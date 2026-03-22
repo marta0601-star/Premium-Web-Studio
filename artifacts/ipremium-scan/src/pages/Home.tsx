@@ -245,16 +245,19 @@ function SourceBanner({
   source,
   productId,
   ean,
+  offerUrl,
 }: {
   source: string | null | undefined;
   productId?: string | null;
   ean?: string | null;
+  offerUrl?: string | null;
 }) {
   const kind = getSourceKind(source);
   if (kind === "allegro") {
-    const allegroUrl = ean
+    const fallbackUrl = ean
       ? `https://allegro.pl/listing?string=${encodeURIComponent(ean)}`
       : null;
+    const allegroUrl = offerUrl || fallbackUrl;
     return (
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 mb-6">
         <span className="text-green-400 text-lg leading-none">✅</span>
@@ -843,7 +846,7 @@ export default function Home() {
             <motion.div key="form-step" initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -40 }} transition={{ duration: 0.4, ease: "easeOut" }} className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-10 shadow-2xl">
 
               {/* Source Banner */}
-              <SourceBanner source={scannedData.source} productId={scannedData.productId} ean={scannedData.ean} />
+              <SourceBanner source={scannedData.source} productId={scannedData.productId} ean={scannedData.ean} offerUrl={scannedData.offerUrl} />
 
               {/* Product header */}
               <div className="flex flex-col md:flex-row gap-8 mb-8">

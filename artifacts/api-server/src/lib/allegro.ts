@@ -107,6 +107,38 @@ export async function getCategoryName(categoryId: string): Promise<string> {
   return (response.data as { name?: string }).name ?? "";
 }
 
+/**
+ * Find the first active offer on Allegro for a given EAN.
+ * Returns a direct offer URL like https://allegro.pl/oferta/{id}, or null on failure.
+ */
+export async function getFirstOfferUrlByEan(ean: string): Promise<string | null> {
+  try {
+    let token: string;
+    try {
+      token = await getUserToken();
+    } catch {
+      token = await getClientCredentialsToken();
+    }
+    const response = await axios.get(`${ALLEGRO_BASE_URL}/offers/listing`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.allegro.public.v1+json",
+      },
+      params: { phrase: ean, limit: 1 },
+      timeout: 8000,
+    });
+    const items = (response.data as { items?: { regular?: Array<{ id?: string }> } }).items;
+    const firstId = items?.regular?.[0]?.id;
+    if (firstId) {
+      return `https://allegro.pl/oferta/${firstId}`;
+    }
+    return null;
+  } catch (err) {
+    logger.warn({ err }, "getFirstOfferUrlByEan failed");
+    return null;
+  }
+}
+
 export async function getCategoryParameters(categoryId: string) {
   // This endpoint requires a user-level token; fall back to CC if none available
   let token: string;

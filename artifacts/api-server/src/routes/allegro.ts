@@ -8,6 +8,7 @@ import {
   searchCatalogByEan,
   getCategoryParameters,
   getCategoryName,
+  getFirstOfferUrlByEan,
   createAllegroOffer,
   uploadImageToAllegro,
   uploadImageBinaryToAllegro,
@@ -108,10 +109,14 @@ router.get("/scan", async (req, res) => {
         }
       }
 
-      // Fetch category parameters + product-parameters + name in parallel
+      // Fetch category parameters + product-parameters + name + first offer URL in parallel
       let parameters: ReturnType<typeof mapParam>[] = [];
       let productParamIds: string[] = [];
       let resolvedCategoryName = categoryName;
+      let offerUrl: string | null = null;
+
+      // Always kick off offer URL lookup in parallel
+      const offerUrlPromise = getFirstOfferUrlByEan(ean);
 
       if (categoryId) {
         const token = await getUserToken();
@@ -144,6 +149,9 @@ router.get("/scan", async (req, res) => {
         }
       }
 
+      offerUrl = await offerUrlPromise;
+      req.log.info({ ean, offerUrl }, "First offer URL lookup result");
+
       res.json({
         productId,
         productName,
@@ -155,6 +163,7 @@ router.get("/scan", async (req, res) => {
         productParamIds,
         source: "allegro_catalog",
         ean,
+        offerUrl,
       });
       return;
     }
