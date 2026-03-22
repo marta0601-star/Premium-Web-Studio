@@ -1,0 +1,60 @@
+The scanner sometimes reads barcodes INCORRECTLY — wrong numbers. Fix this by adding strict validation:
+
+1. DOUBLE-READ VALIDATION: Do not accept a barcode after just one read. Wait until the SAME barcode is read at least 3 TIMES IN A ROW before accepting it. If different codes are read between attempts, reset the counter. This eliminates most false reads.
+
+Code logic:
+let lastCode = '';
+let readCount = 0;
+
+Quagga.onDetected(function(result) {
+    var code = result.codeResult.code;
+    
+    // Check confidence
+    var errors = result.codeResult.decodedCodes
+        .filter(x => x.error !== undefined)
+        .map(x => x.error);
+    var avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
+    if (avgError > 0.10) return; // ignore low confidence reads
+    
+    // Must be valid EAN length
+    if (code.length !== 8 && code.length !== 13) return;
+    
+    // EAN checksum validation
+    if (!isValidEAN(code)) return;
+    
+    // Same code 3 times in a row
+    if (code === lastCode) {
+        readCount++;
+        if (readCount >= 3) {
+            Quagga.stop();
+            if (navigator.vibrate) navigator.vibrate(100);
+            onScanSuccess(code);
+            lastCode = '';
+            readCount = 0;
+        }
+    } else {
+        lastCode = code;
+        readCount = 1;
+    }
+});
+
+2. EAN CHECKSUM VALIDATION — only accept codes that pass the mathematical checksum:
+
+function isValidEAN(code) {
+    if (code.length !== 8 && code.length !== 13) return false;
+    var sum = 0;
+    for (var i = 0; i < code.length - 1; i++) {
+        var digit = parseInt(code[i]);
+        if (code.length === 13) {
+            sum += (i % 2 === 0) ? digit : digit * 3;
+        } else {
+            sum += (i % 2 === 0) ? digit * 3 : digit;
+        }
+    }
+    var checkDigit = (10 - (sum % 10)) % 10;
+    return checkDigit === parseInt(code[code.length - 1]);
+}
+
+3. Lower the error threshold from 0.15 to 0.10 — stricter confidence requirement
+
+These 3 validations together (confidence check + checksum + triple read) will eliminate virtually all false reads.
