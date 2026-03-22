@@ -9,6 +9,7 @@ import { useScanBarcode, useSubmitOffer } from "@/hooks/use-allegro";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { PremiumButton, PremiumInput, PremiumSelect, PremiumSwitch } from "@/components/ui-custom";
 import { AllegroAuthBanner } from "@/components/AllegroAuth";
+import { LocationSetup } from "@/components/LocationSetup";
 import type { CreateOfferRequest, ParameterValue } from "@workspace/api-client-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -489,6 +490,9 @@ export default function Home() {
 
   const [offerId, setOfferId] = useState<string | null>(null);
   const [offerUrl, setOfferUrl] = useState<string | null>(null);
+  const [offerStatus, setOfferStatus] = useState<string | null>(null);
+  const [productStatus, setProductStatus] = useState<string | null>(null);
+  const [offerMessage, setOfferMessage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [allegroErrors, setAllegroErrors] = useState<AllegroError[]>([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -712,9 +716,12 @@ export default function Home() {
 
     try {
       const res = await submitMutation.mutateAsync(payload);
-      const newOfferId = res.offerId || "";
+      const newOfferId = (res as { offerId?: string }).offerId || "";
       setOfferId(newOfferId);
-      setOfferUrl(res.offerUrl || null);
+      setOfferUrl((res as { offerUrl?: string }).offerUrl || null);
+      setOfferStatus((res as { status?: string }).status || null);
+      setProductStatus((res as { productStatus?: string }).productStatus || null);
+      setOfferMessage((res as { message?: string }).message || null);
       setScanHistory((prev) =>
         prev.map((e) => (e.ean === currentEan ? { ...e, offerId: newOfferId } : e))
       );
@@ -741,6 +748,9 @@ export default function Home() {
     setCurrentEan("");
     setOfferId(null);
     setOfferUrl(null);
+    setOfferStatus(null);
+    setProductStatus(null);
+    setOfferMessage(null);
     setErrorMsg(null);
     setAllegroErrors([]);
     setSubmitAttempted(false);
@@ -790,6 +800,8 @@ export default function Home() {
         </div>
 
         <AllegroAuthBanner />
+
+        <LocationSetup onConfigured={() => {}} />
 
         <AnimatePresence mode="wait">
 
@@ -1194,16 +1206,28 @@ export default function Home() {
           {/* STEP 4: SUCCESS */}
           {step === "SUCCESS" && (
             <motion.div key="success-step" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-10 text-center shadow-2xl max-w-xl mx-auto">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/10 mb-6">
-                <CheckCircle2 className="w-10 h-10 text-green-500" />
+              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 ${offerStatus === "ACTIVE" ? "bg-green-500/10" : "bg-amber-500/10"}`}>
+                <CheckCircle2 className={`w-10 h-10 ${offerStatus === "ACTIVE" ? "text-green-500" : "text-amber-400"}`} />
               </div>
-              <h2 className="text-3xl font-display text-white mb-3">Oferta wystawiona!</h2>
-              <p className="text-white/60 mb-6">Oferta jest już <span className="text-green-400 font-semibold">aktywna i widoczna</span> na Allegro za <span className="text-white font-semibold">999 PLN</span>.</p>
+              <h2 className="text-3xl font-display text-white mb-3">
+                {offerStatus === "ACTIVE" ? "Oferta aktywna!" : "Oferta złożona!"}
+              </h2>
+              <p className="text-white/60 mb-2 text-sm leading-relaxed max-w-sm mx-auto">
+                {offerMessage || (offerStatus === "ACTIVE"
+                  ? "Oferta jest aktywna i widoczna na Allegro za 999 PLN."
+                  : "Produkt oczekuje na akceptację Allegro — oferta aktywuje się automatycznie."
+                )}
+              </p>
+              {productStatus === "PROPOSED" && (
+                <p className="text-amber-400/70 text-xs mb-4">
+                  Nowy produkt wymaga akceptacji Allegro (zazwyczaj do 24h).
+                </p>
+              )}
 
               {offerId && (
-                <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4 mb-5 flex flex-col items-center justify-center">
-                  <span className="text-xs font-semibold text-green-400/60 uppercase tracking-wider mb-1">ID Oferty</span>
-                  <span className="font-mono text-xl text-green-400">{offerId}</span>
+                <div className={`border rounded-xl p-4 mb-5 flex flex-col items-center justify-center ${offerStatus === "ACTIVE" ? "bg-green-500/5 border-green-500/20" : "bg-amber-500/5 border-amber-500/20"}`}>
+                  <span className={`text-xs font-semibold uppercase tracking-wider mb-1 ${offerStatus === "ACTIVE" ? "text-green-400/60" : "text-amber-400/60"}`}>ID Oferty</span>
+                  <span className={`font-mono text-xl ${offerStatus === "ACTIVE" ? "text-green-400" : "text-amber-300"}`}>{offerId}</span>
                 </div>
               )}
 
@@ -1213,22 +1237,20 @@ export default function Home() {
                     href={offerUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors font-medium text-sm"
+                    className={`inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl border font-medium text-sm transition-colors ${offerStatus === "ACTIVE" ? "bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20" : "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"}`}
                   >
                     <ExternalLink className="w-4 h-4" />
-                    Otwórz szkic oferty na Allegro
+                    {offerStatus === "ACTIVE" ? "Otwórz ofertę na Allegro" : "Podgląd oferty na Allegro"}
                   </a>
                 )}
-                {offerId && (
-                  <a
-                    href={`https://allegro.pl/moje-allegro/sprzedaz/oferty`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white/70 transition-colors text-sm"
-                  >
-                    Przejdź do Moje Allegro → Oferty
-                  </a>
-                )}
+                <a
+                  href="https://allegro.pl/moje-allegro/sprzedaz/oferty"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white/70 transition-colors text-sm"
+                >
+                  Przejdź do Moje Allegro → Oferty
+                </a>
               </div>
 
               <PremiumButton onClick={resetWorkflow} className="w-full">Skanuj kolejny produkt</PremiumButton>

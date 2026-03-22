@@ -14,6 +14,7 @@ import {
 } from "../lib/allegro";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
+import { getSellerSettings, saveSellerSettings } from "../lib/settings";
 
 const ALLEGRO_BASE_URL = "https://api.allegro.pl";
 
@@ -345,11 +346,24 @@ router.post("/create-offer", async (req, res) => {
     const offerId = (offer as { id?: string }).id ?? "";
     const status = (offer as { publication?: { status?: string } }).publication?.status || "INACTIVE";
 
+    type ProductSet = { product?: { publication?: { status?: string } } };
+    const productStatus = (offer as { productSet?: ProductSet[] }).productSet?.[0]?.product?.publication?.status;
+
+    let message: string;
+    if (status === "ACTIVE") {
+      message = `Oferta aktywna na Allegro za 999 PLN!`;
+    } else if (productStatus === "PROPOSED") {
+      message = `Oferta złożona! Produkt oczekuje na akceptację Allegro — oferta aktywuje się automatycznie po zatwierdzeniu (zazwyczaj do 24h).`;
+    } else {
+      message = `Oferta utworzona (status: ${status}). Sprawdź szczegóły w panelu Allegro.`;
+    }
+
     res.json({
       offerId,
       status,
+      productStatus: productStatus || null,
       offerUrl: `https://allegro.pl/oferta/${offerId}`,
-      message: "Oferta została pomyślnie utworzona jako szkic (NIEAKTYWNA) za 999 PLN",
+      message,
     });
   } catch (err: unknown) {
     req.log.error({ err }, "Error creating offer");
@@ -388,6 +402,32 @@ router.post("/create-offer", async (req, res) => {
       message: "Błąd podczas tworzenia oferty na Allegro",
       errors: [],
     });
+  }
+});
+
+// ── GET /api/allegro/settings ────────────────────────────────────────────────
+router.get("/settings", (_req, res) => {
+  const seller = getSellerSettings();
+  res.json({ seller: seller ?? null });
+});
+
+// ── PUT /api/allegro/settings ────────────────────────────────────────────────
+router.put("/settings", (req, res) => {
+  try {
+    const { city, postCode, state } = req.body as { city?: string; postCode?: string; state?: string };
+    if (!city || !postCode || !state) {
+      res.status(400).json({ error: "city, postCode i state są wymagane" });
+      return;
+    }
+    const postCodeRe = /^\d{2}-\d{3}$/;
+    if (!postCodeRe.test(postCode)) {
+      res.status(400).json({ error: "Kod pocztowy musi być w formacie XX-XXX" });
+      return;
+    }
+    saveSellerSettings({ city: city.trim(), postCode: postCode.trim(), state: state.trim().toUpperCase() });
+    res.json({ ok: true, seller: { city, postCode, state } });
+  } catch (err) {
+    res.status(500).json({ error: "Błąd podczas zapisywania ustawień" });
   }
 });
 

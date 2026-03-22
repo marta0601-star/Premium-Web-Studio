@@ -1,6 +1,7 @@
 import axios from "axios";
 import { logger } from "./logger";
 import { getUserToken, setUserToken } from "./allegro-auth";
+import { getSellerSettings } from "./settings";
 
 const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID;
 const ALLEGRO_CLIENT_SECRET = process.env.ALLEGRO_CLIENT_SECRET;
@@ -210,13 +211,14 @@ export async function uploadImageToAllegro(imageUrl: string): Promise<string | n
       {
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/vnd.allegro.public.v1+json",
           Accept: "application/vnd.allegro.public.v1+json",
         },
         timeout: 30000,
       }
     );
-    const allegroUrl = (resp.data as { url?: string }).url || null;
+    const data = resp.data as { location?: string; url?: string };
+    const allegroUrl = data.location || data.url || null;
     logger.info({ imageUrl, allegroUrl }, "Image uploaded to Allegro");
     return allegroUrl;
   } catch (err: unknown) {
@@ -243,7 +245,8 @@ export async function uploadImageBinaryToAllegro(
         timeout: 30000,
       }
     );
-    const allegroUrl = (resp.data as { url?: string }).url || null;
+    const data = resp.data as { location?: string; url?: string };
+    const allegroUrl = data.location || data.url || null;
     logger.info({ allegroUrl }, "Binary image uploaded to Allegro");
     return allegroUrl;
   } catch (err: unknown) {
@@ -428,7 +431,15 @@ export async function createAllegroOffer(payload: {
     stock: { available: 1, unit: "UNIT" },
     publication: { status: "ACTIVE" },
     payments: { invoice: "VAT" },
-    location: { countryCode: "PL" },
+    location: (() => {
+      const loc = getSellerSettings();
+      return {
+        countryCode: "PL",
+        ...(loc?.city ? { city: loc.city } : {}),
+        ...(loc?.postCode ? { postCode: loc.postCode } : {}),
+        ...(loc?.state ? { province: loc.state } : {}),
+      };
+    })(),
   };
 
   if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];
@@ -440,7 +451,11 @@ export async function createAllegroOffer(payload: {
           items: [
             {
               type: "TEXT",
-              content: `<p>${payload.description.trim().replace(/\n/g, "<br/>")}</p>`,
+              content: (() => {
+                const raw = payload.description!.trim().replace(/\n/g, "<br/>");
+                // Don't double-wrap if the description already contains a block tag
+                return /^<(p|div|ul|ol|h[1-6])[^>]*>/i.test(raw) ? raw : `<p>${raw}</p>`;
+              })(),
             },
           ],
         },
@@ -472,16 +487,15 @@ export async function createAllegroOffer(payload: {
       if (productLevelParams.length > 0) productEntry.parameters = productLevelParams.map(mapAllegroParam);
       body.productSet = [{ product: productEntry }];
       if (offerLevelParams.length > 0) body.parameters = offerLevelParams.map(mapAllegroParam);
-    } else if (isNonCatalog) {
-      // Strategy B: propose new product via productSet[0].product
+    } else if (isNonCatalog && !skipProductProposal) {
+      // Strategy B: propose new product via productSet[0].product.
+      // Do NOT include id/idType — those tell Allegro to do a catalog lookup
+      // (MatchingProductForDataNotFoundException if not found). EAN is already
+      // passed as parameter 225693 in productLevelParams.
       const productProposal: Record<string, unknown> = {
         name: payload.productName,
         category: { id: payload.categoryId },
       };
-      if (payload.ean) {
-        productProposal.id = payload.ean;
-        productProposal.idType = "GTIN";
-      }
       if (productLevelParams.length > 0) productProposal.parameters = productLevelParams.map(mapAllegroParam);
       if (allegroImageUrl) productProposal.images = [allegroImageUrl];
       body.productSet = [{ product: productProposal }];
@@ -494,19 +508,22 @@ export async function createAllegroOffer(payload: {
     return body;
   }
 
-  let offerBody = buildOfferBody();
-
   // Track which params we have already moved to avoid infinite flip-flopping
   const movedToOffer = new Set<string>();
   const movedToProduct = new Set<string>();
   const droppedEntirely = new Set<string>();
 
-  const MAX_RETRIES = 8;
+  // If MatchingProductForDataNotFoundException fires, fall back to Strategy C
+  let skipProductProposal = false;
+
+  let offerBody = buildOfferBody();
+
+  const MAX_RETRIES = 20;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     logger.info(
       {
-        strategy: payload.productId ? "catalog" : isNonCatalog ? "product-proposal" : "direct",
+        strategy: payload.productId ? "catalog" : (isNonCatalog && !skipProductProposal) ? "product-proposal" : "direct",
         categoryId: payload.categoryId,
         attempt,
         productLevelParams: productLevelParams,
@@ -555,6 +572,32 @@ export async function createAllegroOffer(payload: {
       );
 
       const errors = axiosErr.response?.data?.errors || [];
+
+      // ── Handle MatchingProductForDataNotFoundException / ProductValidationException ──
+      // • MatchingProductForDataNotFoundException — id+idType triggered a catalog
+      //   lookup, but the product isn't in Allegro catalog.
+      // • ProductValidationException with image message — product proposal needs ≥1
+      //   image but none was uploaded (e.g. no image available from external lookup).
+      // Fix: set skipProductProposal → drop productSet → retry as Strategy C.
+      const productSetErr = errors.find(
+        (e) =>
+          e.code === "MatchingProductForDataNotFoundException" ||
+          (e.code === "ProductValidationException" &&
+            e.path?.includes("productSet") &&
+            /image|zdjęci/i.test((e.userMessage || "") + " " + (e.message || "")))
+      );
+      if (productSetErr && isNonCatalog && !skipProductProposal && attempt < MAX_RETRIES) {
+        skipProductProposal = true;
+        logger.warn(
+          { attempt, code: productSetErr.code, path: productSetErr.path },
+          "product-proposal failed: falling back to direct offer (no productSet)"
+        );
+        // Move all product-level params back to offer level for Strategy C
+        offerLevelParams = [...offerLevelParams, ...productLevelParams];
+        productLevelParams = [];
+        offerBody = buildOfferBody();
+        continue;
+      }
 
       // ── Handle DuplicateDetectionMissingParametersException ──────────────────
       // Allegro needs certain params in productSet[0].product.parameters for
