@@ -42,15 +42,18 @@ function vibrate() {
 
 type CameraDevice = { id: string; label: string };
 
+// videoConstraints here must NOT include facingMode — that goes in the start() selector arg
+const BASE_VIDEO_CONSTRAINTS = {
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  advanced: [{ focusMode: "continuous" }] as never,
+};
+
 const SCAN_CONFIG = {
   fps: 30,
   qrbox: { width: 340, height: 190 },
   aspectRatio: 1.777,
-  videoConstraints: {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    advanced: [{ focusMode: "continuous" }] as never,
-  },
+  videoConstraints: BASE_VIDEO_CONSTRAINTS,
   experimentalFeatures: { useBarCodeDetectorIfSupported: true },
 } as never;
 
@@ -108,8 +111,13 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
     setTorchSupported(false);
   }, []);
 
-  const startWithConstraints = useCallback(async (cameraConstraint: { deviceId?: { exact: string }; facingMode?: string }) => {
+  // Start with a specific camera constraint; logs which method succeeded
+  const startWithConstraints = useCallback(async (
+    cameraConstraint: { deviceId?: { exact: string }; facingMode?: string | { exact: string } },
+    label: string
+  ) => {
     const scanner = getOrCreateScanner();
+    console.log(`[Scanner] Trying: ${label}`, cameraConstraint);
     await scanner.start(
       cameraConstraint,
       SCAN_CONFIG,
@@ -118,39 +126,62 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
     );
     startedRef.current = true;
     setStatus("scanning");
+    console.log(`[Scanner] Started successfully: ${label}`);
     detectTorchSupport();
   }, [getOrCreateScanner, onSuccess, detectTorchSupport]);
 
-  const startScanner = useCallback(async (camList: CameraDevice[], camIdx: number) => {
+  // Primary start: always rear camera first via facingMode
+  const startRearCamera = useCallback(async () => {
     await stopScanner();
     setStatus("loading");
 
-    const cameraId = camList[camIdx]?.id;
-
+    // 1. Strict rear camera (exact)
     try {
-      // Try exact deviceId first (best for multi-camera phones)
-      if (cameraId) {
-        await startWithConstraints({ deviceId: { exact: cameraId } });
-        return;
-      }
-    } catch {
-      // Fall through to facingMode fallback
+      await startWithConstraints({ facingMode: { exact: "environment" } }, "facingMode exact=environment");
+      return;
+    } catch (e) {
+      console.warn("[Scanner] facingMode exact=environment failed:", e);
     }
 
+    // 2. Preferred rear camera (non-exact — allows fallback if no exact match)
     try {
-      // Fallback: environment (back camera)
-      await startWithConstraints({ facingMode: "environment" });
-    } catch {
-      try {
-        // Last resort: any camera
-        await startWithConstraints({ facingMode: "user" });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Nie można uruchomić kamery";
-        setErrorMsg(msg);
-        setStatus("error");
-      }
+      await startWithConstraints({ facingMode: "environment" }, "facingMode environment");
+      return;
+    } catch (e) {
+      console.warn("[Scanner] facingMode environment failed:", e);
+    }
+
+    // 3. Any camera (do NOT use facingMode: "user" — that's front camera)
+    try {
+      await startWithConstraints({}, "any camera");
+      return;
+    } catch (e) {
+      console.warn("[Scanner] any camera failed:", e);
+      const msg = e instanceof Error ? e.message : "Nie można uruchomić kamery";
+      setErrorMsg(msg);
+      setStatus("error");
     }
   }, [stopScanner, startWithConstraints]);
+
+  // Manual switch: cycle through enumerated deviceIds
+  const startByDeviceId = useCallback(async (camList: CameraDevice[], camIdx: number) => {
+    await stopScanner();
+    setStatus("loading");
+    setTorchOn(false);
+
+    const cam = camList[camIdx];
+    if (!cam) return;
+
+    console.log(`[Scanner] Manual switch to camera [${camIdx}]: "${cam.label}" id=${cam.id}`);
+
+    try {
+      await startWithConstraints({ deviceId: { exact: cam.id } }, `deviceId ${cam.id} ("${cam.label}")`);
+    } catch (e) {
+      console.warn("[Scanner] deviceId switch failed:", e);
+      // Try by facing mode as fallback
+      await startRearCamera();
+    }
+  }, [stopScanner, startWithConstraints, startRearCamera]);
 
   const toggleTorch = useCallback(async () => {
     if (!html5QrRef.current || !startedRef.current) return;
@@ -160,52 +191,48 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
         advanced: [{ torch: next }] as never,
       });
       setTorchOn(next);
-    } catch { /* torch not supported at runtime */ }
+      console.log(`[Scanner] Torch ${next ? "ON" : "OFF"}`);
+    } catch (e) {
+      console.warn("[Scanner] Torch toggle failed:", e);
+    }
   }, [torchOn]);
 
   const switchCamera = useCallback(async () => {
     if (cameras.length < 2) return;
     const nextIdx = (activeCameraIdx + 1) % cameras.length;
     setActiveCameraIdx(nextIdx);
-    setTorchOn(false);
-    await startScanner(cameras, nextIdx);
-  }, [cameras, activeCameraIdx, startScanner]);
+    console.log(`[Scanner] Switching camera: ${activeCameraIdx} → ${nextIdx} of ${cameras.length}`);
+    await startByDeviceId(cameras, nextIdx);
+  }, [cameras, activeCameraIdx, startByDeviceId]);
 
-  // Mount: enumerate cameras and start
+  // Mount: enumerate cameras for switch button, then always start rear camera first
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
+      // Enumerate cameras for the switch button (non-blocking)
       try {
         const camList = await Html5Qrcode.getCameras();
-        if (cancelled) return;
-
-        if (!camList || camList.length === 0) {
-          // No cameras found via enumeration — try facingMode directly
-          await startScanner([], 0);
-          return;
-        }
-
-        // Prefer back/environment camera
-        let preferredIdx = camList.findIndex(
-          (c) => /back|rear|environment|tylna|główna/i.test(c.label)
-        );
-        if (preferredIdx < 0) {
-          preferredIdx = camList.findIndex(
-            (c) => !/front|selfie|przednia|user/i.test(c.label)
-          );
-        }
-        if (preferredIdx < 0) preferredIdx = camList.length > 1 ? 1 : 0; // index 1 is usually back on Android
-
-        if (!cancelled) {
+        if (!cancelled && camList?.length) {
+          console.log("[Scanner] Cameras found:", camList.map((c) => `"${c.label}" (${c.id})`).join(", "));
           setCameras(camList);
-          setActiveCameraIdx(preferredIdx);
-          await startScanner(camList, preferredIdx);
+
+          // Find the back camera index for the switch button starting point
+          let backIdx = camList.findIndex((c) => /back|rear|environment|tylna|główna/i.test(c.label));
+          if (backIdx < 0) backIdx = camList.findIndex((c) => !/front|selfie|przednia|user/i.test(c.label));
+          if (backIdx < 0 && camList.length > 1) backIdx = camList.length - 1; // last is often back
+          if (backIdx < 0) backIdx = 0;
+          setActiveCameraIdx(backIdx);
+        } else {
+          console.log("[Scanner] No cameras enumerated, will rely on facingMode");
         }
-      } catch {
-        if (cancelled) return;
-        // getCameras() failed — try environment facingMode directly
-        await startScanner([], 0);
+      } catch (e) {
+        console.warn("[Scanner] getCameras() failed:", e);
+      }
+
+      // Always start with rear camera via facingMode (most reliable)
+      if (!cancelled) {
+        await startRearCamera();
       }
     })();
 
