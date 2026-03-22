@@ -451,6 +451,24 @@ async function fetchCategoryParameters(categoryId: string): Promise<AllegroParam
   }
 }
 
+// ── Auto-description builder ─────────────────────────────────────────────────
+
+function buildAutoDescription(
+  productName: string | null | undefined,
+  brand: string | null | undefined,
+  weight: string | null | undefined,
+  ean: string
+): string {
+  const parts: string[] = [];
+  if (productName) parts.push(productName);
+  const meta: string[] = [];
+  if (brand) meta.push(brand);
+  if (weight) meta.push(weight);
+  if (meta.length > 0) parts.push(meta.join(", "));
+  if (ean) parts.push(`EAN: ${ean}`);
+  return parts.join(" — ");
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -479,6 +497,7 @@ export default function Home() {
   const [userImagePreviewUrl, setUserImagePreviewUrl] = useState<string | null>(null);
   const [allegroImageUrl, setAllegroImageUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [description, setDescription] = useState<string>("");
 
   const scanMutation = useScanBarcode();
   const submitMutation = useSubmitOffer();
@@ -552,6 +571,7 @@ export default function Home() {
       const data = await scanMutation.mutateAsync(trimmed) as ExtendedScanResult;
       setScannedData(data);
       setProductParamIds(data.productParamIds || []);
+      setDescription(buildAutoDescription(data.productName, data.brand, data.weight, trimmed));
 
       const kind = getSourceKind(data.source);
       setScanHistory((prev) => {
@@ -686,6 +706,8 @@ export default function Home() {
       parameters: parameters_payload,
       productParamIds,
       imageUrl: resolvedImageUrl || undefined,
+      ean: currentEan || undefined,
+      description: description.trim() || undefined,
     };
 
     try {
@@ -730,6 +752,7 @@ export default function Home() {
     setUserImagePreviewUrl(null);
     setAllegroImageUrl(null);
     setImageUploading(false);
+    setDescription("");
     setStep("SCAN");
   };
 
@@ -1042,6 +1065,27 @@ export default function Home() {
                         })}
                       </div>
                     </>
+                  )}
+                </div>
+
+                {/* Description field */}
+                <div className="space-y-2 pt-2">
+                  <label className="text-sm font-medium text-white/80 flex items-center gap-1.5">
+                    Opis oferty
+                    <span className="text-primary text-xs">*</span>
+                    <span className="text-white/30 text-xs font-normal ml-1">(wymagany przez Allegro)</span>
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Opis produktu..."
+                    className="w-full rounded-xl bg-black/30 border border-white/10 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 text-white placeholder:text-white/30 text-sm px-4 py-3 resize-none outline-none transition-all"
+                  />
+                  {submitAttempted && !description.trim() && (
+                    <p className="text-red-400 text-xs flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> Opis jest wymagany
+                    </p>
                   )}
                 </div>
 

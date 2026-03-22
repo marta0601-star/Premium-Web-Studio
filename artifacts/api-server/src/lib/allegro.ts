@@ -252,36 +252,120 @@ export async function uploadImageBinaryToAllegro(
   }
 }
 
+type AllegroParam = { id: string; values?: string[]; valuesIds?: string[] };
+
+function mapAllegroParam(p: AllegroParam): Record<string, unknown> {
+  const m: Record<string, unknown> = { id: p.id };
+  if (p.valuesIds && p.valuesIds.length > 0) m.valuesIds = p.valuesIds;
+  if (p.values && p.values.length > 0) m.values = p.values;
+  return m;
+}
+
+function isAllegroHosted(url: string): boolean {
+  return (
+    url.includes("allegroimg.com") ||
+    url.includes("upload.allegro.pl") ||
+    url.includes("allegro.pl/images")
+  );
+}
+
+// Create a product in the Allegro catalog (POST /sale/products)
+// Returns the newly created (or existing) product ID.
+async function createAllegroProduct(opts: {
+  name: string;
+  categoryId: string;
+  parameters: AllegroParam[];
+  imageUrl: string | null;
+  ean: string;
+}): Promise<string> {
+  const token = await getUserToken();
+
+  const body: Record<string, unknown> = {
+    name: opts.name,
+    category: { id: opts.categoryId },
+    parameters: opts.parameters.map(mapAllegroParam),
+  };
+  if (opts.ean) body.ean = [opts.ean];
+  if (opts.imageUrl) body.images = [{ url: opts.imageUrl }];
+
+  logger.info(
+    { categoryId: opts.categoryId, ean: opts.ean, paramCount: opts.parameters.length, hasImage: !!opts.imageUrl },
+    "Creating product in Allegro catalog"
+  );
+
+  try {
+    const resp = await axios.post(`${ALLEGRO_BASE_URL}/sale/products`, body, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.allegro.public.v1+json",
+        "Content-Type": "application/vnd.allegro.public.v1+json",
+      },
+      timeout: 20000,
+    });
+    const productId = (resp.data as { id: string }).id;
+    logger.info({ productId }, "Allegro catalog product created");
+    return productId;
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { status?: number; data?: { id?: string; productId?: string } } };
+    // 409 Conflict = product already exists in catalog — extract its ID
+    if (axiosErr.response?.status === 409) {
+      const existingId = axiosErr.response.data?.id || axiosErr.response.data?.productId;
+      if (existingId) {
+        logger.info({ existingId }, "Product already in Allegro catalog — using existing ID");
+        return existingId;
+      }
+    }
+    throw err;
+  }
+}
+
 export async function createAllegroOffer(payload: {
   productId?: string | null;
   categoryId: string;
   productName: string;
-  parameters: Array<{
-    id: string;
-    values?: string[];
-    valuesIds?: string[];
-  }>;
+  parameters: AllegroParam[];
   productParamIds?: string[];
   imageUrl?: string | null;
+  ean?: string;
+  description?: string | null;
 }) {
   const token = await getUserToken();
 
-  // If fixedDefaults were not loaded yet (e.g. no user token at startup), try now
   if (!fixedDefaults.shippingRateId && !fixedDefaults.returnPolicyId && !fixedDefaults.impliedWarrantyId) {
     await loadFixedDefaults();
   }
 
-  // Split parameters into product-level and offer-level
+  // ── Step 1: upload image to Allegro (needed for both product and offer) ──────
+  let allegroImageUrl: string | null = null;
+  if (payload.imageUrl) {
+    if (isAllegroHosted(payload.imageUrl)) {
+      allegroImageUrl = payload.imageUrl;
+    } else {
+      allegroImageUrl = await uploadImageToAllegro(payload.imageUrl);
+    }
+  }
+
+  // ── Step 2: for non-catalog products, create product in Allegro catalog first ─
+  // Parameters that are not allowed in the offer section but ARE valid for products
+  const ALWAYS_EXCLUDED_FROM_OFFER = new Set(["224017", "225693", "242901"]);
+
+  let resolvedProductId: string | null = payload.productId || null;
+
+  if (!resolvedProductId && payload.ean) {
+    // Non-catalog product: create it in the Allegro catalog
+    resolvedProductId = await createAllegroProduct({
+      name: payload.productName,
+      categoryId: payload.categoryId,
+      parameters: payload.parameters, // All params go to the product
+      imageUrl: allegroImageUrl,
+      ean: payload.ean,
+    });
+  }
+
+  // ── Step 3: build offer body ───────────────────────────────────────────────
   const productParamSet = new Set(payload.productParamIds || []);
   const offerParams = payload.parameters.filter((p) => !productParamSet.has(p.id));
   const productParams = payload.parameters.filter((p) => productParamSet.has(p.id));
-
-  const mapParam = (p: { id: string; values?: string[]; valuesIds?: string[] }) => {
-    const mapped: Record<string, unknown> = { id: p.id };
-    if (p.valuesIds && p.valuesIds.length > 0) mapped.valuesIds = p.valuesIds;
-    if (p.values && p.values.length > 0) mapped.values = p.values;
-    return mapped;
-  };
 
   const offerBody: Record<string, unknown> = {
     name: payload.productName,
@@ -290,41 +374,54 @@ export async function createAllegroOffer(payload: {
       format: "BUY_NOW",
       price: { amount: "999", currency: "PLN" },
     },
-    stock: {
-      available: 1,
-      unit: "UNIT",
-    },
-    publication: {
-      status: "ACTIVE",
-      duration: null,
-    },
-    payments: {
-      invoice: "VAT",
-    },
+    stock: { available: 1, unit: "UNIT" },
+    publication: { status: "ACTIVE", duration: null },
+    payments: { invoice: "VAT" },
   };
 
-  // Use productSet structure (new API) when productId is available
-  if (payload.productId) {
-    const productEntry: Record<string, unknown> = { id: payload.productId };
+  if (resolvedProductId) {
+    // Link to product (catalog or just-created) — product owns all its params
+    const productEntry: Record<string, unknown> = { id: resolvedProductId };
     if (productParams.length > 0) {
-      productEntry.parameters = productParams.map(mapParam);
+      productEntry.parameters = productParams.map(mapAllegroParam);
     }
     offerBody.productSet = [{ product: productEntry }];
-    if (offerParams.length > 0) {
-      offerBody.parameters = offerParams.map(mapParam);
+    // For catalog products, offer can still carry non-product params (filtered)
+    // For non-catalog (just created above), we skip offer-level params entirely
+    if (payload.productId && offerParams.length > 0) {
+      offerBody.parameters = offerParams
+        .filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id))
+        .map(mapAllegroParam);
     }
   } else {
-    if (payload.parameters.length > 0) {
-      offerBody.parameters = payload.parameters.map(mapParam);
-    }
+    // No product at all — pass filtered params directly to offer
+    const filtered = payload.parameters.filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id));
+    if (filtered.length > 0) offerBody.parameters = filtered.map(mapAllegroParam);
   }
 
-  // Fixed delivery (DOSTAWA)
+  if (allegroImageUrl) {
+    offerBody.images = [{ url: allegroImageUrl }];
+  }
+
+  if (payload.description?.trim()) {
+    offerBody.description = {
+      sections: [
+        {
+          items: [
+            {
+              type: "TEXT",
+              content: `<p>${payload.description.trim().replace(/\n/g, "<br/>")}</p>`,
+            },
+          ],
+        },
+      ],
+    };
+  }
+
   if (fixedDefaults.shippingRateId) {
     offerBody.delivery = { shippingRates: { id: fixedDefaults.shippingRateId } };
   }
 
-  // Fixed after-sales services (ZWROT + REKLAMACJA)
   if (fixedDefaults.returnPolicyId || fixedDefaults.impliedWarrantyId) {
     offerBody.afterSalesServices = {
       ...(fixedDefaults.impliedWarrantyId ? { impliedWarranty: { id: fixedDefaults.impliedWarrantyId } } : {}),
@@ -332,59 +429,44 @@ export async function createAllegroOffer(payload: {
     };
   }
 
-  // Upload image to Allegro if provided (skip if already Allegro-hosted)
-  if (payload.imageUrl) {
-    const isAlreadyAllegro =
-      payload.imageUrl.includes("allegroimg.com") ||
-      payload.imageUrl.includes("upload.allegro.pl") ||
-      payload.imageUrl.includes("allegro.pl/images");
-    if (isAlreadyAllegro) {
-      offerBody.images = [{ url: payload.imageUrl }];
-    } else {
-      const allegroImageUrl = await uploadImageToAllegro(payload.imageUrl);
-      if (allegroImageUrl) {
-        offerBody.images = [{ url: allegroImageUrl }];
-      }
+  // ── Step 4: retry loop for offer creation (auto-strip bad params) ────────────
+  function filterOfferParams(excluded: Set<string>) {
+    if (resolvedProductId && !payload.productId) {
+      // Non-catalog product linked via productSet — no offer-level params
+      delete offerBody.parameters;
+      return;
     }
-  }
-
-  // Always exclude known-bad parameters (never allowed in offer section)
-  const ALWAYS_EXCLUDED = new Set(["224017", "225693", "242901"]); // Kod producenta, EAN (GTIN), Pojemność — not allowed in offer section
-
-  // Rebuild offerBody.parameters filtering out excluded IDs
-  function filterParams(excluded: Set<string>) {
-    if (payload.productId) {
-      const allowedOffer = offerParams.filter((p) => !excluded.has(p.id));
-      if (allowedOffer.length > 0) {
-        offerBody.parameters = allowedOffer.map(mapParam);
+    if (resolvedProductId && offerParams.length > 0) {
+      const allowed = offerParams.filter((p) => !excluded.has(p.id));
+      if (allowed.length > 0) {
+        offerBody.parameters = allowed.map(mapAllegroParam);
       } else {
         delete offerBody.parameters;
       }
-      // product-level params stay in productSet (no filtering needed there)
-    } else {
+    } else if (!resolvedProductId) {
       const allowed = payload.parameters.filter((p) => !excluded.has(p.id));
       if (allowed.length > 0) {
-        offerBody.parameters = allowed.map(mapParam);
+        offerBody.parameters = allowed.map(mapAllegroParam);
       } else {
         delete offerBody.parameters;
       }
     }
   }
 
-  // Apply initial exclusion before first attempt
-  filterParams(ALWAYS_EXCLUDED);
+  const excluded = new Set(ALWAYS_EXCLUDED_FROM_OFFER);
+  filterOfferParams(excluded);
 
   const MAX_RETRIES = 6;
-  const excluded = new Set(ALWAYS_EXCLUDED);
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     logger.info(
       {
-        productId: payload.productId,
+        productId: resolvedProductId,
         categoryId: payload.categoryId,
         attempt,
         excludedParams: [...excluded],
-        hasImage: !!offerBody.images,
+        hasImage: !!allegroImageUrl,
+        hasDescription: !!payload.description,
       },
       "Creating Allegro offer via product-offers API"
     );
@@ -422,7 +504,6 @@ export async function createAllegroOffer(payload: {
 
       const errors = axiosErr.response?.data?.errors || [];
 
-      // Find any ParameterCategoryException errors and extract their parameter IDs
       const paramErrors = errors.filter(
         (e) =>
           e.code === "ParameterCategoryException" ||
@@ -431,26 +512,17 @@ export async function createAllegroOffer(payload: {
       );
 
       if (paramErrors.length === 0 || attempt === MAX_RETRIES) {
-        // Not a parameter issue, or out of retries — rethrow to caller
         throw err;
       }
 
-      // Extract parameter IDs — check metadata.parameterId first (most reliable),
-      // then fall back to regex on userMessage / message
       let foundNew = false;
       for (const pe of paramErrors) {
-        // 1. Direct ID from metadata (Allegro provides this)
         const directId = pe.metadata?.parameterId as string | undefined;
-
-        // 2. Regex on userMessage or message
         const text = pe.userMessage || pe.message || "";
         const msgMatch = text.match(/Parameter\s+[`'"]?(\w+):/i);
-
-        // 3. Path index fallback (/parameters/N)
         const pathMatch = pe.path?.match(/\/parameters\/(\d+)/);
 
         let paramId: string | undefined = directId || msgMatch?.[1];
-
         if (!paramId && pathMatch?.[1]) {
           const idx = parseInt(pathMatch[1], 10);
           const currentParams = (offerBody.parameters as Array<{ id: string }> | undefined) || [];
@@ -464,13 +536,8 @@ export async function createAllegroOffer(payload: {
         }
       }
 
-      if (!foundNew) {
-        // Couldn't identify which param to remove — rethrow
-        throw err;
-      }
-
-      // Rebuild parameters with the newly excluded IDs and retry
-      filterParams(excluded);
+      if (!foundNew) throw err;
+      filterOfferParams(excluded);
     }
   }
 }

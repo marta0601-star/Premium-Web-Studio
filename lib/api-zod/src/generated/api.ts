@@ -98,6 +98,8 @@ export const CreateOfferBody = zod.object({
   ),
   productParamIds: zod.array(zod.string()).optional(),
   imageUrl: zod.string().nullable().optional(),
+  ean: zod.string().optional(),
+  description: zod.string().nullable().optional(),
 });
 
 export const CreateOfferResponse = zod.object({

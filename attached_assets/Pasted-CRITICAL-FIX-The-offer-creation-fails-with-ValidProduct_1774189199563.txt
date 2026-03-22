@@ -1,0 +1,49 @@
+CRITICAL FIX: The offer creation fails with "ValidProductization" error. In many Allegro categories (especially food/beverages), every offer MUST be linked to a catalog product. If the product doesn't exist in the catalog, we must CREATE it first.
+
+Fix the flow for products NOT found in Allegro catalog:
+
+STEP 1 — CREATE PRODUCT IN ALLEGRO CATALOG:
+- Use POST https://api.allegro.pl/sale/products with:
+  {
+    "name": "product name",
+    "category": {"id": "categoryId"},
+    "parameters": [array of required parameters with values],
+    "images": ["image_url"],
+    "ean": ["ean_code"]
+  }
+- Headers: Authorization: Bearer {token}, Accept: application/vnd.allegro.public.v1+json, Content-Type: application/vnd.allegro.public.v1+json
+- This creates the product in Allegro catalog and returns a product.id
+
+STEP 2 — CREATE OFFER LINKED TO THAT PRODUCT:
+- Use the returned product.id in the offer creation
+- Set "product": {"id": "returned_product_id"} in the offer
+- This satisfies the ValidProductization requirement
+
+ALSO FIX THESE OTHER 3 ERRORS:
+
+1. MissingRequiredParameters (Marka, Pojemność, EAN):
+   - The parameters ARE in the form but are not being sent correctly to the API
+   - Make sure parameters are sent in the correct format:
+     For dictionary values: {"id": "paramId", "valuesIds": ["valueId"]}
+     For string/number values: {"id": "paramId", "values": ["value"]}
+   - Debug: log the exact parameters array being sent to the API
+
+2. GallerySize (needs at least 1 photo):
+   - Upload the product image to Allegro BEFORE creating the offer
+   - POST https://upload.allegro.pl/sale/images with body: {"url": "image_url"}
+   - Use the returned URL in the offer's images array
+   - If no image found online, require the user to take a photo before allowing submission
+
+3. EmptyDescription:
+   - Auto-generate a simple description from the product data, for example:
+     "{product_name} - {brand}, {weight/volume}. EAN: {ean}"
+   - Or let the user type their own description
+   - Add a description text field to the form, pre-filled with the auto-generated text
+   - Never send an empty description
+
+The complete flow for NON-catalog products should be:
+1. Upload image to Allegro → get Allegro image URL
+2. Create product in Allegro catalog with name, category, parameters, image, EAN
+3. Create offer linked to that product with price 999, stock 1, shipping DOSTAWA, returns ZWROT, warranty REKLAMACJA, auto-generated description
+
+Implement auto-retry: if any step fails, show the exact error and let the user fix it. Keep everything in Polish.
