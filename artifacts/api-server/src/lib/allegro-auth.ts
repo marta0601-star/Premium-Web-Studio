@@ -13,12 +13,19 @@
 
 import axios from "axios";
 import { logger } from "./logger";
+import * as fs from "fs";
+import * as path from "path";
 
 const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID!;
 const ALLEGRO_CLIENT_SECRET = process.env.ALLEGRO_CLIENT_SECRET!;
 
 const TOKEN_URL = "https://allegro.pl/auth/oauth/token";
 const DEVICE_URL = "https://allegro.pl/auth/oauth/device";
+
+// Persist tokens to this file so they survive server restarts
+const TOKEN_FILE = path.resolve(
+  process.env.TOKEN_STORE_PATH || path.join(process.cwd(), ".allegro-token.json")
+);
 
 interface UserTokenStore {
   accessToken: string;
@@ -27,9 +34,37 @@ interface UserTokenStore {
   scopes: string[];
 }
 
-// In-memory store — survives for the process lifetime
-// For persistence across restarts, save to disk or DB
-let userToken: UserTokenStore | null = null;
+// Load from disk on startup
+function loadTokenFromDisk(): UserTokenStore | null {
+  try {
+    if (fs.existsSync(TOKEN_FILE)) {
+      const raw = fs.readFileSync(TOKEN_FILE, "utf-8");
+      const data = JSON.parse(raw) as UserTokenStore;
+      if (data.accessToken && data.refreshToken && data.expiresAt) {
+        logger.info({ expiresAt: new Date(data.expiresAt).toISOString() }, "Allegro user token loaded from disk");
+        return data;
+      }
+    }
+  } catch (e) {
+    logger.warn({ err: e }, "Could not load Allegro token from disk");
+  }
+  return null;
+}
+
+function saveTokenToDisk(token: UserTokenStore | null): void {
+  try {
+    if (token) {
+      fs.writeFileSync(TOKEN_FILE, JSON.stringify(token, null, 2), "utf-8");
+    } else {
+      if (fs.existsSync(TOKEN_FILE)) fs.unlinkSync(TOKEN_FILE);
+    }
+  } catch (e) {
+    logger.warn({ err: e }, "Could not save Allegro token to disk");
+  }
+}
+
+// In-memory store — initialised from disk
+let userToken: UserTokenStore | null = loadTokenFromDisk();
 
 // In-progress device flow state
 interface DeviceFlowState {
@@ -107,6 +142,7 @@ async function refreshAccessToken(): Promise<void> {
     scopes,
   };
 
+  saveTokenToDisk(userToken);
   logger.info("Allegro user token refreshed");
 }
 
@@ -132,6 +168,7 @@ export function setUserToken(
 ): void {
   if (!accessToken) {
     userToken = null;
+    saveTokenToDisk(null);
     logger.info("Allegro user token cleared");
     return;
   }
@@ -142,11 +179,13 @@ export function setUserToken(
     expiresAt: Date.now() + (expiresIn - 60) * 1000,
     scopes,
   };
+  saveTokenToDisk(userToken);
   logger.info({ scopes }, "Allegro user token stored");
 }
 
 export function clearUserToken(): void {
   userToken = null;
+  saveTokenToDisk(null);
   logger.info("Allegro user token cleared");
 }
 
