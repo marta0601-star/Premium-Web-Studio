@@ -1,0 +1,25 @@
+Create a modern, premium-looking full-stack web application named "iPremium scan" that scans EAN barcodes and creates draft offers on Allegro PL, but with an intermediate review/edit step.
+
+    LANGUAGE, NAME AND DESIGN: Name is "iPremium scan". The ENTIRE UI (buttons, labels, forms, messages) MUST be strictly in Polish. Use a modern, minimalist design (e.g., Tailwind CSS).
+
+    FRONTEND WORKFLOW:
+
+    STEP 1 (Scan & Manual Entry): Use 'html5-qrcode' to scan an EAN via camera. ALSO, provide a clear text input field and a submit button (e.g., "Szukaj EAN") directly below the scanner so the user can manually type the EAN code if the camera is unavailable or the barcode is unreadable. Show a loading spinner once an EAN is submitted (either scanned or typed).
+
+    STEP 2 (Review & Edit): Once an EAN is provided, call the backend to fetch product details AND its category's mandatory parameters. Hide the scanner/input area and render a dynamic HTML form. Display the Product Name, Category ID, and generate input fields for ALL mandatory parameters required by that category. Pre-fill these fields with data from the Allegro product catalog if available.
+
+    STEP 3 (Submit): Provide a button to submit this form. Send the edited parameters to the backend to create the draft offer.
+
+    BACKEND (Express.js) & ALLEGRO API INTEGRATION:
+
+    Implement Client Credentials flow for Allegro auth.
+
+    Endpoint A (Fetch): Search Catalog API by EAN. Extract product.id and category.id. Then, call the Allegro Category Parameters API (/sale/categories/{categoryId}/parameters). Filter for required: true. Return the product details and the required parameters schema to the frontend.
+
+    Endpoint B (Create): Receive the form payload. Call the Allegro Offers API to create an "INACTIVE" offer linked to the product.id, filling in the parameters array with the user's edited values. Set the price to 999 PLN.
+
+    PORTABILITY (CRITICAL): Exportable as ZIP to be hosted on Vercel/Render. NO Replit DB, NO Replit Auth, NO Replit-specific proprietary tools.
+
+    ENVIRONMENT VARIABLES AND SECRETS: Use 'dotenv' (.env). Create a .env file in the root directory and populate it with these exact values so the app is immediately ready to test:
+    ALLEGRO_CLIENT_ID=f309375859d343608638a5bb44c2b5b4
+    ALLEGRO_CLIENT_SECRET=Q8zXqxwA8fsUlO4x0KLAOMlDZXzNxnMClB4HJ7q1bBbeOjfmWYQYqqPJ6RAlVi4x

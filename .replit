@@ -24,3 +24,9 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+ALLEGRO_CLIENT_ID = "f309375859d343608638a5bb44c2b5b4"
+ALLEGRO_CLIENT_SECRET = "Q8zXqxwA8fsUlO4x0KLAOMlDZXzNxnMClB4HJ7q1bBbeOjfmWYQYqqPJ6RAlVi4x"

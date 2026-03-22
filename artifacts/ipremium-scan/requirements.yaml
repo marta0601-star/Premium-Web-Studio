@@ -1,0 +1,15 @@
+packages:
+  "html5-qrcode": "Required for camera-based EAN barcode scanning"
+  "framer-motion": "Required for premium smooth layout transitions and animations"
+  "clsx": "Utility for conditionally joining class names"
+  "tailwind-merge": "Utility to merge tailwind classes efficiently"
+
+images:
+  - path: "artifacts/ipremium-scan/public/images/premium-bg.png"
+    description: "Abstract subtle dark background with a very soft ambient glow of amber, gold and deep slate. High-end minimalist luxury tech aesthetic, smooth gradients, no sharp edges."
+    aspect_ratio: "16:9"
+
+notes:
+  - "Assuming @workspace/api-client-react is correctly linked in node_modules."
+  - "Using framer-motion for step transitions."
+  - "html5-qrcode requires a DOM element with a specific ID to mount."

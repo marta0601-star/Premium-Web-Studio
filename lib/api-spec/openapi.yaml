@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: iPremium Scan API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: allegro
+    description: Allegro operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /allegro/scan:
+    get:
+      operationId: scanEan
+      tags: [allegro]
+      summary: Scan EAN barcode
+      description: Fetches product details from Allegro catalog by EAN and returns required category parameters
+      parameters:
+        - name: ean
+          in: query
+          required: true
+          schema:
+            type: string
+          description: EAN barcode code
+      responses:
+        "200":
+          description: Product details with required parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /allegro/create-offer:
+    post:
+      operationId: createOffer
+      tags: [allegro]
+      summary: Create draft offer on Allegro
+      description: Creates an INACTIVE draft offer on Allegro with the provided product data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOfferRequest"
+      responses:
+        "200":
+          description: Offer created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOfferResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +101,142 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
+
+    CategoryParameter:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [string, integer, float, dictionary, boolean]
+        required:
+          type: boolean
+        unit:
+          type: string
+          nullable: true
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParameterOption"
+        restrictions:
+          type: object
+          nullable: true
+          additionalProperties: true
+      required:
+        - id
+        - name
+        - type
+        - required
+
+    ParameterOption:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+
+    ProductImage:
+      type: object
+      properties:
+        url:
+          type: string
+      required:
+        - url
+
+    ScanResult:
+      type: object
+      properties:
+        productId:
+          type: string
+        productName:
+          type: string
+        categoryId:
+          type: string
+        categoryName:
+          type: string
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductImage"
+        parameters:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryParameter"
+        prefillValues:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - productId
+        - productName
+        - categoryId
+        - categoryName
+        - images
+        - parameters
+        - prefillValues
+
+    ParameterValue:
+      type: object
+      properties:
+        id:
+          type: string
+        values:
+          type: array
+          items:
+            type: string
+        valuesIds:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+
+    CreateOfferRequest:
+      type: object
+      properties:
+        productId:
+          type: string
+        categoryId:
+          type: string
+        productName:
+          type: string
+        parameters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParameterValue"
+      required:
+        - productId
+        - categoryId
+        - productName
+        - parameters
+
+    CreateOfferResponse:
+      type: object
+      properties:
+        offerId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+      required:
+        - offerId
+        - status
+        - message
