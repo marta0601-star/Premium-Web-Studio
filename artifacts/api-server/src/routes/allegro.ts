@@ -70,6 +70,10 @@ router.get("/scan", async (req, res) => {
           { productId: allegroProduct.id, productName: allegroProduct.name },
           "Allegro catalog product selected"
         );
+        req.log.info(
+          { productKeys: Object.keys(allegroProduct), _links: allegroProduct._links, productUrl: allegroProduct.url },
+          "Allegro product object fields"
+        );
       }
     } catch (allegroErr: unknown) {
       const e = allegroErr as { response?: { status?: number }; message?: string };
@@ -144,9 +148,25 @@ router.get("/scan", async (req, res) => {
         }
       }
 
+      // Build direct product page URL:
+      // Allegro catalog format: https://allegro.pl/produkt/{slug}-{id-no-dashes}
+      // Also expose _links.self.href if the API returns one
+      const linksHref = (allegroProduct._links as { self?: { href?: string } } | undefined)?.self?.href ?? null;
+      const idNoDashes = productId.replace(/-/g, "");
+      const nameSlug = productName
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, "")
+        .trim()
+        .replace(/[\s_]+/g, "-")
+        .replace(/-+/g, "-")
+        .slice(0, 80);
+      const builtUrl = `https://allegro.pl/produkt/${nameSlug}-${idNoDashes}`;
+      const productUrl = linksHref || builtUrl;
+
       res.json({
         productId,
         productName,
+        productUrl,
         categoryId,
         categoryName: resolvedCategoryName,
         images,
