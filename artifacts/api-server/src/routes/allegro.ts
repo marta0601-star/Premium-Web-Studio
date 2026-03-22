@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import axios from "axios";
 import {
   ScanEanQueryParams,
   CreateOfferBody,
@@ -6,34 +7,59 @@ import {
 import {
   searchCatalogByEan,
   getCategoryParameters,
+  getCategoryName,
   createAllegroOffer,
 } from "../lib/allegro";
+import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
+
+const ALLEGRO_BASE_URL = "https://api.allegro.pl";
 
 const router: IRouter = Router();
 
+// ── Helper: map raw Allegro parameter to our API shape ──────────────────────
+interface RawAllegroParam {
+  id: string;
+  name: string;
+  type: string;
+  required?: boolean;
+  requiredForProduct?: boolean;
+  unit?: string | null;
+  dictionary?: Array<{ id: string; value: string; dependsOnValueIds?: string[] }>;
+  restrictions?: Record<string, unknown>;
+  options?: Record<string, unknown>;
+}
+
+function mapParam(p: RawAllegroParam, required?: boolean) {
+  return {
+    id: p.id,
+    name: p.name,
+    type: p.type || "string",
+    required: required !== undefined ? required : (p.required ?? false),
+    requiredForProduct: p.requiredForProduct ?? false,
+    unit: p.unit ?? null,
+    options: (p.dictionary || []).map((d) => ({ id: d.id, name: d.value })),
+    restrictions: p.restrictions ?? null,
+  };
+}
+
+// ── GET /api/allegro/scan ────────────────────────────────────────────────────
 router.get("/scan", async (req, res) => {
   try {
     const { ean } = ScanEanQueryParams.parse(req.query);
 
-    // ── Step 1: Try Allegro catalog FIRST (requires user-level OAuth token) ──
-    // If this succeeds and returns a product, we STOP here — no external lookup.
-    // Only fall through to external sources if the catalog returns nothing OR
-    // if no user token is available (throws).
-    let allegroProduct: null | {
-      id: string;
-      name: string;
-      category?: { id: string; name?: string };
-      images?: Array<{ url: string }>;
-      parameters?: Array<{ id: string; values?: string[]; valuesIds?: string[] }>;
-    } = null;
+    // Step 1: Try Allegro catalog FIRST (user-level OAuth token required)
+    let allegroProduct: null | Record<string, unknown> = null;
 
     try {
       const catalogData = await searchCatalogByEan(ean);
-      const products = catalogData.products;
+      const products = (catalogData as { products?: unknown[] }).products;
       if (products && products.length > 0) {
-        allegroProduct = products[0];
-        req.log.info({ productId: allegroProduct!.id, productName: allegroProduct!.name }, "Allegro catalog product selected");
+        allegroProduct = products[0] as Record<string, unknown>;
+        req.log.info(
+          { productId: allegroProduct.id, productName: allegroProduct.name },
+          "Allegro catalog product selected"
+        );
       }
     } catch (allegroErr: unknown) {
       const e = allegroErr as { response?: { status?: number }; message?: string };
@@ -43,73 +69,55 @@ router.get("/scan", async (req, res) => {
       );
     }
 
-    // ── Step 2: If Allegro returned a product, use it (ALWAYS wins) ──
+    // Step 2: If Allegro returned a product, fetch parameters and return
     if (allegroProduct) {
       const product = allegroProduct;
-      const categoryId = product.category?.id ?? null;
-      const productId = product.id;
-      const productName = product.name;
-      const categoryName = product.category?.name ?? "";
-      const images = (product.images || []).map((img: { url: string }) => ({
-        url: img.url,
-      }));
+      const cat = product.category as { id?: string; name?: string } | undefined;
+      const categoryId = cat?.id ?? null;
+      const categoryName = cat?.name ?? "";
+      const productId = product.id as string;
+      const productName = product.name as string;
+      const images = ((product.images as Array<{ url: string }>) || []).map(
+        (img) => ({ url: img.url })
+      );
 
-      // Prefill from product parameters
-      const prefillValues: Record<string, string> = {};
-      const productParams = product.parameters || [];
-      for (const pp of productParams) {
-        if (pp.values && pp.values.length > 0) {
-          prefillValues[pp.id] = pp.values[0];
-        } else if (pp.valuesIds && pp.valuesIds.length > 0) {
-          prefillValues[pp.id] = pp.valuesIds[0];
+      // Build prefillValues from catalog product.parameters
+      const prefillValues: Record<string, string[]> = {};
+      const rawProductParams = (product.parameters as Array<{
+        id: string;
+        values?: string[];
+        valuesIds?: string[];
+        rangeValue?: { from?: string; to?: string };
+      }>) || [];
+
+      for (const pp of rawProductParams) {
+        if (pp.valuesIds && pp.valuesIds.length > 0) {
+          prefillValues[pp.id] = pp.valuesIds;
+        } else if (pp.values && pp.values.length > 0) {
+          prefillValues[pp.id] = pp.values;
         }
       }
 
-      // Fetch category parameters separately — failure here must NOT discard the catalog result
-      let parameters: Array<{
-        id: string;
-        name: string;
-        type: string;
-        required: boolean;
-        unit: string | null;
-        options: Array<{ id: string; name: string }>;
-        restrictions: Record<string, unknown> | null;
-      }> = [];
+      // Fetch category parameters + name in parallel (failure must NOT discard Allegro result)
+      let parameters: ReturnType<typeof mapParam>[] = [];
+      let resolvedCategoryName = categoryName;
 
       if (categoryId) {
-        try {
-          const parametersData = await getCategoryParameters(categoryId);
-          const allParams = parametersData.parameters || [];
-          const requiredParams = allParams.filter(
-            (p: { required: boolean }) => p.required === true
-          );
-          parameters = requiredParams.map(
-            (p: {
-              id: string;
-              name: string;
-              type: string;
-              unit?: string;
-              options?: Array<{ id: string; value: string }>;
-              restrictions?: Record<string, unknown>;
-            }) => ({
-              id: p.id,
-              name: p.name,
-              type: p.type || "string",
-              required: true,
-              unit: p.unit || null,
-              options: (p.options || []).map((opt) => ({
-                id: opt.id,
-                name: opt.value || opt.id,
-              })),
-              restrictions: p.restrictions || null,
-            })
-          );
-        } catch (paramErr: unknown) {
-          const e = paramErr as { response?: { status?: number }; message?: string };
-          req.log.warn(
-            { categoryId, status: e.response?.status, msg: e.message },
-            "Could not fetch category parameters — returning Allegro product without required params"
-          );
+        const [parametersResult, nameResult] = await Promise.allSettled([
+          getCategoryParameters(categoryId),
+          !categoryName ? getCategoryName(categoryId) : Promise.resolve(categoryName),
+        ]);
+
+        if (parametersResult.status === "fulfilled") {
+          const allParams: RawAllegroParam[] = (parametersResult.value as { parameters?: RawAllegroParam[] }).parameters || [];
+          parameters = allParams.map((p) => mapParam(p));
+        } else {
+          const e = parametersResult.reason as { response?: { status?: number }; message?: string };
+          req.log.warn({ categoryId, status: e.response?.status, msg: e.message }, "Could not fetch category parameters");
+        }
+
+        if (nameResult.status === "fulfilled") {
+          resolvedCategoryName = nameResult.value as string;
         }
       }
 
@@ -117,16 +125,17 @@ router.get("/scan", async (req, res) => {
         productId,
         productName,
         categoryId,
-        categoryName,
+        categoryName: resolvedCategoryName,
         images,
         parameters,
         prefillValues,
         source: "allegro_catalog",
+        ean,
       });
       return;
     }
 
-    // ── Step 3: Fallback — use the multi-source external lookup chain ──
+    // Step 3: External fallback
     req.log.info({ ean }, "Allegro catalog empty — trying external lookup");
     const result = await lookupEan(ean);
 
@@ -135,6 +144,7 @@ router.get("/scan", async (req, res) => {
         error: "not_found",
         message: "Nie znaleziono produktu dla podanego kodu EAN",
         logs: result.logs,
+        ean,
       });
       return;
     }
@@ -152,6 +162,7 @@ router.get("/scan", async (req, res) => {
       weight: result.weight,
       category: result.category,
       logs: result.logs,
+      ean,
     });
   } catch (err: unknown) {
     req.log.error({ err }, "Error scanning EAN");
@@ -162,6 +173,67 @@ router.get("/scan", async (req, res) => {
   }
 });
 
+// ── GET /api/allegro/matching-categories?name={name} ────────────────────────
+// Returns suggested Allegro categories for a product name (for external products)
+router.get("/matching-categories", async (req, res) => {
+  const { name } = req.query as { name?: string };
+  if (!name?.trim()) {
+    res.status(400).json({ error: "name parameter required" });
+    return;
+  }
+
+  try {
+    const token = await getUserToken();
+    const response = await axios.get(
+      `${ALLEGRO_BASE_URL}/sale/matching-categories?name=${encodeURIComponent(name.trim())}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.allegro.public.v1+json",
+        },
+        timeout: 8000,
+      }
+    );
+    res.json(response.data);
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number; data?: unknown }; message?: string };
+    req.log.warn({ status: e.response?.status, msg: e.message }, "matching-categories failed");
+    res.status(e.response?.status || 500).json({
+      error: "allegro_error",
+      details: e.response?.data,
+      message: e.message,
+    });
+  }
+});
+
+// ── GET /api/allegro/category-parameters/:categoryId ────────────────────────
+// Returns ALL parameters for a category (cached-friendly, used by the form)
+router.get("/category-parameters/:categoryId", async (req, res) => {
+  const { categoryId } = req.params;
+  if (!categoryId?.trim()) {
+    res.status(400).json({ error: "categoryId required" });
+    return;
+  }
+
+  try {
+    const parametersData = await getCategoryParameters(categoryId);
+    const allParams: RawAllegroParam[] = (parametersData as { parameters?: RawAllegroParam[] }).parameters || [];
+    res.json({
+      categoryId,
+      parameters: allParams.map((p) => mapParam(p)),
+    });
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number; data?: unknown }; message?: string };
+    req.log.warn({ categoryId, status: e.response?.status, msg: e.message }, "category-parameters failed");
+    res.status(e.response?.status || 500).json({
+      error: "allegro_error",
+      message: e.message,
+      details: e.response?.data,
+    });
+  }
+});
+
+// ── POST /api/allegro/create-offer ──────────────────────────────────────────
 router.post("/create-offer", async (req, res) => {
   try {
     const body = CreateOfferBody.parse(req.body);
@@ -170,12 +242,14 @@ router.post("/create-offer", async (req, res) => {
 
     res.json({
       offerId: offer.id,
-      status: offer.publication?.status || "INACTIVE",
+      status: (offer as { publication?: { status?: string } }).publication?.status || "INACTIVE",
       message: "Oferta została pomyślnie utworzona",
     });
   } catch (err: unknown) {
     req.log.error({ err }, "Error creating offer");
-    const axiosErr = err as { response?: { data?: { errors?: Array<{ message: string }> }; status?: number } };
+    const axiosErr = err as {
+      response?: { data?: { errors?: Array<{ message: string }> }; status?: number };
+    };
     if (axiosErr.response?.data?.errors) {
       res.status(400).json({
         error: "allegro_error",

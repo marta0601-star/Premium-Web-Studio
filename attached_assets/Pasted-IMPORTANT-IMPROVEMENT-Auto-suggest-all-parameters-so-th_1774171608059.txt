@@ -1,0 +1,58 @@
+IMPORTANT IMPROVEMENT: Auto-suggest all parameters so the user just reviews and approves them.
+
+1. FOR PRODUCTS FOUND IN ALLEGRO CATALOG:
+   - Show the category name and category ID clearly at the top
+   - Fetch ALL required parameters for that category
+   - Pre-fill parameters from the Allegro catalog product data (product.parameters array)
+   - Show ALL parameters in the form, pre-filled and ready to submit
+   - User just reviews, edits if needed, and clicks "Utwórz ofertę"
+
+2. FOR PRODUCTS FOUND FROM EXTERNAL SOURCES (Open Food Facts, Google, etc.):
+   - Auto-suggest the category based on the product type/name:
+     * Use Allegro API: GET https://api.allegro.pl/sale/matching-categories?phrase={product_name}
+     * Pick the first/best matching category automatically
+     * Let user change it if wrong
+   - After category is determined, fetch required parameters
+   - AUTO-FILL parameters intelligently from the product data:
+     * "Marka/Brand" parameter → fill from product brand
+     * "EAN (GTIN)" parameter → fill from the scanned EAN code
+     * "Waga/Weight" parameter → fill from product weight/quantity
+     * "Nazwa/Name" parameter → fill from product name
+     * "Pojemność/Volume" parameter → fill from product volume if available
+     * "Kraj pochodzenia/Country" parameter → try to detect from EAN prefix (400-440=Germany, 590=Poland, 300-379=France, 800-839=Italy, etc.)
+     * For dictionary parameters, try to fuzzy-match the product data against allowed values
+   - Highlight auto-filled fields in GREEN so user sees what was filled
+   - Highlight empty required fields in RED so user knows what to fill manually
+
+3. PARAMETER FORM DESIGN:
+   - Show category name with a "Zmień kategorię" (change category) button
+   - Group parameters logically
+   - For dictionary parameters: show dropdown with allowed values, pre-select best match
+   - For string parameters: show text input, pre-fill if data available
+   - For number parameters: show number input with min/max from parameter restrictions
+   - Show which fields are required (*) and which are optional
+   - Add a progress indicator: "Wypełniono 8/12 wymaganych parametrów"
+
+4. EAN PREFIX COUNTRY DETECTION for auto-filling "Country of origin":
+   - 400-440 → Niemcy (Germany)
+   - 590 → Polska (Poland)
+   - 300-379 → Francja (France)  
+   - 800-839 → Włochy (Italy)
+   - 840-849 → Hiszpania (Spain)
+   - 858 → Czechy (Czech Republic)
+   - 859 → Słowacja (Slovakia)
+   - 869 → Turcja (Turkey)
+   - 471 → Tajwan (Taiwan)
+   - 489 → Hongkong
+   - 500-509 → Wielka Brytania (UK)
+   - 690-699 → Chiny (China)
+   - 880 → Korea Południowa (South Korea)
+   - 490-499 → Japonia (Japan)
+
+5. SMART AUTO-FILL LOGIC:
+   - When external source provides ingredients/composition → try to match "Skład" parameter
+   - When product name contains size info (e.g. "250ml", "100g") → fill weight/volume parameter
+   - When brand is known → search Allegro's dictionary values for that brand name and pre-select it
+   - For parameters you cannot determine → leave empty but highlight in RED
+
+The goal is: user scans EAN → sees ALL parameters pre-filled → quickly reviews → clicks submit. Minimum manual work. Keep everything in Polish.

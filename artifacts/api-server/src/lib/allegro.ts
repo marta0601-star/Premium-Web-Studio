@@ -88,8 +88,31 @@ export async function searchCatalogByEan(ean: string) {
   return { products: [], totalCount: 0 };
 }
 
+export async function getCategoryName(categoryId: string): Promise<string> {
+  let token: string;
+  try {
+    token = await getUserToken();
+  } catch {
+    token = await getClientCredentialsToken();
+  }
+  const response = await axios.get(`${ALLEGRO_BASE_URL}/sale/categories/${categoryId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.allegro.public.v1+json",
+    },
+    timeout: 6000,
+  });
+  return (response.data as { name?: string }).name ?? "";
+}
+
 export async function getCategoryParameters(categoryId: string) {
-  const token = await getClientCredentialsToken();
+  // This endpoint requires a user-level token; fall back to CC if none available
+  let token: string;
+  try {
+    token = await getUserToken();
+  } catch {
+    token = await getClientCredentialsToken();
+  }
 
   const response = await axios.get(
     `${ALLEGRO_BASE_URL}/sale/categories/${categoryId}/parameters`,
