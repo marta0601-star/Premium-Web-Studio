@@ -334,6 +334,57 @@ async function googleTextSearch(query: string, label: string, logs: string[]): P
   return extractNameFromGoogleHtml(html, label, logs);
 }
 
+// ── Open Beauty Facts / Open Pet Food Facts ───────────────────────────────────
+
+async function searchOpenFactsApi(url: string, label: string, ean: string, logs: string[]): Promise<LookupResult | null> {
+  logs.push(`[${label}] ${url}`);
+  try {
+    const resp = await axios.get(url, {
+      timeout: 8000,
+      headers: { "User-Agent": "iPremiumScan/1.0" },
+    });
+    const data = resp.data;
+    if (data.status === 1 && data.product) {
+      const p = data.product as Record<string, unknown>;
+      const name =
+        (p.product_name as string) ||
+        (p.product_name_en as string) ||
+        (p.product_name_de as string) ||
+        (p.product_name_pl as string) ||
+        (p.product_name_fr as string) ||
+        null;
+      if (!name) { logs.push(`[${label}] Found but no name`); return null; }
+      const image = extractOffImage(p, ean);
+      logs.push(`[${label}] Found: ${name}`);
+      return {
+        found: true,
+        name,
+        brand: (p.brands as string) || null,
+        weight: (p.quantity as string) || null,
+        category: p.categories ? (p.categories as string).split(",")[0].trim() : null,
+        image,
+        description: null,
+        source: label.toLowerCase().replace(/[^a-z_/]/g, "_"),
+        logs,
+      };
+    }
+    logs.push(`[${label}] status=${data.status}`);
+  } catch (err: unknown) {
+    const e = err as { code?: string; message?: string; response?: { status?: number } };
+    logs.push(`[${label}] ${e.response?.status === 404 ? "404" : e.message}`);
+  }
+  return null;
+}
+
+// ── Google Shopping search ─────────────────────────────────────────────────────
+
+async function searchGoogleShopping(ean: string, logs: string[]): Promise<LookupResult | null> {
+  const url = `https://www.google.com/search?q=${encodeURIComponent(ean)}&tbm=shop`;
+  const html = await fetchGoogle(url, "GoogleShopping", logs, 8000);
+  if (!html) return null;
+  return extractNameFromGoogleHtml(html, "GoogleShopping", logs);
+}
+
 // ── Main lookup ───────────────────────────────────────────────────────────────
 
 export async function lookupEan(ean: string): Promise<LookupResult> {
@@ -402,7 +453,43 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
     }
   }
 
-  // ── Phase 4: Nothing found ────────────────────────────────────────────────
+  // ── Phase 4: Extended parallel sweep — e-shops, barcode DBs, Beauty/Pet, Shopping ──
+  logs.push("[Phase4] All sources empty — running extended parallel sweep");
+
+  const phase4Results = await Promise.all([
+    // E-shops
+    googleTextSearch(`site:amazon.de ${ean}`, "Google/Amazon.de", logs).catch(() => null),
+    googleTextSearch(`site:amazon.pl ${ean}`, "Google/Amazon.pl", logs).catch(() => null),
+    googleTextSearch(`site:kaufland.de ${ean}`, "Google/Kaufland", logs).catch(() => null),
+    googleTextSearch(`site:lidl.pl ${ean}`, "Google/Lidl", logs).catch(() => null),
+    googleTextSearch(`site:auchan.pl ${ean}`, "Google/Auchan", logs).catch(() => null),
+    googleTextSearch(`site:carrefour.pl ${ean}`, "Google/Carrefour", logs).catch(() => null),
+    googleTextSearch(`site:biedronka.pl ${ean}`, "Google/Biedronka", logs).catch(() => null),
+    googleTextSearch(`site:rossmann.pl ${ean}`, "Google/Rossmann", logs).catch(() => null),
+    googleTextSearch(`site:empik.com ${ean}`, "Google/Empik", logs).catch(() => null),
+    // Barcode databases
+    googleTextSearch(`site:go-upc.com ${ean}`, "Google/GoUPC", logs).catch(() => null),
+    googleTextSearch(`site:buycott.com ${ean}`, "Google/Buycott", logs).catch(() => null),
+    googleTextSearch(`site:codecheck.info ${ean}`, "Google/Codecheck", logs).catch(() => null),
+    // Additional product APIs
+    searchOpenFactsApi(`https://world.openbeautyfacts.org/api/v2/product/${ean}.json`, "OpenBeautyFacts", ean, logs).catch(() => null),
+    searchOpenFactsApi(`https://world.openpetfoodfacts.org/api/v2/product/${ean}.json`, "OpenPetFoodFacts", ean, logs).catch(() => null),
+    // Google Shopping
+    searchGoogleShopping(ean, logs).catch(() => null),
+  ]);
+
+  const phase4Hit = phase4Results.find((r) => r?.name);
+  if (phase4Hit) {
+    image = image || phase4Hit.image || null;
+    if (!image) {
+      logs.push(`[ImageHunt] Searching by name: ${phase4Hit.name}`);
+      image = await searchGoogleImagesUrl(phase4Hit.name!, "GoogleImg/Phase4", logs);
+    }
+    if (image) logs.push(`[Result] Image: ${image.slice(0, 80)}`);
+    return { ...phase4Hit, image: image || null, logs };
+  }
+
+  // ── Phase 5: Nothing found anywhere ──────────────────────────────────────
   logs.push("Nie znaleziono produktu w żadnym źródle");
   return { found: false, logs };
 }
