@@ -24,8 +24,11 @@ const DEVICE_URL = "https://allegro.pl/auth/oauth/device";
 
 // Persist tokens to this file so they survive server restarts
 const TOKEN_FILE = path.resolve(
-  process.env.TOKEN_STORE_PATH || path.join(process.cwd(), ".allegro-token.json")
+  process.env.TOKEN_STORE_PATH || path.join(process.cwd(), "tokens.json")
 );
+
+// Legacy path — migrate automatically on first load
+const TOKEN_FILE_LEGACY = path.resolve(path.join(process.cwd(), ".allegro-token.json"));
 
 interface UserTokenStore {
   accessToken: string;
@@ -34,19 +37,34 @@ interface UserTokenStore {
   scopes: string[];
 }
 
-// Load from disk on startup
+// Load from disk on startup — also migrates from old filename
 function loadTokenFromDisk(): UserTokenStore | null {
-  try {
-    if (fs.existsSync(TOKEN_FILE)) {
-      const raw = fs.readFileSync(TOKEN_FILE, "utf-8");
-      const data = JSON.parse(raw) as UserTokenStore;
-      if (data.accessToken && data.refreshToken && data.expiresAt) {
-        logger.info({ expiresAt: new Date(data.expiresAt).toISOString() }, "Allegro user token loaded from disk");
-        return data;
+  // Try new path first, fall back to legacy path (and migrate it)
+  const filesToTry = [TOKEN_FILE, TOKEN_FILE_LEGACY];
+  for (const file of filesToTry) {
+    try {
+      if (fs.existsSync(file)) {
+        const raw = fs.readFileSync(file, "utf-8");
+        const data = JSON.parse(raw) as UserTokenStore;
+        if (data.accessToken && data.refreshToken && data.expiresAt) {
+          logger.info(
+            { file, expiresAt: new Date(data.expiresAt).toISOString() },
+            "Allegro user token loaded from disk"
+          );
+          // Migrate legacy file to new path
+          if (file !== TOKEN_FILE) {
+            try {
+              fs.writeFileSync(TOKEN_FILE, JSON.stringify(data, null, 2), "utf-8");
+              fs.unlinkSync(file);
+              logger.info({ from: file, to: TOKEN_FILE }, "Migrated token file to tokens.json");
+            } catch { /* ignore migration errors */ }
+          }
+          return data;
+        }
       }
+    } catch (e) {
+      logger.warn({ err: e, file }, "Could not load Allegro token from disk");
     }
-  } catch (e) {
-    logger.warn({ err: e }, "Could not load Allegro token from disk");
   }
   return null;
 }
@@ -146,6 +164,9 @@ async function refreshAccessToken(): Promise<void> {
   logger.info("Allegro user token refreshed");
 }
 
+// Refresh the token if it expires within this many ms
+const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function getUserToken(): Promise<string> {
   if (!userToken) {
     throw new Error(
@@ -153,7 +174,12 @@ export async function getUserToken(): Promise<string> {
     );
   }
 
-  if (Date.now() >= userToken.expiresAt) {
+  // Proactively refresh if the token expires in the next 5 minutes
+  if (Date.now() >= userToken.expiresAt - REFRESH_BUFFER_MS) {
+    logger.info(
+      { expiresAt: new Date(userToken.expiresAt).toISOString() },
+      "Access token expiring soon — refreshing automatically"
+    );
     await refreshAccessToken();
   }
 
