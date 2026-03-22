@@ -397,65 +397,7 @@ function CategoryPicker({
   );
 }
 
-// ── Offer settings types ──────────────────────────────────────────────────────
-
-interface ShippingRate { id: string; name: string; }
-interface ReturnPolicy { id: string; name: string; availability?: { range: string }; }
-interface ImpliedWarranty { id: string; name: string; }
-
-interface OfferDefaults {
-  shippingRates: ShippingRate[];
-  returnPolicies: ReturnPolicy[];
-  impliedWarranties: ImpliedWarranty[];
-}
-
-interface OfferSettings {
-  quantity: number;
-  shippingRateId: string | null;
-  returnPolicyId: string | null;
-  impliedWarrantyId: string | null;
-  invoice: "VAT" | "WITHOUT_VAT" | "VAT_MARGIN" | "NO_INVOICE";
-}
-
-function detectVatRate(categoryName: string): number {
-  const n = categoryName.toLowerCase();
-  const food5 = /chleb|mąka|kasza|ryż|płatki|nabiał|mleko|masło|jaja|sery/.test(n);
-  const food8 = /chipsy|ciastka|cukierki|napój|napoje|żywność|jedzenie|czekolada|słodycze|baton|cukier|kawa|herbata|sok|woda|energet|przekąski|lody|dżem|miód|muesli|owoce|warzywa|mięso|ryba/.test(n);
-  if (food5) return 5;
-  if (food8) return 8;
-  return 23;
-}
-
-function initOfferSettings(defaults: OfferDefaults): OfferSettings {
-  // Pick the most broadly available return policy (prefer FULL)
-  const fullReturn = defaults.returnPolicies.find((p) => p.availability?.range === "FULL");
-  const anyReturn = fullReturn || defaults.returnPolicies[0] || null;
-
-  return {
-    quantity: 1,
-    shippingRateId: defaults.shippingRates[0]?.id || null,
-    returnPolicyId: anyReturn?.id || null,
-    impliedWarrantyId: defaults.impliedWarranties[0]?.id || null,
-    invoice: "VAT",
-  };
-}
-
 // ── API helpers ──────────────────────────────────────────────────────────────
-
-async function fetchOfferDefaults(): Promise<OfferDefaults> {
-  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-  try {
-    const r = await fetch(`${BASE}/api/allegro/offer-defaults`);
-    const d = await r.json();
-    return {
-      shippingRates: (d.shippingRates || []) as ShippingRate[],
-      returnPolicies: (d.returnPolicies || []) as ReturnPolicy[],
-      impliedWarranties: (d.impliedWarranties || []) as ImpliedWarranty[],
-    };
-  } catch {
-    return { shippingRates: [], returnPolicies: [], impliedWarranties: [] };
-  }
-}
 
 async function fetchMatchingCategories(name: string): Promise<CategorySuggestion[]> {
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -512,21 +454,8 @@ export default function Home() {
   const [scanHistory, setScanHistory] = useState<HistoryEntry[]>([]);
   const [productParamIds, setProductParamIds] = useState<string[]>([]);
 
-  // Offer settings state
-  const [offerDefaults, setOfferDefaults] = useState<OfferDefaults>({ shippingRates: [], returnPolicies: [], impliedWarranties: [] });
-  const [offerSettings, setOfferSettings] = useState<OfferSettings>({ quantity: 1, shippingRateId: null, returnPolicyId: null, impliedWarrantyId: null, invoice: "VAT" });
-  const [vatRate, setVatRate] = useState<number>(23);
-
   const scanMutation = useScanBarcode();
   const submitMutation = useSubmitOffer();
-
-  // Fetch offer defaults (shipping rates, return policies, warranties) on mount
-  useEffect(() => {
-    fetchOfferDefaults().then((defaults) => {
-      setOfferDefaults(defaults);
-      setOfferSettings(initOfferSettings(defaults));
-    });
-  }, []);
 
   // When category changes, re-fetch parameters and re-auto-fill
   const applyCategory = useCallback(
@@ -546,7 +475,6 @@ export default function Home() {
       setCategoryId(catId);
       setCategoryName(catName);
       setParameters(params);
-      setVatRate(detectVatRate(catName));
       const { formState: fs, autoFilledIds: ai } = buildAutoFilledState(params, prefillValues, ctx);
       setFormState(fs);
       setAutoFilledIds(ai);
@@ -679,11 +607,6 @@ export default function Home() {
       productName: scannedData.productName as string,
       parameters: parameters_payload,
       productParamIds,
-      quantity: offerSettings.quantity,
-      shippingRateId: offerSettings.shippingRateId,
-      returnPolicyId: offerSettings.returnPolicyId,
-      impliedWarrantyId: offerSettings.impliedWarrantyId,
-      invoice: offerSettings.invoice,
     };
 
     try {
@@ -724,8 +647,6 @@ export default function Home() {
     setCategoryName("");
     setCategorySuggestions([]);
     setProductParamIds([]);
-    setVatRate(23);
-    setOfferSettings(initOfferSettings(offerDefaults));
     setStep("SCAN");
   };
 
@@ -972,135 +893,6 @@ export default function Home() {
                       </div>
                     </>
                   )}
-                </div>
-
-                {/* ── Ustawienia oferty ── */}
-                <div className="space-y-5 pt-2">
-                  <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                    <h3 className="text-xl font-display text-white">Ustawienia oferty</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-                    {/* Cena */}
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white/80">Cena</label>
-                      <div className="flex h-12 items-center px-4 rounded-xl bg-black/20 border border-white/5 text-white/60 text-sm">
-                        <span className="text-white font-semibold text-lg">999</span>
-                        <span className="ml-1 text-white/50">PLN</span>
-                      </div>
-                    </div>
-
-                    {/* Stan magazynowy */}
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white/80">Stan magazynowy</label>
-                      <div className="flex items-center gap-2">
-                        <PremiumInput
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={offerSettings.quantity}
-                          onChange={(e) => setOfferSettings((s) => ({ ...s, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
-                          className="flex-1"
-                        />
-                        <span className="text-white/40 text-sm shrink-0">sztuk</span>
-                      </div>
-                    </div>
-
-                    {/* Dostawa */}
-                    {offerDefaults.shippingRates.length > 0 && (
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <label className="text-sm font-medium text-white/80">Cennik dostawy</label>
-                        <PremiumSelect
-                          value={offerSettings.shippingRateId || ""}
-                          onChange={(e) => setOfferSettings((s) => ({ ...s, shippingRateId: e.target.value || null }))}
-                        >
-                          <option value="" className="bg-background text-white/50">— Brak cennika dostawy —</option>
-                          {offerDefaults.shippingRates.map((r) => (
-                            <option key={r.id} value={r.id} className="bg-background text-white">{r.name}</option>
-                          ))}
-                        </PremiumSelect>
-                      </div>
-                    )}
-
-                    {/* Faktura VAT */}
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white/80">Faktura</label>
-                      <PremiumSelect
-                        value={offerSettings.invoice}
-                        onChange={(e) => setOfferSettings((s) => ({ ...s, invoice: e.target.value as OfferSettings["invoice"] }))}
-                      >
-                        <option value="VAT" className="bg-background text-white">Faktura VAT</option>
-                        <option value="WITHOUT_VAT" className="bg-background text-white">Bez VAT (zw.)</option>
-                        <option value="VAT_MARGIN" className="bg-background text-white">VAT marża</option>
-                        <option value="NO_INVOICE" className="bg-background text-white">Bez faktury</option>
-                      </PremiumSelect>
-                    </div>
-
-                    {/* VAT rate (informational) */}
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white/80 flex items-center gap-1.5">
-                        Stawka VAT
-                        {categoryName && <span className="text-white/30 text-xs font-normal">(auto-wykryta)</span>}
-                      </label>
-                      <div className="flex gap-2">
-                        {[23, 8, 5].map((rate) => (
-                          <button
-                            key={rate}
-                            type="button"
-                            onClick={() => setVatRate(rate)}
-                            className={`flex-1 h-12 rounded-xl text-sm font-semibold border transition-colors ${
-                              vatRate === rate
-                                ? "bg-primary/20 border-primary/60 text-primary"
-                                : "bg-black/20 border-white/10 text-white/40 hover:text-white/60"
-                            }`}
-                          >
-                            {rate}%
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Czas trwania */}
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-white/80">Czas trwania</label>
-                      <div className="flex h-12 items-center px-4 rounded-xl bg-black/20 border border-white/5 text-white/60 text-sm">
-                        Do wyczerpania zapasów
-                      </div>
-                    </div>
-
-                    {/* Warunki zwrotów */}
-                    {offerDefaults.returnPolicies.length > 0 && (
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-white/80">Warunki zwrotów</label>
-                        <PremiumSelect
-                          value={offerSettings.returnPolicyId || ""}
-                          onChange={(e) => setOfferSettings((s) => ({ ...s, returnPolicyId: e.target.value || null }))}
-                        >
-                          <option value="" className="bg-background text-white/50">— Brak —</option>
-                          {offerDefaults.returnPolicies.map((p) => (
-                            <option key={p.id} value={p.id} className="bg-background text-white">{p.name}</option>
-                          ))}
-                        </PremiumSelect>
-                      </div>
-                    )}
-
-                    {/* Reklamacje */}
-                    {offerDefaults.impliedWarranties.length > 0 && (
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-white/80">Reklamacje</label>
-                        <PremiumSelect
-                          value={offerSettings.impliedWarrantyId || ""}
-                          onChange={(e) => setOfferSettings((s) => ({ ...s, impliedWarrantyId: e.target.value || null }))}
-                        >
-                          <option value="" className="bg-background text-white/50">— Brak —</option>
-                          {offerDefaults.impliedWarranties.map((w) => (
-                            <option key={w.id} value={w.id} className="bg-background text-white">{w.name}</option>
-                          ))}
-                        </PremiumSelect>
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                 {(errorMsg || allegroErrors.length > 0) && (

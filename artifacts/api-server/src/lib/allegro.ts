@@ -128,30 +128,77 @@ export async function getCategoryParameters(categoryId: string) {
   return response.data;
 }
 
-export async function getOfferDefaults() {
-  const token = await getUserToken();
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.allegro.public.v1+json",
-  };
+// ── Fixed defaults — resolved once at startup and cached ─────────────────────
 
-  const [shippingResult, returnResult, warrantyResult] = await Promise.allSettled([
-    axios.get(`${ALLEGRO_BASE_URL}/sale/shipping-rates`, { headers, timeout: 8000 }),
-    axios.get(`${ALLEGRO_BASE_URL}/after-sales-service-conditions/return-policies`, { headers, timeout: 8000 }),
-    axios.get(`${ALLEGRO_BASE_URL}/after-sales-service-conditions/implied-warranties`, { headers, timeout: 8000 }),
-  ]);
+interface FixedDefaults {
+  shippingRateId: string | null;
+  returnPolicyId: string | null;
+  impliedWarrantyId: string | null;
+}
 
-  return {
-    shippingRates: shippingResult.status === "fulfilled"
-      ? ((shippingResult.value.data as { shippingRates?: unknown[] }).shippingRates || [])
-      : [],
-    returnPolicies: returnResult.status === "fulfilled"
-      ? ((returnResult.value.data as { returnPolicies?: unknown[] }).returnPolicies || [])
-      : [],
-    impliedWarranties: warrantyResult.status === "fulfilled"
-      ? ((warrantyResult.value.data as { impliedWarranties?: unknown[] }).impliedWarranties || [])
-      : [],
-  };
+const fixedDefaults: FixedDefaults = {
+  shippingRateId: null,
+  returnPolicyId: null,
+  impliedWarrantyId: null,
+};
+
+function pickById<T extends { id: string; name: string }>(
+  items: T[],
+  nameContains: string,
+  label: string
+): string | null {
+  const match = items.find((x) => x.name.toUpperCase().includes(nameContains.toUpperCase()));
+  if (match) {
+    logger.info({ id: match.id, name: match.name }, `Fixed default resolved: ${label}`);
+    return match.id;
+  }
+  const fallback = items[0] ?? null;
+  if (fallback) {
+    logger.warn(
+      { searched: nameContains, fallbackId: fallback.id, fallbackName: fallback.name },
+      `Fixed default "${label}" not found by name — using first available as fallback`
+    );
+    return fallback.id;
+  }
+  logger.warn({ searched: nameContains }, `Fixed default "${label}" not found and no fallback available`);
+  return null;
+}
+
+export async function loadFixedDefaults(): Promise<void> {
+  try {
+    const token = await getUserToken();
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.allegro.public.v1+json",
+    };
+
+    const [shippingRes, returnRes, warrantyRes] = await Promise.allSettled([
+      axios.get(`${ALLEGRO_BASE_URL}/sale/shipping-rates`, { headers, timeout: 10000 }),
+      axios.get(`${ALLEGRO_BASE_URL}/after-sales-service-conditions/return-policies`, { headers, timeout: 10000 }),
+      axios.get(`${ALLEGRO_BASE_URL}/after-sales-service-conditions/implied-warranties`, { headers, timeout: 10000 }),
+    ]);
+
+    const rates = shippingRes.status === "fulfilled"
+      ? ((shippingRes.value.data as { shippingRates?: { id: string; name: string }[] }).shippingRates || [])
+      : [];
+    const policies = returnRes.status === "fulfilled"
+      ? ((returnRes.value.data as { returnPolicies?: { id: string; name: string }[] }).returnPolicies || [])
+      : [];
+    const warranties = warrantyRes.status === "fulfilled"
+      ? ((warrantyRes.value.data as { impliedWarranties?: { id: string; name: string }[] }).impliedWarranties || [])
+      : [];
+
+    fixedDefaults.shippingRateId = pickById(rates, "DOSTAWA", "shippingRate");
+    fixedDefaults.returnPolicyId = pickById(policies, "ZWROT", "returnPolicy");
+    fixedDefaults.impliedWarrantyId = pickById(warranties, "REKLAMACJA", "impliedWarranty");
+
+    logger.info(
+      { fixedDefaults },
+      "Fixed offer defaults loaded and cached"
+    );
+  } catch (err) {
+    logger.error({ err }, "Failed to load fixed offer defaults — will retry on first offer creation");
+  }
 }
 
 export async function createAllegroOffer(payload: {
@@ -164,13 +211,13 @@ export async function createAllegroOffer(payload: {
     valuesIds?: string[];
   }>;
   productParamIds?: string[];
-  quantity?: number;
-  shippingRateId?: string | null;
-  returnPolicyId?: string | null;
-  impliedWarrantyId?: string | null;
-  invoice?: string;
 }) {
   const token = await getUserToken();
+
+  // If fixedDefaults were not loaded yet (e.g. no user token at startup), try now
+  if (!fixedDefaults.shippingRateId && !fixedDefaults.returnPolicyId && !fixedDefaults.impliedWarrantyId) {
+    await loadFixedDefaults();
+  }
 
   // Split parameters into product-level and offer-level
   const productParamSet = new Set(payload.productParamIds || []);
@@ -192,7 +239,7 @@ export async function createAllegroOffer(payload: {
       price: { amount: "999", currency: "PLN" },
     },
     stock: {
-      available: payload.quantity ?? 1,
+      available: 1,
       unit: "UNIT",
     },
     publication: {
@@ -200,7 +247,7 @@ export async function createAllegroOffer(payload: {
       duration: null,
     },
     payments: {
-      invoice: payload.invoice || "VAT",
+      invoice: "VAT",
     },
   };
 
@@ -211,31 +258,32 @@ export async function createAllegroOffer(payload: {
       productEntry.parameters = productParams.map(mapParam);
     }
     offerBody.productSet = [{ product: productEntry }];
-    // Offer-level params (e.g. Stan) go in root parameters
     if (offerParams.length > 0) {
       offerBody.parameters = offerParams.map(mapParam);
     }
   } else {
-    // External product: no productSet, all params at offer level
     if (payload.parameters.length > 0) {
       offerBody.parameters = payload.parameters.map(mapParam);
     }
   }
 
-  // Delivery
-  if (payload.shippingRateId) {
-    offerBody.delivery = { shippingRates: { id: payload.shippingRateId } };
+  // Fixed delivery (DOSTAWA)
+  if (fixedDefaults.shippingRateId) {
+    offerBody.delivery = { shippingRates: { id: fixedDefaults.shippingRateId } };
   }
 
-  // After-sales services
-  if (payload.returnPolicyId || payload.impliedWarrantyId) {
+  // Fixed after-sales services (ZWROT + REKLAMACJA)
+  if (fixedDefaults.returnPolicyId || fixedDefaults.impliedWarrantyId) {
     offerBody.afterSalesServices = {
-      ...(payload.impliedWarrantyId ? { impliedWarranty: { id: payload.impliedWarrantyId } } : {}),
-      ...(payload.returnPolicyId ? { returnPolicy: { id: payload.returnPolicyId } } : {}),
+      ...(fixedDefaults.impliedWarrantyId ? { impliedWarranty: { id: fixedDefaults.impliedWarrantyId } } : {}),
+      ...(fixedDefaults.returnPolicyId ? { returnPolicy: { id: fixedDefaults.returnPolicyId } } : {}),
     };
   }
 
-  logger.info({ offerBody: JSON.stringify(offerBody) }, "Creating Allegro offer via product-offers API");
+  logger.info(
+    { productId: payload.productId, categoryId: payload.categoryId, fixedDefaults },
+    "Creating Allegro offer via product-offers API"
+  );
 
   const response = await axios.post(
     `${ALLEGRO_BASE_URL}/sale/product-offers`,

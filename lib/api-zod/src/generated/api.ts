@@ -97,11 +97,6 @@ export const CreateOfferBody = zod.object({
     }),
   ),
   productParamIds: zod.array(zod.string()).optional(),
-  quantity: zod.number().int().min(1).optional(),
-  shippingRateId: zod.string().nullable().optional(),
-  returnPolicyId: zod.string().nullable().optional(),
-  impliedWarrantyId: zod.string().nullable().optional(),
-  invoice: zod.enum(["VAT", "WITHOUT_VAT", "VAT_MARGIN", "NO_INVOICE"]).optional(),
 });
 
 export const CreateOfferResponse = zod.object({

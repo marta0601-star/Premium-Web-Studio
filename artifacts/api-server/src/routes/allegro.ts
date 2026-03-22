@@ -9,7 +9,6 @@ import {
   getCategoryParameters,
   getCategoryName,
   createAllegroOffer,
-  getOfferDefaults,
 } from "../lib/allegro";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
@@ -248,24 +247,6 @@ router.get("/category-parameters/:categoryId", async (req, res) => {
   }
 });
 
-// ── GET /api/allegro/offer-defaults ─────────────────────────────────────────
-// Returns shipping rates, return policies, and implied warranties for the user
-router.get("/offer-defaults", async (req, res) => {
-  try {
-    const defaults = await getOfferDefaults();
-    res.json(defaults);
-  } catch (err: unknown) {
-    const e = err as { response?: { status?: number }; message?: string };
-    req.log.warn({ status: e.response?.status, msg: e.message }, "offer-defaults fetch failed");
-    res.status(e.response?.status || 500).json({
-      error: "allegro_error",
-      message: e.message,
-      shippingRates: [],
-      returnPolicies: [],
-      impliedWarranties: [],
-    });
-  }
-});
 
 // ── POST /api/allegro/create-offer ──────────────────────────────────────────
 router.post("/create-offer", async (req, res) => {

@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { loadFixedDefaults } from "./lib/allegro";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,9 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Resolve and cache DOSTAWA / ZWROT / REKLAMACJA IDs once at startup
+  loadFixedDefaults().catch((e) =>
+    logger.warn({ err: e }, "loadFixedDefaults failed at startup — will retry at first offer creation")
+  );
 });

@@ -82,11 +82,6 @@ export interface CreateOfferRequest {
   productName: string;
   parameters: ParameterValue[];
   productParamIds?: string[];
-  quantity?: number;
-  shippingRateId?: string | null;
-  returnPolicyId?: string | null;
-  impliedWarrantyId?: string | null;
-  invoice?: "VAT" | "WITHOUT_VAT" | "VAT_MARGIN" | "NO_INVOICE";
 }
 
 export interface AllegroApiError {
