@@ -332,11 +332,19 @@ export async function createAllegroOffer(payload: {
     };
   }
 
-  // Upload image to Allegro if provided
+  // Upload image to Allegro if provided (skip if already Allegro-hosted)
   if (payload.imageUrl) {
-    const allegroImageUrl = await uploadImageToAllegro(payload.imageUrl);
-    if (allegroImageUrl) {
-      offerBody.images = [{ url: allegroImageUrl }];
+    const isAlreadyAllegro =
+      payload.imageUrl.includes("allegroimg.com") ||
+      payload.imageUrl.includes("upload.allegro.pl") ||
+      payload.imageUrl.includes("allegro.pl/images");
+    if (isAlreadyAllegro) {
+      offerBody.images = [{ url: payload.imageUrl }];
+    } else {
+      const allegroImageUrl = await uploadImageToAllegro(payload.imageUrl);
+      if (allegroImageUrl) {
+        offerBody.images = [{ url: allegroImageUrl }];
+      }
     }
   }
 

@@ -581,7 +581,25 @@ export default function Home() {
         setCategoryName("");
         setParameters([]);
 
-        // Find Supermarket top-level category (exact name match)
+        // Auto-upload any image found by the lookup to Allegro in background
+        const lookupImageUrl = data.images?.[0]?.url ?? null;
+        if (lookupImageUrl) {
+          setImageUploading(true);
+          const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+          fetch(`${BASE}/api/allegro/upload-image`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: lookupImageUrl }),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d: { url?: string } | null) => {
+              if (d?.url) setAllegroImageUrl(d.url);
+            })
+            .catch(() => {/* best-effort */})
+            .finally(() => setImageUploading(false));
+        }
+
+        // Find Supermarket top-level category (exact name match) — runs in parallel with image upload
         const supermarketResults = await fetchMatchingCategories("Supermarket");
         const supermarket = supermarketResults.find((c) => c.name === "Supermarket") || supermarketResults[0];
 
