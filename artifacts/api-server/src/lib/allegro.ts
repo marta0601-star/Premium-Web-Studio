@@ -349,7 +349,7 @@ export async function createAllegroOffer(payload: {
   }
 
   // Always exclude known-bad parameters (never allowed in offer section)
-  const ALWAYS_EXCLUDED = new Set(["224017"]); // Kod producenta — not allowed in offer section
+  const ALWAYS_EXCLUDED = new Set(["224017", "225693"]); // Kod producenta, EAN (GTIN) — not allowed in offer section
 
   // Rebuild offerBody.parameters filtering out excluded IDs
   function filterParams(excluded: Set<string>) {
@@ -436,7 +436,7 @@ export async function createAllegroOffer(payload: {
       // Extract parameter IDs from error messages: "Parameter 224017:Kod producenta should not..."
       let foundNew = false;
       for (const pe of paramErrors) {
-        const msgMatch = pe.message?.match(/Parameter\s+(\w+):/i);
+        const msgMatch = pe.message?.match(/Parameter\s+[`'"]?(\w+):/i);
         const pathMatch = pe.path?.match(/\/parameters\/(\d+)/);
 
         if (msgMatch?.[1]) {
