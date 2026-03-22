@@ -771,7 +771,6 @@ export default function Home() {
                     <h3 className="text-xl font-display text-white">Parametry produktu</h3>
                     <div className="flex items-center gap-3 text-xs text-white/40">
                       <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-500/40 border border-green-500/60 inline-block" /> Auto-wypełnione</span>
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-red-500/20 border border-red-500/40 inline-block" /> Wymagane</span>
                     </div>
                   </div>
 
@@ -793,17 +792,8 @@ export default function Home() {
 
                   {!loadingParams && parameters.length > 0 && (
                     <>
-                      {/* Required params first, then optional */}
-                      {[true, false].map((showRequired) => {
-                        const group = parameters.filter((p) => p.required === showRequired);
-                        if (group.length === 0) return null;
-                        return (
-                          <div key={String(showRequired)} className="space-y-4">
-                            <p className="text-xs font-semibold text-white/30 uppercase tracking-wider">
-                              {showRequired ? "Wymagane *" : "Opcjonalne"}
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                              {group.map((param) => {
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {parameters.filter((p) => p.required).map((param) => {
                                 const isAutoFilled = autoFilledIds.has(param.id);
                                 const hasValue =
                                   (formState[param.id]?.values?.[0] && formState[param.id]?.values?.[0] !== "") ||
@@ -874,11 +864,8 @@ export default function Home() {
                                     )}
                                   </div>
                                 );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
+                        })}
+                      </div>
                     </>
                   )}
                 </div>
