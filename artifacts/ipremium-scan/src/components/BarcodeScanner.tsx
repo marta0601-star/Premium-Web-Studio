@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
 interface CameraDevice {
@@ -6,55 +6,65 @@ interface CameraDevice {
   label: string;
 }
 
-interface BarcodeScannerProps {
-  onScan: (text: string) => void;
-}
+function pickMainRearCamera(cameras: CameraDevice[]): CameraDevice | null {
+  if (cameras.length === 0) return null;
 
-function pickMainCamera(cameras: CameraDevice[]): CameraDevice {
-  const BAD = /wide|ultra|dual|macro|tele/i;
+  const FRONT = /front|predná|user|selfie|facetime/i;
+  const BAD   = /wide|ultra|dual|tele|macro|široko|duálna|dualna/i;
+  const REAR  = /back|rear|zadná|tylna|rückkamera|caméra arrière/i;
 
-  // Exclude front-facing cameras first
-  const rear = cameras.filter((c) => !/front|selfie|user|przednia/i.test(c.label));
+  // 1. Remove front cameras
+  const rear = cameras.filter((c) => !FRONT.test(c.label));
   const pool = rear.length > 0 ? rear : cameras;
 
-  // Prefer cameras whose label does NOT contain bad keywords
-  const good = pool.filter((c) => !BAD.test(c.label));
-  if (good.length > 0) return good[0];
+  // 2. BEST: rear camera whose label contains a rear keyword but NO bad keyword
+  const clean = pool.filter((c) => REAR.test(c.label) && !BAD.test(c.label));
+  if (clean.length > 0) {
+    // Pick shortest label among clean matches (shortest = most generic = main camera)
+    clean.sort((a, b) => a.label.length - b.label.length);
+    console.log("[Scanner] Selected (clean rear):", clean[0].label);
+    return clean[0];
+  }
 
-  // Fall back to first rear camera
-  return pool[0];
+  // 3. OK: shortest label that contains a rear keyword (even if bad words present)
+  const rearAny = pool.filter((c) => REAR.test(c.label));
+  if (rearAny.length > 0) {
+    rearAny.sort((a, b) => a.label.length - b.label.length);
+    console.log("[Scanner] Selected (shortest rear):", rearAny[0].label);
+    return rearAny[0];
+  }
+
+  // 4. FALLBACK: last camera in the full pool (main rear is usually listed last)
+  const last = pool[pool.length - 1];
+  console.log("[Scanner] Selected (fallback last):", last.label);
+  return last;
+}
+
+interface BarcodeScannerProps {
+  onScan: (text: string) => void;
 }
 
 export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
 
-  const [cameraList, setCameraList] = useState<CameraDevice[]>([]);
-  const [selectedCamera, setSelectedCamera] = useState<CameraDevice | null>(null);
-
   useEffect(() => {
     let scanner: Html5Qrcode | null = null;
-    let stopped = false;
 
     Html5Qrcode.getCameras()
       .then((cameras) => {
         console.log(
-          "[Scanner] Available cameras:",
-          cameras.map((c) => `"${c.label}" (id=${c.id})`).join(", ")
+          "[Scanner] All cameras:",
+          cameras.map((c) => `"${c.label}"`).join(", ")
         );
-        setCameraList(cameras);
 
-        const chosen = cameras.length > 0 ? pickMainCamera(cameras) : null;
-        setSelectedCamera(chosen);
-
-        console.log(
-          "[Scanner] Selected camera:",
-          chosen ? `"${chosen.label}" (id=${chosen.id})` : "none — falling back to facingMode"
-        );
+        const chosen = pickMainRearCamera(cameras);
 
         scanner = new Html5Qrcode("reader");
 
-        const cameraArg = chosen ? { deviceId: { exact: chosen.id } } : { facingMode: "environment" };
+        const cameraArg = chosen
+          ? { deviceId: { exact: chosen.id } }
+          : { facingMode: "environment" };
 
         return scanner.start(
           cameraArg,
@@ -81,28 +91,9 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
       });
 
     return () => {
-      stopped = true;
       if (scanner) scanner.stop().catch(() => {});
-      void stopped;
     };
   }, []);
 
-  return (
-    <div className="w-full">
-      <div id="reader" className="w-full" />
-
-      {/* Camera debug list — temporary, shows on screen */}
-      {cameraList.length > 0 && (
-        <div className="mt-2 p-2 rounded bg-black/60 text-xs text-white/60 space-y-1">
-          <p className="font-semibold text-white/80 mb-1">Dostępne kamery:</p>
-          {cameraList.map((cam) => (
-            <p key={cam.id} className={cam.id === selectedCamera?.id ? "text-green-400 font-bold" : ""}>
-              {cam.id === selectedCamera?.id ? "✓ " : "  "}
-              {cam.label || "(bez nazwy)"} <span className="opacity-40 text-[10px]">{cam.id.slice(0, 16)}…</span>
-            </p>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return <div id="reader" className="w-full" />;
 }
