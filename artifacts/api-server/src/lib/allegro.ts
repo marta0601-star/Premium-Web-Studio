@@ -373,7 +373,8 @@ export async function createAllegroOffer(payload: {
     location: { countryCode: "PL" },
   };
 
-  if (allegroImageUrl) commonOfferFields.images = [{ url: allegroImageUrl }];
+  // images at offer level: flat string array per API spec
+  if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];
 
   if (payload.description?.trim()) {
     commonOfferFields.description = {
@@ -417,20 +418,24 @@ export async function createAllegroOffer(payload: {
     const offerFiltered = offerParams.filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id));
     if (offerFiltered.length > 0) offerBody.parameters = offerFiltered.map(mapAllegroParam);
   } else if (isNonCatalog) {
-    // ── Strategy B: embed product proposal directly in product-offers request ─
-    // ALL parameters go into the product proposal — none in offer section
+    // ── Strategy B: propose new product via productSet[0].product ─────────────
+    // Per API spec: productSet[].product accepts full definition OR just id.
+    // images = flat string array, EAN = id + idType:"GTIN"
     const productProposal: Record<string, unknown> = {
       name: payload.productName,
       category: { id: payload.categoryId },
       parameters: payload.parameters.map(mapAllegroParam),
     };
-    if (payload.ean) productProposal.ean = [payload.ean];
-    if (allegroImageUrl) productProposal.images = [{ url: allegroImageUrl }];
+    if (payload.ean) {
+      productProposal.id = payload.ean;
+      productProposal.idType = "GTIN";
+    }
+    if (allegroImageUrl) productProposal.images = [allegroImageUrl];
 
     offerBody = {
       ...commonOfferFields,
       category: { id: payload.categoryId },
-      product: productProposal,
+      productSet: [{ product: productProposal }],
     };
   } else {
     // ── Strategy C: no product info — send params directly as offer params ───
