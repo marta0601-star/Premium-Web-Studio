@@ -68,7 +68,6 @@ export interface ScanResult {
   images: ProductImage[];
   parameters: CategoryParameter[];
   prefillValues: ScanResultPrefillValues;
-  offerUrl?: string | null;
 }
 
 export interface ParameterValue {
