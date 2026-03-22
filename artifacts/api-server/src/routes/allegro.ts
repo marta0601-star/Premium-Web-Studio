@@ -353,6 +353,20 @@ router.post("/create-offer", async (req, res) => {
     });
   } catch (err: unknown) {
     req.log.error({ err }, "Error creating offer");
+
+    // Custom error thrown when user is missing param values for DuplicateDetection
+    const customErr = err as { allegroErrors?: unknown[]; statusCode?: number; message?: string };
+    if (customErr.allegroErrors) {
+      const errors = customErr.allegroErrors as Array<{ code?: string; message?: string; path?: string; userMessage?: string }>;
+      req.log.error({ errors }, "Allegro DuplicateDetection missing params (user must fill in)");
+      res.status(422).json({
+        error: "allegro_error",
+        message: errors.map((e) => e.userMessage || e.message || e.code).join("; ") || "Błąd Allegro",
+        errors,
+      });
+      return;
+    }
+
     const axiosErr = err as {
       response?: {
         data?: { errors?: Array<{ code?: string; message?: string; path?: string; userMessage?: string }> };

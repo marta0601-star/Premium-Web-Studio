@@ -354,12 +354,15 @@ export async function createAllegroOffer(payload: {
 
   // paramFlags: map of paramId → {describesProduct, describesOffer}
   const paramFlags = new Map<string, { describesProduct: boolean; describesOffer: boolean }>();
+  // paramNameToId: map of lowercase param name → id (for DuplicateDetectionMissingParametersException)
+  const paramNameToId = new Map<string, string>();
   try {
     const rawData = await getCategoryParameters(payload.categoryId);
     const rawParams = (
       rawData as {
         parameters?: Array<{
           id: string;
+          name?: string;
           options?: { describesOffer?: boolean; describesProduct?: boolean };
         }>;
       }
@@ -369,6 +372,7 @@ export async function createAllegroOffer(payload: {
         describesProduct: rp.options?.describesProduct ?? false,
         describesOffer: rp.options?.describesOffer ?? false,
       });
+      if (rp.name) paramNameToId.set(rp.name.toLowerCase().trim(), rp.id);
     }
     logger.info({ flagCount: paramFlags.size, categoryId: payload.categoryId }, "Loaded category param flags");
   } catch (flagErr) {
@@ -505,8 +509,8 @@ export async function createAllegroOffer(payload: {
         strategy: payload.productId ? "catalog" : isNonCatalog ? "product-proposal" : "direct",
         categoryId: payload.categoryId,
         attempt,
-        productLevelParamIds: productLevelParams.map((p) => p.id),
-        offerLevelParamIds: offerLevelParams.map((p) => p.id),
+        productLevelParams: productLevelParams,
+        offerLevelParams: offerLevelParams,
         requestBody: JSON.stringify(offerBody),
       },
       "POST /sale/product-offers — full request"
@@ -552,6 +556,70 @@ export async function createAllegroOffer(payload: {
 
       const errors = axiosErr.response?.data?.errors || [];
 
+      // ── Handle DuplicateDetectionMissingParametersException ──────────────────
+      // Allegro needs certain params in productSet[0].product.parameters for
+      // duplicate detection. Error message: "Add parameters: [Pojemność, ...]"
+      const ddErrors = errors.filter((e) => e.code === "DuplicateDetectionMissingParametersException");
+      if (ddErrors.length > 0 && attempt < MAX_RETRIES) {
+        let ddMadeChange = false;
+        const missingForUser: string[] = [];
+
+        for (const dde of ddErrors) {
+          const text = dde.userMessage || dde.message || "";
+          // Extract names inside brackets: "Add parameters: [Pojemność, Smak]"
+          const bracketMatch = text.match(/\[([^\]]+)\]/);
+          const rawNames = bracketMatch
+            ? bracketMatch[1].split(",").map((s: string) => s.trim())
+            : [];
+
+          for (const name of rawNames) {
+            const paramId = paramNameToId.get(name.toLowerCase().trim());
+            if (!paramId) {
+              missingForUser.push(name);
+              continue;
+            }
+            const inOffer = offerLevelParams.some((p) => p.id === paramId);
+            const inProduct = productLevelParams.some((p) => p.id === paramId);
+
+            if (inOffer) {
+              // Move from offer → product so Allegro can run duplicate detection
+              const param = offerLevelParams.find((p) => p.id === paramId)!;
+              offerLevelParams = offerLevelParams.filter((p) => p.id !== paramId);
+              productLevelParams = [...productLevelParams, param];
+              movedToProduct.add(paramId);
+              logger.warn({ paramId, name, attempt }, "DuplicateDetection: moved param offer→product for detection");
+              ddMadeChange = true;
+            } else if (!inProduct) {
+              // The user never provided a value for this param — we can't add it
+              missingForUser.push(name);
+            }
+            // If already in product — no action needed (shouldn't happen, but safe)
+          }
+        }
+
+        if (missingForUser.length > 0) {
+          // Surface a clear user-facing error listing the missing param names
+          const userMsg = `Uzupełnij wymagane parametry do wyszukiwania duplikatów: ${missingForUser.join(", ")}`;
+          logger.warn({ missingForUser, attempt }, "DuplicateDetection: missing param values from user");
+          const userError = new Error(userMsg) as Error & { allegroErrors?: unknown[]; statusCode?: number };
+          userError.allegroErrors = [
+            {
+              code: "DuplicateDetectionMissingParametersException",
+              userMessage: userMsg,
+              path: "productSet[0].product.parameters",
+            },
+          ];
+          userError.statusCode = 422;
+          throw userError;
+        }
+
+        if (ddMadeChange) {
+          offerBody = buildOfferBody();
+          continue;
+        }
+      }
+
+      // ── Handle ParameterCategoryException ────────────────────────────────────
       const paramErrors = errors.filter(
         (e) =>
           e.code === "ParameterCategoryException" ||
@@ -593,7 +661,6 @@ export async function createAllegroOffer(payload: {
         // ── Determine direction to move ───────────────────────────────────────
         const isInProductSection = productLevelParams.some((p) => p.id === paramId);
         const isInOfferSection = offerLevelParams.some((p) => p.id === paramId);
-        const sectionHint = text.toLowerCase().includes("productsset") || text.toLowerCase().includes("productset") || (pe.path || "").includes("productSet");
 
         if (isInProductSection && !movedToOffer.has(paramId)) {
           // Move from product → offer
