@@ -345,66 +345,38 @@ export async function createAllegroOffer(payload: {
     }
   }
 
-  // ── Step 2: for non-catalog products, create product in Allegro catalog first ─
-  // Parameters that are not allowed in the offer section but ARE valid for products
+  // ── Step 2: build offer body ───────────────────────────────────────────────
+  // Parameters that are not allowed in the offer section
   const ALWAYS_EXCLUDED_FROM_OFFER = new Set(["224017", "225693", "242901"]);
 
-  let resolvedProductId: string | null = payload.productId || null;
+  const ALLEGRO_HEADERS = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.allegro.public.v1+json",
+    "Content-Type": "application/vnd.allegro.public.v1+json",
+  };
 
-  if (!resolvedProductId && payload.ean) {
-    // Non-catalog product: create it in the Allegro catalog
-    resolvedProductId = await createAllegroProduct({
-      name: payload.productName,
-      categoryId: payload.categoryId,
-      parameters: payload.parameters, // All params go to the product
-      imageUrl: allegroImageUrl,
-      ean: payload.ean,
-    });
-  }
+  const isNonCatalog = !payload.productId && !!payload.ean;
 
-  // ── Step 3: build offer body ───────────────────────────────────────────────
   const productParamSet = new Set(payload.productParamIds || []);
   const offerParams = payload.parameters.filter((p) => !productParamSet.has(p.id));
   const productParams = payload.parameters.filter((p) => productParamSet.has(p.id));
 
-  const offerBody: Record<string, unknown> = {
+  const commonOfferFields: Record<string, unknown> = {
     name: payload.productName,
-    category: { id: payload.categoryId },
     sellingMode: {
       format: "BUY_NOW",
       price: { amount: "999", currency: "PLN" },
     },
     stock: { available: 1, unit: "UNIT" },
-    publication: { status: "ACTIVE", duration: null },
+    publication: { status: "ACTIVE" },
     payments: { invoice: "VAT" },
+    location: { countryCode: "PL" },
   };
 
-  if (resolvedProductId) {
-    // Link to product (catalog or just-created) — product owns all its params
-    const productEntry: Record<string, unknown> = { id: resolvedProductId };
-    if (productParams.length > 0) {
-      productEntry.parameters = productParams.map(mapAllegroParam);
-    }
-    offerBody.productSet = [{ product: productEntry }];
-    // For catalog products, offer can still carry non-product params (filtered)
-    // For non-catalog (just created above), we skip offer-level params entirely
-    if (payload.productId && offerParams.length > 0) {
-      offerBody.parameters = offerParams
-        .filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id))
-        .map(mapAllegroParam);
-    }
-  } else {
-    // No product at all — pass filtered params directly to offer
-    const filtered = payload.parameters.filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id));
-    if (filtered.length > 0) offerBody.parameters = filtered.map(mapAllegroParam);
-  }
-
-  if (allegroImageUrl) {
-    offerBody.images = [{ url: allegroImageUrl }];
-  }
+  if (allegroImageUrl) commonOfferFields.images = [{ url: allegroImageUrl }];
 
   if (payload.description?.trim()) {
-    offerBody.description = {
+    commonOfferFields.description = {
       sections: [
         {
           items: [
@@ -419,31 +391,69 @@ export async function createAllegroOffer(payload: {
   }
 
   if (fixedDefaults.shippingRateId) {
-    offerBody.delivery = { shippingRates: { id: fixedDefaults.shippingRateId } };
+    commonOfferFields.delivery = { shippingRates: { id: fixedDefaults.shippingRateId } };
   }
 
   if (fixedDefaults.returnPolicyId || fixedDefaults.impliedWarrantyId) {
-    offerBody.afterSalesServices = {
+    commonOfferFields.afterSalesServices = {
       ...(fixedDefaults.impliedWarrantyId ? { impliedWarranty: { id: fixedDefaults.impliedWarrantyId } } : {}),
       ...(fixedDefaults.returnPolicyId ? { returnPolicy: { id: fixedDefaults.returnPolicyId } } : {}),
     };
   }
 
-  // ── Step 4: retry loop for offer creation (auto-strip bad params) ────────────
+  // ── Step 3: choose strategy based on whether we have a catalog product ────────
+
+  let offerBody: Record<string, unknown>;
+
+  if (payload.productId) {
+    // ── Strategy A: link to existing Allegro catalog product via productSet ──
+    const productEntry: Record<string, unknown> = { id: payload.productId };
+    if (productParams.length > 0) productEntry.parameters = productParams.map(mapAllegroParam);
+    offerBody = {
+      ...commonOfferFields,
+      category: { id: payload.categoryId },
+      productSet: [{ product: productEntry }],
+    };
+    const offerFiltered = offerParams.filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id));
+    if (offerFiltered.length > 0) offerBody.parameters = offerFiltered.map(mapAllegroParam);
+  } else if (isNonCatalog) {
+    // ── Strategy B: embed product proposal directly in product-offers request ─
+    // ALL parameters go into the product proposal — none in offer section
+    const productProposal: Record<string, unknown> = {
+      name: payload.productName,
+      category: { id: payload.categoryId },
+      parameters: payload.parameters.map(mapAllegroParam),
+    };
+    if (payload.ean) productProposal.ean = [payload.ean];
+    if (allegroImageUrl) productProposal.images = [{ url: allegroImageUrl }];
+
+    offerBody = {
+      ...commonOfferFields,
+      category: { id: payload.categoryId },
+      product: productProposal,
+    };
+  } else {
+    // ── Strategy C: no product info — send params directly as offer params ───
+    offerBody = { ...commonOfferFields, category: { id: payload.categoryId } };
+    const filtered = payload.parameters.filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id));
+    if (filtered.length > 0) offerBody.parameters = filtered.map(mapAllegroParam);
+  }
+
+  // ── Step 4: retry loop (auto-strip bad offer-level params) ──────────────────
   function filterOfferParams(excluded: Set<string>) {
-    if (resolvedProductId && !payload.productId) {
-      // Non-catalog product linked via productSet — no offer-level params
-      delete offerBody.parameters;
+    if (isNonCatalog) {
+      // Non-catalog: params live in product.parameters — don't touch them
+      // (Allegro shouldn't complain about product params in product section)
       return;
     }
-    if (resolvedProductId && offerParams.length > 0) {
+    if (payload.productId && offerParams.length > 0) {
       const allowed = offerParams.filter((p) => !excluded.has(p.id));
       if (allowed.length > 0) {
         offerBody.parameters = allowed.map(mapAllegroParam);
       } else {
         delete offerBody.parameters;
       }
-    } else if (!resolvedProductId) {
+    } else if (!payload.productId) {
       const allowed = payload.parameters.filter((p) => !excluded.has(p.id));
       if (allowed.length > 0) {
         offerBody.parameters = allowed.map(mapAllegroParam);
@@ -461,14 +471,15 @@ export async function createAllegroOffer(payload: {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     logger.info(
       {
-        productId: resolvedProductId,
+        strategy: payload.productId ? "catalog" : isNonCatalog ? "product-proposal" : "direct",
         categoryId: payload.categoryId,
         attempt,
         excludedParams: [...excluded],
         hasImage: !!allegroImageUrl,
         hasDescription: !!payload.description,
+        requestBody: JSON.stringify(offerBody),
       },
-      "Creating Allegro offer via product-offers API"
+      "POST /sale/product-offers — full request"
     );
 
     try {
@@ -476,13 +487,13 @@ export async function createAllegroOffer(payload: {
         `${ALLEGRO_BASE_URL}/sale/product-offers`,
         offerBody,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.allegro.public.v1+json",
-            "Content-Type": "application/vnd.allegro.public.v1+json",
-          },
-          timeout: 15000,
+          headers: ALLEGRO_HEADERS,
+          timeout: 20000,
         }
+      );
+      logger.info(
+        { status: response.status, responseData: JSON.stringify(response.data) },
+        "POST /sale/product-offers — success"
       );
       return response.data;
     } catch (err: unknown) {
@@ -501,6 +512,16 @@ export async function createAllegroOffer(payload: {
         };
         message?: string;
       };
+
+      logger.error(
+        {
+          attempt,
+          httpStatus: axiosErr.response?.status,
+          responseData: JSON.stringify(axiosErr.response?.data),
+          requestBodySent: JSON.stringify(offerBody),
+        },
+        "POST /sale/product-offers — ERROR response"
+      );
 
       const errors = axiosErr.response?.data?.errors || [];
 
