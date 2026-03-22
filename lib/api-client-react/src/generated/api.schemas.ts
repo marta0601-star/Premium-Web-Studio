@@ -62,7 +62,6 @@ export type ScanResultPrefillValues = { [key: string]: string };
 
 export interface ScanResult {
   productId: string;
-  productUrl?: string | null;
   productName: string;
   categoryId: string;
   categoryName: string;
@@ -79,7 +78,6 @@ export interface ParameterValue {
 
 export interface CreateOfferRequest {
   productId?: string | null;
-  productUrl?: string | null;
   categoryId: string;
   categoryName?: string;
   productName: string;
