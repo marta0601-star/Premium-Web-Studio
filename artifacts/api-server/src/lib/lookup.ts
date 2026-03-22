@@ -244,7 +244,13 @@ async function searchOpenFoodFacts(ean: string, logs: string[]): Promise<LookupR
           found: true,
           name,
           brand: (p.brands as string) || null,
-          weight: (p.quantity as string) || null,
+          weight:
+            (p.quantity as string) ||
+            (p.product_quantity
+              ? `${p.product_quantity} ${(p.product_quantity_unit as string) || ""}`.trim()
+              : null) ||
+            (p.serving_size as string) ||
+            null,
           category: p.categories ? (p.categories as string).split(",")[0].trim() : null,
           image,
           description: null,

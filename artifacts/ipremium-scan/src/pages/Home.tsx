@@ -990,6 +990,9 @@ export default function Home() {
 
                   {!loadingParams && parameters.length > 0 && (
                     <>
+                      {parameters.some((p) => p.required) && parameters.some((p) => !p.required) && (
+                        <p className="text-xs text-white/40 mb-1">Parametry wymagane</p>
+                      )}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         {parameters.filter((p) => p.required).map((param) => {
                                 const isAutoFilled = autoFilledIds.has(param.id);
@@ -1064,6 +1067,68 @@ export default function Home() {
                                 );
                         })}
                       </div>
+
+                      {parameters.some((p) => !p.required) && (
+                        <div className="mt-5 space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-px bg-white/10" />
+                            <span className="text-xs text-white/30 font-medium shrink-0">Parametry dodatkowe</span>
+                            <div className="flex-1 h-px bg-white/10" />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            {parameters.filter((p) => !p.required).map((param) => {
+                              const isAutoFilled = autoFilledIds.has(param.id);
+                              const borderClass = isAutoFilled ? "border-green-500/50 bg-green-500/5" : "";
+
+                              return (
+                                <div key={param.id} className="space-y-1.5">
+                                  <label className="text-sm font-medium text-white/60 flex items-center justify-between gap-2">
+                                    <span className="flex items-center gap-1.5">
+                                      {param.name}
+                                      {isAutoFilled && (
+                                        <span className="text-green-400 text-xs font-normal flex items-center gap-0.5">
+                                          <CheckCheck className="w-3 h-3" /> auto
+                                        </span>
+                                      )}
+                                    </span>
+                                    {param.unit && <span className="text-white/30 text-xs shrink-0">({param.unit})</span>}
+                                  </label>
+
+                                  {param.type === "dictionary" && param.options.length > 0 ? (
+                                    <PremiumSelect
+                                      value={formState[param.id]?.valuesIds?.[0] || ""}
+                                      onChange={(e) => updateForm(param.id, { valuesIds: [e.target.value] })}
+                                      className={borderClass}
+                                    >
+                                      <option value="" className="bg-background text-white/50">— opcjonalne —</option>
+                                      {param.options.map((opt) => (
+                                        <option key={opt.id} value={opt.id} className="bg-background text-white">{opt.name}</option>
+                                      ))}
+                                    </PremiumSelect>
+                                  ) : param.type === "boolean" ? (
+                                    <div className={`flex h-12 items-center px-4 rounded-xl bg-black/20 border ${isAutoFilled ? "border-green-500/50" : "border-white/5"}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={formState[param.id]?.values?.[0] === "true"}
+                                        onChange={(e) => updateForm(param.id, { values: [e.target.checked ? "true" : "false"] })}
+                                        className="w-4 h-4 accent-primary"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <input
+                                      type={param.type === "integer" || param.type === "float" ? "number" : "text"}
+                                      value={formState[param.id]?.values?.[0] || ""}
+                                      onChange={(e) => updateForm(param.id, { values: [e.target.value] })}
+                                      placeholder={`${param.name}${param.unit ? ` (${param.unit})` : ""}`}
+                                      className={`w-full h-12 rounded-xl bg-black/30 border ${borderClass || "border-white/10"} focus:border-primary/60 focus:ring-2 focus:ring-primary/20 text-white placeholder:text-white/30 text-sm px-4 outline-none transition-all`}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
