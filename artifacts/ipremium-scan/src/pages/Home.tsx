@@ -4,6 +4,7 @@ import { ScanLine, Box, CheckCircle2, AlertCircle, RefreshCw, Layers } from "luc
 import { useScanBarcode, useSubmitOffer } from "@/hooks/use-allegro";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { PremiumButton, PremiumInput, PremiumSelect, PremiumSwitch } from "@/components/ui-custom";
+import { AllegroAuthBanner } from "@/components/AllegroAuth";
 import type { ScanResult, CreateOfferRequest, ParameterValue } from "@workspace/api-client-react";
 
 type WorkflowStep = "SCAN" | "LOADING" | "FORM" | "SUCCESS";
@@ -142,6 +143,9 @@ export default function Home() {
             Szybkie tworzenie ofert Allegro na podstawie kodów kreskowych
           </motion.p>
         </div>
+
+        {/* Allegro Auth Banner */}
+        <AllegroAuthBanner />
 
         {/* Global Error Banner */}
         <AnimatePresence>
