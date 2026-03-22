@@ -155,7 +155,7 @@ export async function getOfferDefaults() {
 }
 
 export async function createAllegroOffer(payload: {
-  productId: string;
+  productId?: string | null;
   categoryId: string;
   productName: string;
   parameters: Array<{
@@ -163,6 +163,7 @@ export async function createAllegroOffer(payload: {
     values?: string[];
     valuesIds?: string[];
   }>;
+  productParamIds?: string[];
   quantity?: number;
   shippingRateId?: string | null;
   returnPolicyId?: string | null;
@@ -171,23 +172,24 @@ export async function createAllegroOffer(payload: {
 }) {
   const token = await getUserToken();
 
+  // Split parameters into product-level and offer-level
+  const productParamSet = new Set(payload.productParamIds || []);
+  const offerParams = payload.parameters.filter((p) => !productParamSet.has(p.id));
+  const productParams = payload.parameters.filter((p) => productParamSet.has(p.id));
+
+  const mapParam = (p: { id: string; values?: string[]; valuesIds?: string[] }) => {
+    const mapped: Record<string, unknown> = { id: p.id };
+    if (p.valuesIds && p.valuesIds.length > 0) mapped.valuesIds = p.valuesIds;
+    if (p.values && p.values.length > 0) mapped.values = p.values;
+    return mapped;
+  };
+
   const offerBody: Record<string, unknown> = {
     name: payload.productName,
-    category: {
-      id: payload.categoryId,
-    },
-    product: payload.productId ? { id: payload.productId } : undefined,
-    parameters: payload.parameters.map((p) => ({
-      id: p.id,
-      values: p.values || [],
-      valuesIds: p.valuesIds || [],
-    })),
+    category: { id: payload.categoryId },
     sellingMode: {
       format: "BUY_NOW",
-      price: {
-        amount: "999",
-        currency: "PLN",
-      },
+      price: { amount: "999", currency: "PLN" },
     },
     stock: {
       available: payload.quantity ?? 1,
@@ -202,12 +204,30 @@ export async function createAllegroOffer(payload: {
     },
   };
 
-  // Only include delivery if we have a valid shippingRateId
+  // Use productSet structure (new API) when productId is available
+  if (payload.productId) {
+    const productEntry: Record<string, unknown> = { id: payload.productId };
+    if (productParams.length > 0) {
+      productEntry.parameters = productParams.map(mapParam);
+    }
+    offerBody.productSet = [{ product: productEntry }];
+    // Offer-level params (e.g. Stan) go in root parameters
+    if (offerParams.length > 0) {
+      offerBody.parameters = offerParams.map(mapParam);
+    }
+  } else {
+    // External product: no productSet, all params at offer level
+    if (payload.parameters.length > 0) {
+      offerBody.parameters = payload.parameters.map(mapParam);
+    }
+  }
+
+  // Delivery
   if (payload.shippingRateId) {
     offerBody.delivery = { shippingRates: { id: payload.shippingRateId } };
   }
 
-  // Only include afterSalesServices if we have at least one ID
+  // After-sales services
   if (payload.returnPolicyId || payload.impliedWarrantyId) {
     offerBody.afterSalesServices = {
       ...(payload.impliedWarrantyId ? { impliedWarranty: { id: payload.impliedWarrantyId } } : {}),
@@ -215,8 +235,10 @@ export async function createAllegroOffer(payload: {
     };
   }
 
+  logger.info({ offerBody: JSON.stringify(offerBody) }, "Creating Allegro offer via product-offers API");
+
   const response = await axios.post(
-    `${ALLEGRO_BASE_URL}/sale/offers`,
+    `${ALLEGRO_BASE_URL}/sale/product-offers`,
     offerBody,
     {
       headers: {

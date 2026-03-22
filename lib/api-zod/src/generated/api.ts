@@ -86,7 +86,7 @@ export const ScanEanResponse = zod.object({
  * @summary Create draft offer on Allegro
  */
 export const CreateOfferBody = zod.object({
-  productId: zod.string(),
+  productId: zod.string().nullable().optional(),
   categoryId: zod.string(),
   productName: zod.string(),
   parameters: zod.array(
@@ -96,6 +96,7 @@ export const CreateOfferBody = zod.object({
       valuesIds: zod.array(zod.string()).optional(),
     }),
   ),
+  productParamIds: zod.array(zod.string()).optional(),
   quantity: zod.number().int().min(1).optional(),
   shippingRateId: zod.string().nullable().optional(),
   returnPolicyId: zod.string().nullable().optional(),

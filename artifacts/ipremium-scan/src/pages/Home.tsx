@@ -31,12 +31,20 @@ interface ExtendedScanResult {
   images: Array<{ url: string }>;
   parameters: AllegroParam[];
   prefillValues: Record<string, string[]>;
+  productParamIds?: string[];
   source: string | null;
   brand?: string | null;
   weight?: string | null;
   category?: string | null;
   ean?: string;
   logs?: string[];
+}
+
+interface AllegroError {
+  code?: string;
+  message?: string;
+  path?: string;
+  userMessage?: string;
 }
 
 interface CategorySuggestion {
@@ -497,9 +505,12 @@ export default function Home() {
   const [loadingParams, setLoadingParams] = useState(false);
 
   const [offerId, setOfferId] = useState<string | null>(null);
+  const [offerUrl, setOfferUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [allegroErrors, setAllegroErrors] = useState<AllegroError[]>([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [scanHistory, setScanHistory] = useState<HistoryEntry[]>([]);
+  const [productParamIds, setProductParamIds] = useState<string[]>([]);
 
   // Offer settings state
   const [offerDefaults, setOfferDefaults] = useState<OfferDefaults>({ shippingRates: [], returnPolicies: [], impliedWarranties: [] });
@@ -560,6 +571,7 @@ export default function Home() {
     try {
       const data = await scanMutation.mutateAsync(trimmed) as ExtendedScanResult;
       setScannedData(data);
+      setProductParamIds(data.productParamIds || []);
 
       const kind = getSourceKind(data.source);
       setScanHistory((prev) => {
@@ -653,6 +665,7 @@ export default function Home() {
     if (!scannedData) return;
     setSubmitAttempted(true);
     setErrorMsg(null);
+    setAllegroErrors([]);
 
     const parameters_payload = Object.values(formState).filter(
       (p) =>
@@ -661,10 +674,11 @@ export default function Home() {
     );
 
     const payload: CreateOfferRequest = {
-      productId: scannedData.productId as string,
+      productId: scannedData.productId,
       categoryId: categoryId as string,
       productName: scannedData.productName as string,
       parameters: parameters_payload,
+      productParamIds,
       quantity: offerSettings.quantity,
       shippingRateId: offerSettings.shippingRateId,
       returnPolicyId: offerSettings.returnPolicyId,
@@ -674,15 +688,23 @@ export default function Home() {
 
     try {
       const res = await submitMutation.mutateAsync(payload);
-      const newOfferId = res.offerId || "Zapisano szkic";
+      const newOfferId = res.offerId || "";
       setOfferId(newOfferId);
+      setOfferUrl(res.offerUrl || null);
       setScanHistory((prev) =>
         prev.map((e) => (e.ean === currentEan ? { ...e, offerId: newOfferId } : e))
       );
       setStep("SUCCESS");
     } catch (err: unknown) {
-      const e = err as { message?: string };
-      setErrorMsg(e.message || "Wystąpił błąd podczas tworzenia oferty.");
+      // ApiError has .data = parsed JSON body; extract structured Allegro errors
+      const e = err as { data?: { errors?: AllegroError[]; message?: string }; message?: string };
+      const apiErrors: AllegroError[] = e.data?.errors || [];
+      if (apiErrors.length > 0) {
+        setAllegroErrors(apiErrors);
+        setErrorMsg(e.data?.message || "Allegro zwróciło błędy walidacji.");
+      } else {
+        setErrorMsg(e.data?.message || e.message || "Wystąpił błąd podczas tworzenia oferty.");
+      }
     }
   };
 
@@ -694,11 +716,14 @@ export default function Home() {
     setManualEan("");
     setCurrentEan("");
     setOfferId(null);
+    setOfferUrl(null);
     setErrorMsg(null);
+    setAllegroErrors([]);
     setSubmitAttempted(false);
     setCategoryId(null);
     setCategoryName("");
     setCategorySuggestions([]);
+    setProductParamIds([]);
     setVatRate(23);
     setOfferSettings(initOfferSettings(offerDefaults));
     setStep("SCAN");
@@ -1078,10 +1103,30 @@ export default function Home() {
                   </div>
                 </div>
 
-                {errorMsg && (
-                  <div className="p-4 rounded-xl bg-destructive/20 border border-destructive/50 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                    <p className="text-destructive-foreground text-sm font-medium">{errorMsg}</p>
+                {(errorMsg || allegroErrors.length > 0) && (
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl bg-destructive/20 border border-destructive/50 flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                      <p className="text-destructive-foreground text-sm font-medium">{errorMsg}</p>
+                    </div>
+                    {allegroErrors.length > 0 && (
+                      <div className="rounded-xl border border-destructive/30 bg-destructive/10 overflow-hidden">
+                        <div className="px-4 py-2 border-b border-destructive/20 flex items-center gap-2">
+                          <span className="text-xs font-semibold text-destructive/80 uppercase tracking-wider">Błędy Allegro API ({allegroErrors.length})</span>
+                        </div>
+                        <div className="divide-y divide-destructive/10">
+                          {allegroErrors.map((err, i) => (
+                            <div key={i} className="px-4 py-3 space-y-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {err.code && <span className="font-mono text-xs bg-destructive/20 text-destructive px-1.5 py-0.5 rounded">{err.code}</span>}
+                                {err.path && <span className="text-xs text-white/40 font-mono">@ {err.path}</span>}
+                              </div>
+                              <p className="text-sm text-destructive-foreground/90">{err.userMessage || err.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1101,17 +1146,40 @@ export default function Home() {
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/10 mb-6">
                 <CheckCircle2 className="w-10 h-10 text-green-500" />
               </div>
-              <h2 className="text-3xl font-display text-white mb-4">Oferta utworzona!</h2>
-              <p className="text-white/60 mb-8">Szkic oferty został pomyślnie zapisany w systemie Allegro z ceną bazową 999 PLN.</p>
-              <div className="bg-black/40 border border-white/5 rounded-xl p-4 mb-4 flex flex-col items-center justify-center">
-                <span className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-1">ID Oferty</span>
-                <span className="font-mono text-xl text-primary">{offerId}</span>
-              </div>
-              {offerId && offerId !== "Zapisano szkic" && (
-                <a href={`https://allegro.pl/moje-allegro/sprzedaz/oferty/edytuj/${offerId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-white/40 hover:text-white/70 transition-colors mb-8">
-                  Otwórz ofertę na Allegro <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+              <h2 className="text-3xl font-display text-white mb-3">Oferta utworzona!</h2>
+              <p className="text-white/60 mb-6">Szkic oferty NIEAKTYWNEJ został pomyślnie zapisany w Allegro za <span className="text-white font-semibold">999 PLN</span>.</p>
+
+              {offerId && (
+                <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4 mb-5 flex flex-col items-center justify-center">
+                  <span className="text-xs font-semibold text-green-400/60 uppercase tracking-wider mb-1">ID Oferty</span>
+                  <span className="font-mono text-xl text-green-400">{offerId}</span>
+                </div>
               )}
+
+              <div className="flex flex-col gap-3 mb-8">
+                {offerUrl && (
+                  <a
+                    href={offerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors font-medium text-sm"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Otwórz szkic oferty na Allegro
+                  </a>
+                )}
+                {offerId && (
+                  <a
+                    href={`https://allegro.pl/moje-allegro/sprzedaz/oferty`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white/70 transition-colors text-sm"
+                  >
+                    Przejdź do Moje Allegro → Oferty
+                  </a>
+                )}
+              </div>
+
               <PremiumButton onClick={resetWorkflow} className="w-full">Skanuj kolejny produkt</PremiumButton>
             </motion.div>
           )}

@@ -99,13 +99,21 @@ router.get("/scan", async (req, res) => {
         }
       }
 
-      // Fetch category parameters + name in parallel (failure must NOT discard Allegro result)
+      // Fetch category parameters + product-parameters + name in parallel
       let parameters: ReturnType<typeof mapParam>[] = [];
+      let productParamIds: string[] = [];
       let resolvedCategoryName = categoryName;
 
       if (categoryId) {
-        const [parametersResult, nameResult] = await Promise.allSettled([
+        const token = await getUserToken();
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.allegro.public.v1+json",
+        };
+
+        const [parametersResult, productParamsResult, nameResult] = await Promise.allSettled([
           getCategoryParameters(categoryId),
+          axios.get(`${ALLEGRO_BASE_URL}/sale/categories/${categoryId}/product-parameters?language=pl-PL`, { headers, timeout: 8000 }),
           !categoryName ? getCategoryName(categoryId) : Promise.resolve(categoryName),
         ]);
 
@@ -115,6 +123,11 @@ router.get("/scan", async (req, res) => {
         } else {
           const e = parametersResult.reason as { response?: { status?: number }; message?: string };
           req.log.warn({ categoryId, status: e.response?.status, msg: e.message }, "Could not fetch category parameters");
+        }
+
+        if (productParamsResult.status === "fulfilled") {
+          const productParams = (productParamsResult.value.data as { parameters?: RawAllegroParam[] }).parameters || [];
+          productParamIds = productParams.map((p) => p.id);
         }
 
         if (nameResult.status === "fulfilled") {
@@ -130,6 +143,7 @@ router.get("/scan", async (req, res) => {
         images,
         parameters,
         prefillValues,
+        productParamIds,
         source: "allegro_catalog",
         ean,
       });
@@ -259,29 +273,37 @@ router.post("/create-offer", async (req, res) => {
     const body = CreateOfferBody.parse(req.body);
 
     const offer = await createAllegroOffer(body);
+    const offerId = (offer as { id?: string }).id ?? "";
+    const status = (offer as { publication?: { status?: string } }).publication?.status || "INACTIVE";
 
     res.json({
-      offerId: offer.id,
-      status: (offer as { publication?: { status?: string } }).publication?.status || "INACTIVE",
-      message: "Oferta została pomyślnie utworzona",
+      offerId,
+      status,
+      offerUrl: `https://allegro.pl/oferta/${offerId}`,
+      message: "Oferta została pomyślnie utworzona jako szkic (NIEAKTYWNA) za 999 PLN",
     });
   } catch (err: unknown) {
     req.log.error({ err }, "Error creating offer");
     const axiosErr = err as {
-      response?: { data?: { errors?: Array<{ message: string }> }; status?: number };
+      response?: {
+        data?: { errors?: Array<{ code?: string; message?: string; path?: string; userMessage?: string }> };
+        status?: number;
+      };
     };
     if (axiosErr.response?.data?.errors) {
+      const errors = axiosErr.response.data.errors;
+      req.log.error({ errors }, "Allegro API validation errors");
       res.status(400).json({
         error: "allegro_error",
-        message:
-          axiosErr.response.data.errors.map((e) => e.message).join(", ") ||
-          "Błąd podczas tworzenia oferty",
+        message: errors.map((e) => e.userMessage || e.message || e.code).join("; ") || "Błąd Allegro",
+        errors,
       });
       return;
     }
     res.status(500).json({
       error: "server_error",
       message: "Błąd podczas tworzenia oferty na Allegro",
+      errors: [],
     });
   }
 });

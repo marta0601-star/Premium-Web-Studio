@@ -77,10 +77,11 @@ export interface ParameterValue {
 }
 
 export interface CreateOfferRequest {
-  productId: string;
+  productId?: string | null;
   categoryId: string;
   productName: string;
   parameters: ParameterValue[];
+  productParamIds?: string[];
   quantity?: number;
   shippingRateId?: string | null;
   returnPolicyId?: string | null;
@@ -88,10 +89,19 @@ export interface CreateOfferRequest {
   invoice?: "VAT" | "WITHOUT_VAT" | "VAT_MARGIN" | "NO_INVOICE";
 }
 
+export interface AllegroApiError {
+  code?: string;
+  message?: string;
+  path?: string;
+  userMessage?: string;
+}
+
 export interface CreateOfferResponse {
   offerId: string;
   status: string;
   message: string;
+  offerUrl?: string;
+  errors?: AllegroApiError[];
 }
 
 export type Ping200 = {
