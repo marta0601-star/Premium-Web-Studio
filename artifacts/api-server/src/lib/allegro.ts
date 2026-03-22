@@ -349,7 +349,7 @@ export async function createAllegroOffer(payload: {
   }
 
   // Always exclude known-bad parameters (never allowed in offer section)
-  const ALWAYS_EXCLUDED = new Set(["224017", "225693"]); // Kod producenta, EAN (GTIN) — not allowed in offer section
+  const ALWAYS_EXCLUDED = new Set(["224017", "225693", "242901"]); // Kod producenta, EAN (GTIN), Pojemność — not allowed in offer section
 
   // Rebuild offerBody.parameters filtering out excluded IDs
   function filterParams(excluded: Set<string>) {
@@ -410,8 +410,9 @@ export async function createAllegroOffer(payload: {
             errors?: Array<{
               code?: string;
               message?: string;
-              path?: string;
               userMessage?: string;
+              path?: string;
+              metadata?: Record<string, string>;
             }>;
           };
           status?: number;
@@ -425,7 +426,8 @@ export async function createAllegroOffer(payload: {
       const paramErrors = errors.filter(
         (e) =>
           e.code === "ParameterCategoryException" ||
-          (e.message && /should not be specified in section/i.test(e.message))
+          (e.userMessage && /should not be specified/i.test(e.userMessage)) ||
+          (e.message && /should not be specified/i.test(e.message))
       );
 
       if (paramErrors.length === 0 || attempt === MAX_RETRIES) {
@@ -433,29 +435,32 @@ export async function createAllegroOffer(payload: {
         throw err;
       }
 
-      // Extract parameter IDs from error messages: "Parameter 224017:Kod producenta should not..."
+      // Extract parameter IDs — check metadata.parameterId first (most reliable),
+      // then fall back to regex on userMessage / message
       let foundNew = false;
       for (const pe of paramErrors) {
-        const msgMatch = pe.message?.match(/Parameter\s+[`'"]?(\w+):/i);
+        // 1. Direct ID from metadata (Allegro provides this)
+        const directId = pe.metadata?.parameterId as string | undefined;
+
+        // 2. Regex on userMessage or message
+        const text = pe.userMessage || pe.message || "";
+        const msgMatch = text.match(/Parameter\s+[`'"]?(\w+):/i);
+
+        // 3. Path index fallback (/parameters/N)
         const pathMatch = pe.path?.match(/\/parameters\/(\d+)/);
 
-        if (msgMatch?.[1]) {
-          const paramId = msgMatch[1];
-          if (!excluded.has(paramId)) {
-            logger.warn({ paramId, message: pe.message, attempt }, "Auto-excluding parameter and retrying");
-            excluded.add(paramId);
-            foundNew = true;
-          }
-        } else if (pathMatch?.[1]) {
-          // path like /parameters/2 — look up which param is at that index
+        let paramId: string | undefined = directId || msgMatch?.[1];
+
+        if (!paramId && pathMatch?.[1]) {
           const idx = parseInt(pathMatch[1], 10);
           const currentParams = (offerBody.parameters as Array<{ id: string }> | undefined) || [];
-          const paramId = currentParams[idx]?.id;
-          if (paramId && !excluded.has(paramId)) {
-            logger.warn({ paramId, path: pe.path, attempt }, "Auto-excluding parameter (by index) and retrying");
-            excluded.add(paramId);
-            foundNew = true;
-          }
+          paramId = currentParams[idx]?.id;
+        }
+
+        if (paramId && !excluded.has(paramId)) {
+          logger.warn({ paramId, userMessage: pe.userMessage, attempt }, "Auto-excluding parameter and retrying");
+          excluded.add(paramId);
+          foundNew = true;
         }
       }
 
