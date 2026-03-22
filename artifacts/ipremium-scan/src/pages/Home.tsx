@@ -455,19 +455,12 @@ async function fetchCategoryParameters(categoryId: string): Promise<AllegroParam
 // ── Auto-description builder ─────────────────────────────────────────────────
 
 function buildAutoDescription(
-  productName: string | null | undefined,
-  brand: string | null | undefined,
-  weight: string | null | undefined,
+  _productName: string | null | undefined,
+  _brand: string | null | undefined,
+  _weight: string | null | undefined,
   ean: string
 ): string {
-  const parts: string[] = [];
-  if (productName) parts.push(productName);
-  const meta: string[] = [];
-  if (brand) meta.push(brand);
-  if (weight) meta.push(weight);
-  if (meta.length > 0) parts.push(meta.join(", "));
-  if (ean) parts.push(`EAN: ${ean}`);
-  return parts.join(" — ");
+  return `EAN: ${ean}`;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
