@@ -147,7 +147,7 @@ function pickById<T extends { id: string; name: string }>(
   nameContains: string,
   label: string
 ): string | null {
-  const match = items.find((x) => x.name.toUpperCase().includes(nameContains.toUpperCase()));
+  const match = items.find((x) => x.name.toUpperCase() === nameContains.toUpperCase());
   if (match) {
     logger.info({ id: match.id, name: match.name }, `Fixed default resolved: ${label}`);
     return match.id;
