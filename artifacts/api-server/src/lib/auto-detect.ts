@@ -234,3 +234,83 @@ export function cleanProductName(
 
   return name.trim();
 }
+
+// ── Short Polish category descriptors for name padding ────────────────────────
+
+const CATEGORY_DESCRIPTORS: Record<string, string> = {
+  "Napoje energetyczne": "Napój Energetyczny",
+  "Napoje gazowane": "Napój Gazowany",
+  "Soki owocowe": "Sok Owocowy",
+  "Soki": "Sok Owocowy",
+  "Piwo": "Piwo",
+  "Woda mineralna": "Woda Mineralna",
+  "Woda": "Woda Mineralna",
+  "Mleko": "Mleko",
+  "Jogurty i kefiry": "Jogurt",
+  "Czekolady": "Czekolada",
+  "Cukierki i żelki": "Cukierki",
+  "Chipsy i chrupki": "Chipsy",
+  "Kawa": "Kawa",
+  "Herbata": "Herbata",
+  "Konserwy rybne": "Konserwa",
+  "Makaron": "Makaron",
+  "Sosy i przyprawy": "Sos",
+  "Płatki śniadaniowe": "Płatki Śniadaniowe",
+  "Batoniki": "Baton",
+};
+
+function countWords(s: string): number {
+  return s.trim().split(/\s+/).filter((w) => w.length > 0).length;
+}
+
+function containsIgnoreCase(haystack: string, needle: string): boolean {
+  return haystack.toLowerCase().includes(needle.toLowerCase());
+}
+
+function volumeSuffix(vol: ParsedVolume): string {
+  if (vol.unit === "ml") {
+    return vol.value >= 1000
+      ? `${(vol.value / 1000).toString().replace(".", ",")}l`
+      : `${vol.value}ml`;
+  }
+  return vol.value >= 1000
+    ? `${(vol.value / 1000).toString().replace(".", ",")}kg`
+    : `${vol.value}g`;
+}
+
+/**
+ * Ensures the product name has at least 3 words before sending to Allegro.
+ * Appends brand, category descriptor, or volume until the threshold is met.
+ */
+export function ensureMinWords(
+  name: string,
+  brand: string | null,
+  categoryKeyword: string | null,
+  vol: ParsedVolume | null,
+  minWords = 3
+): string {
+  let result = name.trim();
+
+  // 1. Append brand if not already present and helps word count
+  if (countWords(result) < minWords && brand && !containsIgnoreCase(result, brand)) {
+    result = `${result} ${brand}`.trim();
+  }
+
+  // 2. Append category descriptor if not already present
+  if (countWords(result) < minWords && categoryKeyword) {
+    const descriptor = CATEGORY_DESCRIPTORS[categoryKeyword];
+    if (descriptor && !containsIgnoreCase(result, descriptor.split(" ")[0])) {
+      result = `${result} ${descriptor}`.trim();
+    }
+  }
+
+  // 3. Append volume/weight if not already present
+  if (countWords(result) < minWords && vol) {
+    const hasVol = /\d+\s*(?:ml|l|g|kg|cl)/i.test(result);
+    if (!hasVol) {
+      result = `${result} ${volumeSuffix(vol)}`.trim();
+    }
+  }
+
+  return result;
+}

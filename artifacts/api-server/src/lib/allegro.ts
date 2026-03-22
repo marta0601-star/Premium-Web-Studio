@@ -2,6 +2,12 @@ import axios from "axios";
 import { logger } from "./logger";
 import { getUserToken, setUserToken } from "./allegro-auth";
 import { getSellerSettings } from "./settings";
+import {
+  detectBrand,
+  detectVolume,
+  detectCategoryKeyword,
+  ensureMinWords,
+} from "./auto-detect";
 
 const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID;
 const ALLEGRO_CLIENT_SECRET = process.env.ALLEGRO_CLIENT_SECRET;
@@ -333,6 +339,16 @@ export async function createAllegroOffer(payload: {
   description?: string | null;
 }) {
   const token = await getUserToken();
+
+  // ── Ensure product name has ≥ 3 words (Allegro requirement) ──────────────────
+  const _brand = detectBrand(payload.productName, null);
+  const _vol = detectVolume(payload.productName, null);
+  const _kw = detectCategoryKeyword(payload.productName);
+  const paddedName = ensureMinWords(payload.productName, _brand, _kw, _vol);
+  if (paddedName !== payload.productName) {
+    logger.info({ original: payload.productName, padded: paddedName }, "Product name padded to meet 3-word minimum");
+  }
+  payload = { ...payload, productName: paddedName };
 
   if (!fixedDefaults.shippingRateId && !fixedDefaults.returnPolicyId && !fixedDefaults.impliedWarrantyId) {
     await loadFixedDefaults();
