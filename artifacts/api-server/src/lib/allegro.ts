@@ -128,6 +128,32 @@ export async function getCategoryParameters(categoryId: string) {
   return response.data;
 }
 
+export async function getOfferDefaults() {
+  const token = await getUserToken();
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.allegro.public.v1+json",
+  };
+
+  const [shippingResult, returnResult, warrantyResult] = await Promise.allSettled([
+    axios.get(`${ALLEGRO_BASE_URL}/sale/shipping-rates`, { headers, timeout: 8000 }),
+    axios.get(`${ALLEGRO_BASE_URL}/after-sales-service-conditions/return-policies`, { headers, timeout: 8000 }),
+    axios.get(`${ALLEGRO_BASE_URL}/after-sales-service-conditions/implied-warranties`, { headers, timeout: 8000 }),
+  ]);
+
+  return {
+    shippingRates: shippingResult.status === "fulfilled"
+      ? ((shippingResult.value.data as { shippingRates?: unknown[] }).shippingRates || [])
+      : [],
+    returnPolicies: returnResult.status === "fulfilled"
+      ? ((returnResult.value.data as { returnPolicies?: unknown[] }).returnPolicies || [])
+      : [],
+    impliedWarranties: warrantyResult.status === "fulfilled"
+      ? ((warrantyResult.value.data as { impliedWarranties?: unknown[] }).impliedWarranties || [])
+      : [],
+  };
+}
+
 export async function createAllegroOffer(payload: {
   productId: string;
   categoryId: string;
@@ -137,17 +163,20 @@ export async function createAllegroOffer(payload: {
     values?: string[];
     valuesIds?: string[];
   }>;
+  quantity?: number;
+  shippingRateId?: string | null;
+  returnPolicyId?: string | null;
+  impliedWarrantyId?: string | null;
+  invoice?: string;
 }) {
-  const token = await getClientCredentialsToken();
+  const token = await getUserToken();
 
-  const offerBody = {
+  const offerBody: Record<string, unknown> = {
     name: payload.productName,
     category: {
       id: payload.categoryId,
     },
-    product: {
-      id: payload.productId,
-    },
+    product: payload.productId ? { id: payload.productId } : undefined,
     parameters: payload.parameters.map((p) => ({
       id: p.id,
       values: p.values || [],
@@ -161,18 +190,30 @@ export async function createAllegroOffer(payload: {
       },
     },
     stock: {
-      available: 1,
+      available: payload.quantity ?? 1,
       unit: "UNIT",
     },
     publication: {
       status: "INACTIVE",
+      duration: null,
     },
-    delivery: {
-      shippingRates: {
-        id: null,
-      },
+    payments: {
+      invoice: payload.invoice || "VAT",
     },
   };
+
+  // Only include delivery if we have a valid shippingRateId
+  if (payload.shippingRateId) {
+    offerBody.delivery = { shippingRates: { id: payload.shippingRateId } };
+  }
+
+  // Only include afterSalesServices if we have at least one ID
+  if (payload.returnPolicyId || payload.impliedWarrantyId) {
+    offerBody.afterSalesServices = {
+      ...(payload.impliedWarrantyId ? { impliedWarranty: { id: payload.impliedWarrantyId } } : {}),
+      ...(payload.returnPolicyId ? { returnPolicy: { id: payload.returnPolicyId } } : {}),
+    };
+  }
 
   const response = await axios.post(
     `${ALLEGRO_BASE_URL}/sale/offers`,

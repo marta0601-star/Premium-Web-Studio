@@ -1,0 +1,44 @@
+When creating an offer on Allegro, there are MORE required fields beyond just product parameters. The Allegro offer creation form also requires these fields. Pre-fill them with these DEFAULT values:
+
+1. DOSTAWA (Shipping):
+   - Set a default shipping rate table (cennik dostawy) — or let user select from their existing shipping rate tables via GET https://api.allegro.pl/sale/delivery-methods
+   - Czas wysyłki: "1 dzień" (1 day)
+
+2. CENA (Price):
+   - Already set to 999 PLN — keep this
+
+3. FAKTURA VAT:
+   - Opcje faktury: "faktura VAT"
+   - Stawka VAT Polska: 23% (default for most products)
+   - For food products: auto-detect and set 5% or 8% based on category
+   - Przedmiot oferty: "towar"
+
+4. STAN MAGAZYNOWY (Stock):
+   - Default: 1 sztuk (1 piece)
+   - Let user change the quantity
+
+5. CZAS TRWANIA (Duration):
+   - Default: "do wyczerpania przedmiotów" (until sold out)
+
+6. WARUNKI SPRZEDAŻY (Sales conditions):
+   - Warunki zwrotów: fetch user's return policies via GET https://api.allegro.pl/after-sales-service-conditions/return-policies and pre-select the first one
+   - Reklamacje: fetch via GET https://api.allegro.pl/after-sales-service-conditions/implied-warranties and pre-select the first one
+
+7. LOKALIZACJA (Location):
+   - Fetch from user's account settings via GET https://api.allegro.pl/sale/offer-additional-services/groups or use the default from their Allegro profile
+
+Include ALL these fields in the offer creation API call:
+- stock.available: 1
+- stock.unit: "UNIT"  
+- delivery.shippingRates (from user's shipping tables)
+- afterSalesServices.impliedWarranty.id
+- afterSalesServices.returnPolicy.id
+- payments.invoice: "VAT"
+- location from user profile
+- duration: "INDEFINITE" (do wyczerpania)
+
+Add a section in the review form BELOW the product parameters showing these offer settings with the pre-filled defaults. User can change them but defaults should work for most cases.
+
+Fetch the user's existing shipping tables, return policies and warranty conditions on app startup so they are ready immediately when creating an offer.
+
+Keep everything in Polish.
