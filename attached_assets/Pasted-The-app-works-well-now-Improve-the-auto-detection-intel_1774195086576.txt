@@ -1,0 +1,52 @@
+The app works well now! Improve the auto-detection intelligence for products NOT found in Allegro catalog:
+
+1. BETTER CATEGORY DETECTION:
+   - From product name, detect keywords and map to Allegro categories:
+     * "energy", "energetyczny", "red bull", "monster" → Napoje energetyczne
+     * "cola", "fanta", "sprite", "pepsi", "napój", "juice", "sok" → Napoje gazowane / Soki
+     * "piwo", "beer", "bier" → Piwo
+     * "woda", "water" → Woda
+     * "mleko", "milk", "milch" → Mleko
+     * "jogurt", "yogurt" → Jogurty
+     * "czekolad", "chocolate", "schoko" → Czekolady
+     * "cukier", "bonbon", "drops", "tic tac", "mentos" → Cukierki i draże
+     * "chips", "chipsy", "lay's", "pringles" → Chipsy i chrupki
+     * "kawa", "coffee", "kaffee" → Kawa
+     * "herbat", "tea", "tee" → Herbata
+     * "konserw", "puszka" → Konserwy
+     * "makaron", "pasta", "spaghet" → Makarony
+     * "sos", "sauce", "ketchup", "musztarda" → Sosy i przyprawy
+   - Use Allegro API GET /sale/matching-categories?phrase={detected_keyword} to get the exact category ID
+   - If no keyword matches, fall back to searching by full product name
+
+2. BETTER BRAND DETECTION:
+   - From product name, detect known brands:
+     * "Hell", "Flying Power" → Hell
+     * "Coca-Cola", "Coca Cola", "Coke" → Coca-Cola
+     * "Red Bull" → Red Bull
+     * "Monster" → Monster
+     * "Milka" → Milka
+     * "Barilla" → Barilla
+     * "Nestlé", "Nestle", "Nescafé" → Nestlé
+     * "Haribo" → Haribo
+     * "Lay's", "Lays" → Lay's
+     * "Pringles" → Pringles
+     * "Knorr" → Knorr
+     * "Dr. Oetker" → Dr. Oetker
+     * "Lipton" → Lipton
+   - Also: the first word or first two words of the product name is usually the brand — use this as fallback
+   - When filling the "Marka" dropdown, search the dictionary values for the detected brand name and pre-select the best match
+
+3. BETTER VOLUME/WEIGHT DETECTION from product name or Open Food Facts data:
+   - Parse patterns: "250ml", "0,5l", "500 ml", "1L", "100g", "1,5 kg", "330 ml", "0.33l"
+   - Convert to standard units: 0.5l → 500ml, 1.5kg → 1500g
+   - Pre-fill Pojemność or Waga field
+
+4. BETTER PRODUCT NAME:
+   - Clean up the name: remove duplicate brand names, fix capitalization
+   - Example: "FLYING POWER ENERGY HELL" → "Flying Power Energy Hell 250ml"
+   - If volume/weight is known but not in the name, append it
+
+5. When auto-detection fills a field, still mark it as "auto" so user knows it was auto-detected and can change it if wrong.
+
+Keep everything in Polish. The goal: scan EAN → everything is filled correctly → user just clicks "Wystaw".

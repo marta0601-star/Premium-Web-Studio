@@ -15,6 +15,13 @@ import {
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
 import { getSellerSettings, saveSellerSettings } from "../lib/settings";
+import {
+  detectCategoryKeyword,
+  detectBrand,
+  detectVolume,
+  formatVolumeForContext,
+  cleanProductName,
+} from "../lib/auto-detect";
 
 const ALLEGRO_BASE_URL = "https://api.allegro.pl";
 
@@ -166,18 +173,113 @@ router.get("/scan", async (req, res) => {
       return;
     }
 
+    // ── Step 3a: Auto-detect from lookup result ──────────────────────────────
+    const rawName = result.name || "";
+    const detectedBrand = detectBrand(rawName, result.brand || null);
+    const detectedVolume = detectVolume(rawName, result.weight || null);
+    const categoryKeyword = detectCategoryKeyword(rawName);
+    const cleanedName = cleanProductName(rawName, detectedBrand, detectedVolume);
+    const normalizedWeight = detectedVolume ? formatVolumeForContext(detectedVolume) : (result.weight || null);
+
+    req.log.info(
+      { rawName, cleanedName, detectedBrand, detectedVolume, categoryKeyword },
+      "Auto-detection results"
+    );
+
+    // ── Step 3b: Resolve Allegro category via matching-categories API ─────────
+    let detectedCategoryId = "73973"; // fallback: Produkty spożywcze
+    let detectedCategoryName = "Produkty spożywcze";
+    const searchPhrase = categoryKeyword || cleanedName;
+
+    try {
+      const token = await getUserToken();
+      const catResp = await axios.get(
+        `${ALLEGRO_BASE_URL}/sale/matching-categories?name=${encodeURIComponent(searchPhrase)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.allegro.public.v1+json",
+          },
+          timeout: 5000,
+        }
+      );
+      // Allegro returns "matchingCategories" (array), not "matchingCategory"
+      const cats = (catResp.data as { matchingCategories?: Array<{ id: string; name: string }> }).matchingCategories || [];
+      // Find the best match: prefer exact or closest name match against our keyword
+      const kwLower = searchPhrase.toLowerCase();
+      let bestCat = cats[0];
+      for (const cat of cats) {
+        const cLower = cat.name.toLowerCase();
+        if (cLower === kwLower || cLower.includes(kwLower) || kwLower.includes(cLower)) {
+          bestCat = cat;
+          break;
+        }
+      }
+      if (bestCat?.id) {
+        detectedCategoryId = bestCat.id;
+        detectedCategoryName = bestCat.name;
+        req.log.info(
+          { phrase: searchPhrase, categoryId: detectedCategoryId, categoryName: detectedCategoryName, candidateCount: cats.length },
+          "Category detected via Allegro API"
+        );
+      }
+    } catch (catErr: unknown) {
+      const e = catErr as { message?: string };
+      req.log.warn({ phrase: searchPhrase, msg: e.message }, "matching-categories failed — using fallback");
+    }
+
+    // ── Step 3c: Fetch category parameters + product-parameter IDs ────────────
+    let parameters: ReturnType<typeof mapParam>[] = [];
+    let productParamIds: string[] = [];
+
+    try {
+      const token = await getUserToken();
+      const hdr = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.allegro.public.v1+json",
+      };
+      const [paramsRes, ppRes] = await Promise.allSettled([
+        getCategoryParameters(detectedCategoryId),
+        axios.get(
+          `${ALLEGRO_BASE_URL}/sale/categories/${detectedCategoryId}/product-parameters?language=pl-PL`,
+          { headers: hdr, timeout: 8000 }
+        ),
+      ]);
+
+      if (paramsRes.status === "fulfilled") {
+        const all: RawAllegroParam[] =
+          (paramsRes.value as { parameters?: RawAllegroParam[] }).parameters || [];
+        parameters = all.map((p) => mapParam(p));
+      } else {
+        req.log.warn({ categoryId: detectedCategoryId }, "Could not fetch parameters for detected category");
+      }
+
+      if (ppRes.status === "fulfilled") {
+        const pp = (ppRes.value.data as { parameters?: RawAllegroParam[] }).parameters || [];
+        productParamIds = pp.map((p) => p.id);
+      }
+    } catch (paramErr: unknown) {
+      const e = paramErr as { message?: string };
+      req.log.warn({ msg: e.message }, "Error fetching category parameters");
+    }
+
+    req.log.info(
+      { categoryId: detectedCategoryId, paramCount: parameters.length, productParamCount: productParamIds.length },
+      "Category parameters loaded"
+    );
+
     res.json({
       productId: null,
-      productName: result.name,
-      // Always default to "Produkty spożywcze" (73973) for external/non-catalog products
-      categoryId: "73973",
-      categoryName: "Produkty spożywcze",
+      productName: cleanedName,
+      categoryId: detectedCategoryId,
+      categoryName: detectedCategoryName,
       images: result.image ? [{ url: result.image }] : [],
-      parameters: [],
+      parameters,
       prefillValues: {},
+      productParamIds,
       source: result.source,
-      brand: result.brand,
-      weight: result.weight,
+      brand: detectedBrand,
+      weight: normalizedWeight,
       category: result.category,
       logs: result.logs,
       ean,
