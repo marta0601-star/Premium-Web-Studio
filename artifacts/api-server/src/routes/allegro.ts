@@ -168,8 +168,9 @@ router.get("/scan", async (req, res) => {
     res.json({
       productId: null,
       productName: result.name,
-      categoryId: null,
-      categoryName: null,
+      // Always default to "Produkty spożywcze" (73973) for external/non-catalog products
+      categoryId: "73973",
+      categoryName: "Produkty spożywcze",
       images: result.image ? [{ url: result.image }] : [],
       parameters: [],
       prefillValues: {},

@@ -360,40 +360,47 @@ function ParamProgress({ formState, params }: { formState: Record<string, Parame
   );
 }
 
-// Category picker
+// Category picker — caller controls open/close, not this component
 function CategoryPicker({
   suggestions,
+  currentCatName,
   onSelect,
   onClose,
 }: {
   suggestions: CategorySuggestion[];
+  currentCatName?: string;
   onSelect: (cat: CategorySuggestion) => void;
   onClose: () => void;
 }) {
   if (suggestions.length === 0) {
     return (
       <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-zinc-900 border border-white/20 rounded-xl p-4 shadow-2xl">
-        <p className="text-white/50 text-sm text-center">Brak sugestii kategorii</p>
+        <p className="text-white/50 text-sm text-center">Brak podkategorii</p>
         <button onClick={onClose} className="mt-2 w-full text-xs text-white/30 hover:text-white/60">Zamknij</button>
       </div>
     );
   }
   return (
-    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-zinc-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto">
-      {suggestions.map((cat) => (
-        <button
-          key={cat.id}
-          onClick={() => { onSelect(cat); onClose(); }}
-          className="w-full flex flex-col gap-0.5 px-4 py-3 hover:bg-white/5 text-left border-b border-white/5 last:border-0"
-        >
-          <span className="text-white text-sm font-medium">{cat.name}</span>
-          {cat.path && cat.path.length > 1 && (
-            <span className="text-white/35 text-xs truncate">
-              {cat.path.slice(1).map((p) => p.name).join(" › ")}
-            </span>
-          )}
-        </button>
-      ))}
+    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-zinc-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-white/5">
+        <span className="text-white/50 text-xs uppercase tracking-wider">
+          {currentCatName ? `▸ ${currentCatName}` : "Wybierz kategorię"}
+        </span>
+        <button onClick={onClose} className="text-white/30 hover:text-white/60 text-xs">✕</button>
+      </div>
+      <div className="max-h-64 overflow-y-auto">
+        {suggestions.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => onSelect(cat)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 text-left border-b border-white/5 last:border-0"
+          >
+            <span className="text-white text-sm font-medium">{cat.name}</span>
+            {!cat.leaf && <span className="text-white/30 text-xs ml-2">›</span>}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -575,10 +582,12 @@ export default function Home() {
         setAutoFilledIds(ai);
         setStep("FORM");
       } else {
-        // External source — always default to Supermarket category tree
+        // External source — always use "Produkty spożywcze" (73973) returned by backend
         setStep("FORM");
-        setCategoryId(null);
-        setCategoryName("");
+        const defaultCatId = data.categoryId || "73973";
+        const defaultCatName = data.categoryName || "Produkty spożywcze";
+        setCategoryId(defaultCatId);
+        setCategoryName(defaultCatName);
         setParameters([]);
 
         // Auto-upload any image found by the lookup to Allegro in background
@@ -599,20 +608,10 @@ export default function Home() {
             .finally(() => setImageUploading(false));
         }
 
-        // Find Supermarket top-level category (exact name match) — runs in parallel with image upload
-        const supermarketResults = await fetchMatchingCategories("Supermarket");
-        const supermarket = supermarketResults.find((c) => c.name === "Supermarket") || supermarketResults[0];
-
-        if (supermarket) {
-          setCategoryId(supermarket.id);
-          setCategoryName(supermarket.name);
-          // Load Supermarket's direct children as the picker options
-          const children = await fetchCategoryChildren(supermarket.id);
-          setCategorySuggestions(children);
-          setShowCategoryPicker(true); // Auto-open so user picks a subcategory
-          // Don't auto-select a subcategory — Supermarket is not a leaf; user must choose
-          setParameters([]);
-        }
+        // Load subcategories of "Produkty spożywcze" so user can pick exact leaf category
+        const children = await fetchCategoryChildren(defaultCatId);
+        setCategorySuggestions(children);
+        setShowCategoryPicker(true); // Auto-open picker so user picks the right subcategory
       }
     } catch (err: unknown) {
       console.error(err);
@@ -628,6 +627,22 @@ export default function Home() {
   const handleCategoryChange = useCallback(
     async (cat: CategorySuggestion) => {
       if (!scannedData) return;
+
+      // If this is NOT a leaf category, drill down: show its children in the picker
+      if (!cat.leaf) {
+        setCategoryId(cat.id);
+        setCategoryName(cat.name);
+        setParameters([]);
+        setLoadingParams(true);
+        const children = await fetchCategoryChildren(cat.id);
+        setCategorySuggestions(children);
+        setShowCategoryPicker(true);
+        setLoadingParams(false);
+        return;
+      }
+
+      // Leaf category — close picker and load parameters
+      setShowCategoryPicker(false);
       const country = getCountryFromEan(currentEan);
       const ctx: ProductContext = {
         ean: currentEan,
@@ -901,6 +916,7 @@ export default function Home() {
                     {showCategoryPicker && (
                       <CategoryPicker
                         suggestions={categorySuggestions}
+                        currentCatName={categoryName}
                         onSelect={handleCategoryChange}
                         onClose={() => setShowCategoryPicker(false)}
                       />

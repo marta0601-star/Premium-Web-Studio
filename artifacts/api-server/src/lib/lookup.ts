@@ -33,43 +33,50 @@ export interface LookupResult {
 // ── Image URL extraction helpers ─────────────────────────────────────────────
 
 function extractImageUrl(html: string, label: string, logs: string[]): string | null {
-  // 1. "ou" field — original URL in Google Images JS data
+  // 1. "ou" (original URL) JSON field — most reliable when present
   const ouMatch = html.match(/"ou":"(https?:\/\/[^"\\]+)"/);
   if (ouMatch?.[1]) {
     const url = ouMatch[1].replace(/\\u003d/g, "=").replace(/\\u0026/g, "&");
     if (!url.includes("google.com/images") && !url.includes("gstatic.com/images/branding")) {
-      logs.push(`[${label}] Image via ou: ${url.slice(0, 80)}`);
+      logs.push(`[${label}] via ou: ${url.slice(0, 80)}`);
       return url;
     }
   }
 
-  // 2. imgurl= parameter
+  // 2. imgurl= parameter (in redirect URLs)
   const imgurlMatch = html.match(/imgurl=(https?:\/\/[^&"'\s]+)/);
   if (imgurlMatch?.[1]) {
     const url = decodeURIComponent(imgurlMatch[1]);
-    logs.push(`[${label}] Image via imgurl: ${url.slice(0, 80)}`);
+    logs.push(`[${label}] via imgurl: ${url.slice(0, 80)}`);
     return url;
   }
 
-  // 3. Direct image URL with extension (non-Google domain)
-  const extRegex = /https?:\/\/(?!(?:www\.google|encrypted-tbn|ssl\.gstatic|lh[0-9]\.googleusercontent))[^"'\s<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]*)?/gi;
+  // 3. JSON array pattern ["url",width,height] from Google Images JS
+  const jsonArrMatch = html.match(/\["(https?:\/\/(?!encrypted-tbn)[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)",\s*\d+,\s*\d+\]/);
+  if (jsonArrMatch?.[1]) {
+    logs.push(`[${label}] via JSON arr: ${jsonArrMatch[1].slice(0, 80)}`);
+    return jsonArrMatch[1];
+  }
+
+  // 4. Direct image URL with extension on a non-Google domain
+  const extRegex = /https?:\/\/(?!(?:www\.google|ssl\.gstatic|fonts\.gstatic|lh[0-9]\.googleusercontent))[^"'\s<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"'\s<>]{0,120})?/gi;
   let extMatch: RegExpExecArray | null;
   while ((extMatch = extRegex.exec(html)) !== null) {
     const url = extMatch[0];
-    if (url.length < 300) {
-      logs.push(`[${label}] Image via ext: ${url.slice(0, 80)}`);
+    if (url.length < 400 && !url.includes("google.com")) {
+      logs.push(`[${label}] via ext: ${url.slice(0, 80)}`);
       return url;
     }
   }
 
-  // 4. encrypted-tbn thumbnail (last resort — low quality but better than nothing)
-  const tbnMatch = html.match(/https?:\/\/encrypted-tbn\d*\.gstatic\.com\/[^"'\s<>]+/);
+  // 5. encrypted-tbn thumbnail (low quality but proves the product exists)
+  const tbnMatch = html.match(/https?:\/\/encrypted-tbn\d*\.gstatic\.com\/images[^"'\s<>]+/);
   if (tbnMatch?.[0]) {
-    logs.push(`[${label}] Image via tbn (thumbnail): ${tbnMatch[0].slice(0, 80)}`);
+    logs.push(`[${label}] via tbn (thumbnail): ${tbnMatch[0].slice(0, 80)}`);
     return tbnMatch[0];
   }
 
-  logs.push(`[${label}] No image URL found`);
+  logs.push(`[${label}] No image URL found (html len=${html.length})`);
   return null;
 }
 
@@ -139,7 +146,72 @@ function extractNameFromGoogleHtml(html: string, label: string, logs: string[]):
 
 // ── Structured source searches ───────────────────────────────────────────────
 
+// Extract best image URL from OFF product object — tries many fallbacks
+function extractOffImage(p: Record<string, unknown>, ean: string): string | null {
+  // 1. Top-level standard fields (front image preferred)
+  const direct =
+    (p.image_front_url as string | null) ||
+    (p.image_front_small_url as string | null) ||
+    (p.image_url as string | null) ||
+    (p.image_small_url as string | null);
+  if (direct) return direct;
+
+  // 2. selected_images — check ALL types (front, ingredients, nutrition, packaging)
+  const sel = p.selected_images as Record<string, unknown> | undefined;
+  if (sel) {
+    for (const imgType of ["front", "ingredients", "nutrition", "packaging"]) {
+      const typeObj = sel[imgType] as Record<string, unknown> | undefined;
+      if (!typeObj) continue;
+      for (const sizeKey of ["display", "small", "thumb"]) {
+        const display = typeObj[sizeKey] as Record<string, unknown> | undefined;
+        if (!display) continue;
+        for (const lang of ["pl", "de", "en", "fr", "es", "it", "nl"]) {
+          if (typeof display[lang] === "string" && display[lang]) return display[lang] as string;
+        }
+        const vals = Object.values(display).filter((v) => typeof v === "string" && v);
+        if (vals.length > 0) return vals[0] as string;
+      }
+    }
+  }
+
+  // 3. Top-level ingredient/nutrition image fields (fallback to any product photo)
+  const anyPhoto =
+    (p.image_ingredients_url as string | null) ||
+    (p.image_ingredients_small_url as string | null) ||
+    (p.image_nutrition_url as string | null) ||
+    (p.image_nutrition_small_url as string | null) ||
+    (p.image_packaging_url as string | null);
+  if (anyPhoto) return anyPhoto;
+
+  // 4. images dict — build URL from path + key
+  const eanPath = buildOffEanPath(ean);
+  const imgs = p.images as Record<string, unknown> | undefined;
+  if (imgs && eanPath) {
+    const BASE = "https://images.openfoodfacts.org/images/products";
+    // Named types first (front > ingredients > nutrition)
+    for (const prefix of ["front_en", "front_de", "front_fr", "front", "ingredients_en", "ingredients"]) {
+      if (imgs[prefix]) return `${BASE}/${eanPath}/${prefix}.400.jpg`;
+    }
+    // Numbered images (image "1", "2", etc.)
+    const numKeys = Object.keys(imgs).filter((k) => /^\d+$/.test(k)).sort((a, b) => Number(a) - Number(b));
+    if (numKeys.length > 0) return `${BASE}/${eanPath}/${numKeys[0]}.full.jpg`;
+  }
+
+  return null;
+}
+
+function buildOffEanPath(ean: string): string | null {
+  const s = ean.replace(/\D/g, "");
+  if (s.length === 13) return `${s.slice(0, 3)}/${s.slice(3, 6)}/${s.slice(6, 9)}/${s.slice(9)}`;
+  if (s.length === 8) return `${s.slice(0, 4)}/${s.slice(4)}`;
+  return s.length >= 1 ? s : null;
+}
+
 async function searchOpenFoodFacts(ean: string, logs: string[]): Promise<LookupResult | null> {
+  // Collect all found entries (name+image if possible)
+  let bestWithImage: LookupResult | null = null;
+  let bestWithoutImage: LookupResult | null = null;
+
   for (const region of OPEN_FOOD_FACTS_REGIONS) {
     const url = `https://${region}.openfoodfacts.org/api/v2/product/${ean}.json`;
     logs.push(`[OpenFoodFacts/${region}] ${url}`);
@@ -150,14 +222,14 @@ async function searchOpenFoodFacts(ean: string, logs: string[]): Promise<LookupR
       });
       const data = resp.data;
       if (data.status === 1 && data.product) {
-        const p = data.product;
+        const p = data.product as Record<string, unknown>;
         const name =
-          p.product_name ||
-          p.product_name_pl ||
-          p.product_name_de ||
-          p.product_name_en ||
-          p.product_name_fr ||
-          p.product_name_sk ||
+          (p.product_name as string) ||
+          (p.product_name_pl as string) ||
+          (p.product_name_de as string) ||
+          (p.product_name_en as string) ||
+          (p.product_name_fr as string) ||
+          (p.product_name_sk as string) ||
           null;
 
         if (!name) {
@@ -165,25 +237,26 @@ async function searchOpenFoodFacts(ean: string, logs: string[]): Promise<LookupR
           continue;
         }
 
-        const image =
-          p.image_front_url ||
-          p.image_front_small_url ||
-          p.image_url ||
-          p.image_small_url ||
-          null;
+        const image = extractOffImage(p, ean);
+        logs.push(`[OpenFoodFacts/${region}] Found: ${name}${image ? ` (image: ${image.slice(0, 60)})` : " (no image)"}`);
 
-        logs.push(`[OpenFoodFacts/${region}] Found: ${name}${image ? " (with image)" : " (no image)"}`);
-        return {
+        const entry: LookupResult = {
           found: true,
           name,
-          brand: p.brands || null,
-          weight: p.quantity || null,
-          category: p.categories ? p.categories.split(",")[0].trim() : null,
+          brand: (p.brands as string) || null,
+          weight: (p.quantity as string) || null,
+          category: p.categories ? (p.categories as string).split(",")[0].trim() : null,
           image,
           description: null,
           source: `openfoodfacts/${region}`,
           logs,
         };
+
+        if (image && !bestWithImage) bestWithImage = entry;
+        if (!bestWithoutImage) bestWithoutImage = entry;
+
+        // If we have both name and image, return immediately
+        if (image) return entry;
       } else {
         logs.push(`[OpenFoodFacts/${region}] status=${data.status}`);
       }
@@ -198,7 +271,8 @@ async function searchOpenFoodFacts(ean: string, logs: string[]): Promise<LookupR
       }
     }
   }
-  return null;
+
+  return bestWithImage || bestWithoutImage || null;
 }
 
 async function searchUpcItemdb(ean: string, logs: string[]): Promise<LookupResult | null> {
