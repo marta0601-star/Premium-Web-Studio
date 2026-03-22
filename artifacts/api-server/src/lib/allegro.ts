@@ -201,6 +201,57 @@ export async function loadFixedDefaults(): Promise<void> {
   }
 }
 
+export async function uploadImageToAllegro(imageUrl: string): Promise<string | null> {
+  try {
+    const token = await getUserToken();
+    const resp = await axios.post(
+      "https://upload.allegro.pl/sale/images",
+      { url: imageUrl },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/vnd.allegro.public.v1+json",
+        },
+        timeout: 30000,
+      }
+    );
+    const allegroUrl = (resp.data as { url?: string }).url || null;
+    logger.info({ imageUrl, allegroUrl }, "Image uploaded to Allegro");
+    return allegroUrl;
+  } catch (err: unknown) {
+    logger.warn({ err, imageUrl }, "Failed to upload image URL to Allegro");
+    return null;
+  }
+}
+
+export async function uploadImageBinaryToAllegro(
+  data: Buffer,
+  contentType: string
+): Promise<string | null> {
+  try {
+    const token = await getUserToken();
+    const resp = await axios.post(
+      "https://upload.allegro.pl/sale/images",
+      data,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": contentType,
+          Accept: "application/vnd.allegro.public.v1+json",
+        },
+        timeout: 30000,
+      }
+    );
+    const allegroUrl = (resp.data as { url?: string }).url || null;
+    logger.info({ allegroUrl }, "Binary image uploaded to Allegro");
+    return allegroUrl;
+  } catch (err: unknown) {
+    logger.warn({ err }, "Failed to upload binary image to Allegro");
+    return null;
+  }
+}
+
 export async function createAllegroOffer(payload: {
   productId?: string | null;
   categoryId: string;
@@ -211,6 +262,7 @@ export async function createAllegroOffer(payload: {
     valuesIds?: string[];
   }>;
   productParamIds?: string[];
+  imageUrl?: string | null;
 }) {
   const token = await getUserToken();
 
@@ -280,8 +332,16 @@ export async function createAllegroOffer(payload: {
     };
   }
 
+  // Upload image to Allegro if provided
+  if (payload.imageUrl) {
+    const allegroImageUrl = await uploadImageToAllegro(payload.imageUrl);
+    if (allegroImageUrl) {
+      offerBody.images = [{ url: allegroImageUrl }];
+    }
+  }
+
   logger.info(
-    { productId: payload.productId, categoryId: payload.categoryId, fixedDefaults },
+    { productId: payload.productId, categoryId: payload.categoryId, fixedDefaults, hasImage: !!offerBody.images },
     "Creating Allegro offer via product-offers API"
   );
 

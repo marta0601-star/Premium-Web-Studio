@@ -9,6 +9,8 @@ import {
   getCategoryParameters,
   getCategoryName,
   createAllegroOffer,
+  uploadImageToAllegro,
+  uploadImageBinaryToAllegro,
 } from "../lib/allegro";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
@@ -247,6 +249,55 @@ router.get("/category-parameters/:categoryId", async (req, res) => {
   }
 });
 
+
+// ── POST /api/allegro/upload-image ──────────────────────────────────────────
+// Accepts a binary image body (Content-Type: image/*) from the client,
+// uploads it to Allegro, and returns the hosted Allegro image URL.
+router.post("/upload-image", async (req, res) => {
+  try {
+    const contentType = (req.headers["content-type"] as string) || "image/jpeg";
+
+    // If client sent a JSON body with a URL, forward that URL
+    if (contentType.includes("application/json")) {
+      const { url } = req.body as { url?: string };
+      if (!url) {
+        res.status(400).json({ error: "url field required in body" });
+        return;
+      }
+      const allegroUrl = await uploadImageToAllegro(url);
+      if (!allegroUrl) {
+        res.status(502).json({ error: "Failed to upload image URL to Allegro" });
+        return;
+      }
+      res.json({ url: allegroUrl });
+      return;
+    }
+
+    // Binary image body
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", async () => {
+      const data = Buffer.concat(chunks);
+      if (!data.length) {
+        res.status(400).json({ error: "Empty image body" });
+        return;
+      }
+      const allegroUrl = await uploadImageBinaryToAllegro(data, contentType.split(";")[0].trim());
+      if (!allegroUrl) {
+        res.status(502).json({ error: "Failed to upload image to Allegro" });
+        return;
+      }
+      res.json({ url: allegroUrl });
+    });
+    req.on("error", (err) => {
+      req.log.error({ err }, "Error reading upload-image request body");
+      res.status(500).json({ error: "Error reading image data" });
+    });
+  } catch (err: unknown) {
+    req.log.error({ err }, "Error in upload-image endpoint");
+    res.status(500).json({ error: "server_error" });
+  }
+});
 
 // ── POST /api/allegro/create-offer ──────────────────────────────────────────
 router.post("/create-offer", async (req, res) => {

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ScanLine, Box, CheckCircle2, AlertCircle, RefreshCw, Layers,
   ExternalLink, Clock, ChevronRight, ChevronDown, Edit2, CheckCheck,
+  Camera, ImageIcon, Loader2,
 } from "lucide-react";
 import { useScanBarcode, useSubmitOffer } from "@/hooks/use-allegro";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -453,6 +454,9 @@ export default function Home() {
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [scanHistory, setScanHistory] = useState<HistoryEntry[]>([]);
   const [productParamIds, setProductParamIds] = useState<string[]>([]);
+  const [userImagePreviewUrl, setUserImagePreviewUrl] = useState<string | null>(null);
+  const [allegroImageUrl, setAllegroImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
 
   const scanMutation = useScanBarcode();
   const submitMutation = useSubmitOffer();
@@ -483,6 +487,29 @@ export default function Home() {
     []
   );
 
+  const handleImageFile = useCallback(async (file: File) => {
+    const previewUrl = URL.createObjectURL(file);
+    setUserImagePreviewUrl(previewUrl);
+    setAllegroImageUrl(null);
+    setImageUploading(true);
+    try {
+      const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const resp = await fetch(`${BASE}/api/allegro/upload-image`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as { url?: string };
+        if (data.url) setAllegroImageUrl(data.url);
+      }
+    } catch {
+      /* ignore — preview still visible */
+    } finally {
+      setImageUploading(false);
+    }
+  }, []);
+
   const handleScan = useCallback(async (ean: string) => {
     const trimmed = ean.trim();
     if (!trimmed) return;
@@ -495,6 +522,9 @@ export default function Home() {
     setFormState({});
     setAutoFilledIds(new Set());
     setCategorySuggestions([]);
+    if (userImagePreviewUrl) URL.revokeObjectURL(userImagePreviewUrl);
+    setUserImagePreviewUrl(null);
+    setAllegroImageUrl(null);
 
     try {
       const data = await scanMutation.mutateAsync(trimmed) as ExtendedScanResult;
@@ -564,7 +594,7 @@ export default function Home() {
       });
       setStep("SCAN");
     }
-  }, [scanMutation]);
+  }, [scanMutation, userImagePreviewUrl]);
 
   const handleCategoryChange = useCallback(
     async (cat: CategorySuggestion) => {
@@ -601,12 +631,17 @@ export default function Home() {
         (p.valuesIds && p.valuesIds.length > 0 && p.valuesIds[0] !== "")
     );
 
+    const resolvedImageUrl =
+      allegroImageUrl ||
+      (scannedData.images && scannedData.images.length > 0 ? scannedData.images[0].url : null);
+
     const payload: CreateOfferRequest = {
       productId: scannedData.productId,
       categoryId: categoryId as string,
       productName: scannedData.productName as string,
       parameters: parameters_payload,
       productParamIds,
+      imageUrl: resolvedImageUrl || undefined,
     };
 
     try {
@@ -647,6 +682,10 @@ export default function Home() {
     setCategoryName("");
     setCategorySuggestions([]);
     setProductParamIds([]);
+    if (userImagePreviewUrl) URL.revokeObjectURL(userImagePreviewUrl);
+    setUserImagePreviewUrl(null);
+    setAllegroImageUrl(null);
+    setImageUploading(false);
     setStep("SCAN");
   };
 
@@ -730,13 +769,79 @@ export default function Home() {
 
               {/* Product header */}
               <div className="flex flex-col md:flex-row gap-8 mb-8">
-                {scannedData.images && scannedData.images.length > 0 && (
-                  <div className="w-full md:w-1/3 shrink-0">
-                    <div className="aspect-square rounded-2xl overflow-hidden bg-white/5 border border-white/10 group">
-                      <img src={scannedData.images[0].url} alt={scannedData.productName || ""} className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500" />
-                    </div>
-                  </div>
-                )}
+                {/* Image panel — always shown */}
+                <div className="w-full md:w-1/3 shrink-0">
+                  {(() => {
+                    const displayUrl = userImagePreviewUrl || (scannedData.images && scannedData.images.length > 0 ? scannedData.images[0].url : null);
+                    return (
+                      <div className="aspect-square rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative group">
+                        {displayUrl ? (
+                          <>
+                            <img
+                              src={displayUrl}
+                              alt={scannedData.productName || ""}
+                              className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500"
+                            />
+                            {imageUploading && (
+                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                              </div>
+                            )}
+                            {/* Change photo button */}
+                            <label className="absolute bottom-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/70 hover:bg-black/90 border border-white/20 text-white/70 hover:text-white text-xs cursor-pointer transition-colors">
+                              <Camera className="w-3.5 h-3.5" />
+                              Zmień
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }}
+                              />
+                            </label>
+                          </>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center h-full gap-3 cursor-pointer group/upload">
+                            {imageUploading ? (
+                              <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                            ) : (
+                              <>
+                                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-hover/upload:bg-primary/20 transition-colors">
+                                  <ImageIcon className="w-8 h-8 text-primary/60 group-hover/upload:text-primary/80 transition-colors" />
+                                </div>
+                                <div className="text-center px-4">
+                                  <p className="text-white/60 text-sm font-medium">Brak zdjęcia</p>
+                                  <p className="text-white/30 text-xs mt-0.5">Dotknij aby dodać</p>
+                                </div>
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary text-xs transition-colors">
+                                  <Camera className="w-3.5 h-3.5" />
+                                  Aparat lub galeria
+                                </div>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {userImagePreviewUrl && !allegroImageUrl && !imageUploading && (
+                    <p className="text-amber-400/70 text-xs mt-2 text-center">
+                      Zdjęcie nie zostało przesłane na Allegro
+                    </p>
+                  )}
+                  {allegroImageUrl && (
+                    <p className="text-green-400/70 text-xs mt-2 text-center flex items-center justify-center gap-1">
+                      <CheckCheck className="w-3 h-3" /> Zdjęcie gotowe
+                    </p>
+                  )}
+                </div>
                 <div className="flex-1 space-y-3">
                   {/* Category row with change button */}
                   <div className="relative">

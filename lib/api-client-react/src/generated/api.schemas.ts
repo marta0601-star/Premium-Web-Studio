@@ -82,6 +82,7 @@ export interface CreateOfferRequest {
   productName: string;
   parameters: ParameterValue[];
   productParamIds?: string[];
+  imageUrl?: string | null;
 }
 
 export interface AllegroApiError {
