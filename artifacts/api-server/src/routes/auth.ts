@@ -195,10 +195,76 @@ router.delete("/auth/user-token", (_req, res) => {
   res.json({ message: "Token usunięty" });
 });
 
+/**
+ * POST /api/auth/allegro/exchange
+ * Called by the frontend callback page after the user is redirected back.
+ * Exchanges the authorization code for access + refresh tokens.
+ */
+router.post("/auth/allegro/exchange", async (req, res) => {
+  const { code } = req.body as { code?: string };
+
+  if (!code) {
+    res.status(400).json({ ok: false, error: "Brak kodu autoryzacyjnego" });
+    return;
+  }
+
+  const redirectUri = buildRedirectUri(req);
+
+  try {
+    const credentials = Buffer.from(`${ALLEGRO_CLIENT_ID}:${ALLEGRO_CLIENT_SECRET}`).toString("base64");
+
+    const tokenResp = await axios.post(
+      "https://allegro.pl/auth/oauth/token",
+      new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+      }),
+      {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        timeout: 10000,
+      }
+    );
+
+    const data = tokenResp.data as {
+      access_token: string;
+      refresh_token: string;
+      expires_in: number;
+      scope?: string;
+    };
+
+    setUserToken(data.access_token, data.refresh_token, data.expires_in, data.scope);
+
+    const scopes = data.scope ? data.scope.split(" ") : [];
+    res.json({
+      ok: true,
+      scopes,
+      expiresInHours: Math.round(data.expires_in / 3600),
+    });
+  } catch (err: unknown) {
+    const e = err as { message?: string; response?: { data?: unknown } };
+    res.status(500).json({
+      ok: false,
+      error: e.message,
+      details: e.response?.data,
+    });
+  }
+});
+
+// The redirect URI must match exactly what is registered in Allegro Developer Portal.
+// User has registered: https://<domain>/auth/allegro/callback (handled by the frontend).
 function buildRedirectUri(req: import("express").Request): string {
+  // Check for ALLEGRO_REDIRECT_URI env override first
+  if (process.env.ALLEGRO_REDIRECT_URI) {
+    return process.env.ALLEGRO_REDIRECT_URI;
+  }
   const host = req.get("host") || "localhost";
   const protocol = host.includes("replit") || host.includes(".app") ? "https" : req.protocol;
-  return `${protocol}://${host}/api/auth/allegro/callback`;
+  // Path is /auth/allegro/callback (frontend route), not /api/... 
+  return `${protocol}://${host}/auth/allegro/callback`;
 }
 
 export default router;
