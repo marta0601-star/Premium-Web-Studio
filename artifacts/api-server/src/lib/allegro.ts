@@ -243,7 +243,7 @@ export async function createAllegroOffer(payload: {
       unit: "UNIT",
     },
     publication: {
-      status: "INACTIVE",
+      status: "ACTIVE",
       duration: null,
     },
     payments: {

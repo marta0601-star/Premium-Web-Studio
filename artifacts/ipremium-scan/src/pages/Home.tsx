@@ -925,7 +925,7 @@ export default function Home() {
                 <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-white/10">
                   <PremiumButton type="button" variant="secondary" onClick={resetWorkflow} className="sm:w-auto">Anuluj</PremiumButton>
                   <PremiumButton type="submit" isLoading={submitMutation.isPending} className="flex-1">
-                    Utwórz ofertę (Szkic)
+                    Wystaw ofertę na Allegro
                   </PremiumButton>
                 </div>
               </form>
@@ -938,8 +938,8 @@ export default function Home() {
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/10 mb-6">
                 <CheckCircle2 className="w-10 h-10 text-green-500" />
               </div>
-              <h2 className="text-3xl font-display text-white mb-3">Oferta utworzona!</h2>
-              <p className="text-white/60 mb-6">Szkic oferty NIEAKTYWNEJ został pomyślnie zapisany w Allegro za <span className="text-white font-semibold">999 PLN</span>.</p>
+              <h2 className="text-3xl font-display text-white mb-3">Oferta wystawiona!</h2>
+              <p className="text-white/60 mb-6">Oferta jest już <span className="text-green-400 font-semibold">aktywna i widoczna</span> na Allegro za <span className="text-white font-semibold">999 PLN</span>.</p>
 
               {offerId && (
                 <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4 mb-5 flex flex-col items-center justify-center">
