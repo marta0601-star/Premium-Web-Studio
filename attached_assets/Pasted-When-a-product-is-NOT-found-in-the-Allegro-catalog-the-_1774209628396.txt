@@ -1,0 +1,49 @@
+When a product is NOT found in the Allegro catalog, the app must search the ENTIRE internet more aggressively. Expand the search sources:
+
+KEEP EXISTING SOURCES but ADD these additional searches. If any of these already exist in your code, skip them — do not duplicate:
+
+SOURCE 9: Google Shopping search
+- Fetch https://www.google.com/search?q={EAN}&tbm=shop with Chrome User-Agent
+- Parse product titles and images from results
+
+SOURCE 10: Google search with "EAN" keyword
+- Fetch https://www.google.com/search?q=EAN+{EAN} with Chrome User-Agent
+
+SOURCE 11: Google search with "barcode" keyword  
+- Fetch https://www.google.com/search?q=barcode+{EAN} with Chrome User-Agent
+
+SOURCE 12: Google search specific eshops
+- Fetch https://www.google.com/search?q=site:amazon.de+{EAN}
+- Fetch https://www.google.com/search?q=site:amazon.pl+{EAN}
+- Fetch https://www.google.com/search?q=site:kaufland.de+{EAN}
+- Fetch https://www.google.com/search?q=site:lidl.pl+{EAN}
+- Fetch https://www.google.com/search?q=site:auchan.pl+{EAN}
+- Fetch https://www.google.com/search?q=site:carrefour.pl+{EAN}
+- Fetch https://www.google.com/search?q=site:biedronka.pl+{EAN}
+- Fetch https://www.google.com/search?q=site:rossmann.pl+{EAN}
+- Fetch https://www.google.com/search?q=site:empik.com+{EAN}
+
+SOURCE 13: International barcode databases
+- Fetch https://www.google.com/search?q=site:go-upc.com+{EAN}
+- Fetch https://www.google.com/search?q=site:buycott.com+{EAN}
+- Fetch https://www.google.com/search?q=site:codecheck.info+{EAN}
+- Fetch https://www.google.com/search?q=site:cosmetify.com+{EAN}
+
+SOURCE 14: Open Beauty Facts (for cosmetics/personal care)
+- Fetch https://world.openbeautyfacts.org/api/v2/product/{EAN}.json
+
+SOURCE 15: Open Pet Food Facts (for pet food)
+- Fetch https://world.openpetfoodfacts.org/api/v2/product/{EAN}.json
+
+IMPORTANT RULES:
+- First check which of these sources you ALREADY have — do not add duplicates
+- Run existing sources first as before (stop if found)
+- If NOT found, run NEW sources in PARALLEL (all at once) to save time — take the first one that returns a result
+- Each source gets max 8 seconds timeout
+- Stop as soon as ANY source finds a product with a name
+- Always try to extract product image from every source
+- Log which source found the product
+- After adding, tell me the TOTAL number of distinct sources the app now uses
+- If NOTHING found in all sources, show manual entry form
+
+The goal: if a product exists ANYWHERE on the internet, we MUST find it.

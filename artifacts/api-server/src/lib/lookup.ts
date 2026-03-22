@@ -467,10 +467,14 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
     googleTextSearch(`site:biedronka.pl ${ean}`, "Google/Biedronka", logs).catch(() => null),
     googleTextSearch(`site:rossmann.pl ${ean}`, "Google/Rossmann", logs).catch(() => null),
     googleTextSearch(`site:empik.com ${ean}`, "Google/Empik", logs).catch(() => null),
+    // EAN / barcode keyword searches
+    googleTextSearch(`EAN ${ean}`, "Google/EAN+keyword", logs).catch(() => null),
+    googleTextSearch(`barcode ${ean}`, "Google/barcode+keyword", logs).catch(() => null),
     // Barcode databases
     googleTextSearch(`site:go-upc.com ${ean}`, "Google/GoUPC", logs).catch(() => null),
     googleTextSearch(`site:buycott.com ${ean}`, "Google/Buycott", logs).catch(() => null),
     googleTextSearch(`site:codecheck.info ${ean}`, "Google/Codecheck", logs).catch(() => null),
+    googleTextSearch(`site:cosmetify.com ${ean}`, "Google/Cosmetify", logs).catch(() => null),
     // Additional product APIs
     searchOpenFactsApi(`https://world.openbeautyfacts.org/api/v2/product/${ean}.json`, "OpenBeautyFacts", ean, logs).catch(() => null),
     searchOpenFactsApi(`https://world.openpetfoodfacts.org/api/v2/product/${ean}.json`, "OpenPetFoodFacts", ean, logs).catch(() => null),
