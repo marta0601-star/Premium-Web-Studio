@@ -5,22 +5,12 @@ import { cn } from "@/lib/utils";
 
 const ELEMENT_ID = "qr-reader-canvas";
 
-const BARCODE_FORMATS = [
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.CODE_93,
-  Html5QrcodeSupportedFormats.ITF,
-  Html5QrcodeSupportedFormats.QR_CODE,
-  Html5QrcodeSupportedFormats.DATA_MATRIX,
-];
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function playBeep() {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const ctx = new (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -34,21 +24,116 @@ function playBeep() {
   } catch { /* ignore */ }
 }
 
-function vibrate() {
+function doVibrate() {
   if ("vibrate" in navigator) {
     try { navigator.vibrate(80); } catch { /* ignore */ }
   }
 }
 
-interface BarcodeScannerProps {
+// ── Native BarcodeDetector scanner ───────────────────────────────────────────
+
+interface NativeBarcodeScannerProps {
   onScan: (text: string) => void;
-  className?: string;
+  onError: (msg: string) => void;
+  onReady: () => void;
 }
 
-export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
-  const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+function NativeBarcodeScanner({ onScan, onError, onReady }: NativeBarcodeScannerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastResultRef = useRef<string | null>(null);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
 
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const detector = new (window as unknown as {
+          BarcodeDetector: new (opts: { formats: string[] }) => {
+            detect: (src: HTMLVideoElement) => Promise<{ rawValue: string }[]>;
+          };
+        }).BarcodeDetector({
+          formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code", "data_matrix"],
+        });
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+
+        const video = videoRef.current!;
+        video.srcObject = stream;
+        await video.play();
+
+        onReady();
+
+        intervalRef.current = setInterval(async () => {
+          if (!video || video.readyState < 2) return;
+          try {
+            const results = await detector.detect(video);
+            if (results.length > 0) {
+              const raw = results[0].rawValue;
+              if (raw && raw !== lastResultRef.current) {
+                lastResultRef.current = raw;
+                playBeep();
+                doVibrate();
+                onScanRef.current(raw);
+                // Reset duplicate guard after 3s
+                setTimeout(() => { lastResultRef.current = null; }, 3000);
+              }
+            }
+          } catch { /* frame not ready yet */ }
+        }, 200);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : "Nie można uruchomić kamery";
+          onError(msg);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      className="w-full block"
+      autoPlay
+      muted
+      playsInline
+      style={{ background: "black" }}
+    />
+  );
+}
+
+// ── html5-qrcode fallback scanner ────────────────────────────────────────────
+
+interface FallbackScannerProps {
+  onScan: (text: string) => void;
+  onError: (msg: string) => void;
+  onReady: () => void;
+}
+
+function FallbackScanner({ onScan, onError, onReady }: FallbackScannerProps) {
   const html5QrRef = useRef<Html5Qrcode | null>(null);
   const startedRef = useRef(false);
   const onScanRef = useRef(onScan);
@@ -57,7 +142,14 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
   useEffect(() => {
     const scanner = new Html5Qrcode(ELEMENT_ID, {
       verbose: false,
-      formatsToSupport: BARCODE_FORMATS,
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+      ],
     });
     html5QrRef.current = scanner;
 
@@ -65,26 +157,24 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
       .start(
         { facingMode: "environment" },
         {
-          fps: 30,
-          qrbox: { width: 340, height: 190 },
-          aspectRatio: 1.777,
+          fps: 15,
+          qrbox: { width: 300, height: 150 },
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         },
         (decodedText) => {
           playBeep();
-          vibrate();
+          doVibrate();
           onScanRef.current(decodedText);
         },
         () => { /* silent scan errors */ }
       )
       .then(() => {
         startedRef.current = true;
-        setStatus("scanning");
+        onReady();
       })
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
-        setErrorMsg(msg);
-        setStatus("error");
+        onError(msg);
       });
 
     return () => {
@@ -97,6 +187,31 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  return <div id={ELEMENT_ID} className="w-full" />;
+}
+
+// ── Main BarcodeScanner component ────────────────────────────────────────────
+
+interface BarcodeScannerProps {
+  onScan: (text: string) => void;
+  className?: string;
+}
+
+function hasNativeBarcodeDetector(): boolean {
+  return "BarcodeDetector" in window;
+}
+
+export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
+  const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [useNative] = useState(() => hasNativeBarcodeDetector());
+
+  const handleReady = () => setStatus("scanning");
+  const handleError = (msg: string) => {
+    setErrorMsg(msg);
+    setStatus("error");
+  };
+
   return (
     <div className={cn(
       "relative w-full max-w-sm mx-auto rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl",
@@ -107,14 +222,18 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
         <Scan className="w-4 h-4 text-primary flex-shrink-0" />
         <span className="text-xs font-semibold text-white/60 tracking-wide">
           {status === "loading" && "Uruchamianie…"}
-          {status === "scanning" && "Skanuję…"}
+          {status === "scanning" && (useNative ? "Skanuję… (natywny)" : "Skanuję…")}
           {status === "error" && "Błąd kamery"}
         </span>
       </div>
 
-      {/* Video area */}
+      {/* Video / scanner area */}
       <div className="relative bg-black" style={{ minHeight: 260 }}>
-        <div id={ELEMENT_ID} className="w-full" />
+        {useNative ? (
+          <NativeBarcodeScanner onScan={onScan} onError={handleError} onReady={handleReady} />
+        ) : (
+          <FallbackScanner onScan={onScan} onError={handleError} onReady={handleReady} />
+        )}
 
         {/* Loading overlay */}
         {status === "loading" && (
@@ -135,10 +254,10 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
           </div>
         )}
 
-        {/* Laser line */}
+        {/* Laser overlay — shown when scanning */}
         {status === "scanning" && (
           <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-            <div className="relative" style={{ width: 340, maxWidth: "90%", height: 190 }}>
+            <div className="relative" style={{ width: useNative ? 320 : 300, maxWidth: "90%", height: useNative ? 160 : 150 }}>
               <span className="absolute top-0 left-0 w-7 h-7 border-t-2 border-l-2 border-primary rounded-tl" />
               <span className="absolute top-0 right-0 w-7 h-7 border-t-2 border-r-2 border-primary rounded-tr" />
               <span className="absolute bottom-0 left-0 w-7 h-7 border-b-2 border-l-2 border-primary rounded-bl" />
@@ -152,7 +271,7 @@ export function BarcodeScanner({ onScan, className }: BarcodeScannerProps) {
       {/* Bottom hint */}
       <div className="px-4 py-2 bg-black/80 border-t border-white/10 text-center">
         <p className="text-xs text-white/35 font-medium">
-          {status === "scanning" && "Nakieruj aparat na kod kreskowy EAN"}
+          {status === "scanning" && "Trzymaj telefon stabilnie, kod kreskowy w ramce"}
           {status === "loading" && "Proszę czekać…"}
           {status === "error" && "Sprawdź uprawnienia kamery w przeglądarce"}
         </p>
