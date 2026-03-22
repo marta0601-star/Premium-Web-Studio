@@ -77,39 +77,34 @@
   }
 }
 
-/* html5-qrcode overrides for premium look */
-#qr-reader {
+/* html5-qrcode direct (Html5Qrcode class) — hide generated UI chrome */
+#qr-reader-canvas {
   border: none !important;
-  border-radius: var(--radius) !important;
-  overflow: hidden;
+  background: black;
+  display: block;
+  width: 100% !important;
 }
-#qr-reader__scan_region {
-  background-color: hsl(var(--card));
+#qr-reader-canvas video {
+  width: 100% !important;
+  height: auto !important;
+  object-fit: cover;
+  display: block;
 }
-#qr-reader__dashboard_section_csr span {
-  color: hsl(var(--foreground)) !important;
-  font-family: var(--font-sans);
+/* Hide the built-in scan region overlay that html5-qrcode draws */
+#qr-reader-canvas__scan_region img {
+  display: none !important;
 }
-#qr-reader button {
-  background-color: hsl(var(--secondary)) !important;
-  color: hsl(var(--foreground)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  border-radius: 8px !important;
-  padding: 8px 16px !important;
-  font-family: var(--font-sans);
-  font-weight: 500;
-  transition: all 0.2s;
-  cursor: pointer;
-  margin-top: 8px;
+
+/* Laser scanning line animation */
+@keyframes laser-sweep {
+  0%   { top: 8%; opacity: 1; }
+  48%  { opacity: 1; }
+  50%  { top: 86%; opacity: 1; }
+  52%  { opacity: 0; }
+  54%  { top: 8%; opacity: 0; }
+  56%  { opacity: 1; }
+  100% { top: 86%; opacity: 1; }
 }
-#qr-reader button:hover {
-  background-color: hsl(var(--border)) !important;
-}
-#qr-reader select {
-  background-color: hsl(var(--background)) !important;
-  color: hsl(var(--foreground)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  border-radius: 8px !important;
-  padding: 8px !important;
-  margin-bottom: 12px !important;
+.laser-line {
+  animation: laser-sweep 2s ease-in-out infinite;
 }
