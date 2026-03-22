@@ -1,0 +1,60 @@
+The Allegro catalog search works now — great! Now I need to improve the FALLBACK when a product is NOT found in Allegro catalog. When Allegro returns nothing, search ALL these sources one by one until the product is found:
+
+SOURCE 1: Open Food Facts — try ALL these regions, stop at first match:
+- https://world.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://de.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://pl.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://fr.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://es.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://cz.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://sk.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://it.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://nl.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://hu.openfoodfacts.org/api/v2/product/{EAN}.json
+Extract: product_name (try all language variants), brands, quantity, categories, image_front_url
+
+SOURCE 2: UPCitemdb free trial API:
+- GET https://api.upcitemdb.com/prod/trial/lookup?upc={EAN}
+Extract: title, brand, weight, category, images[0]
+
+SOURCE 3: Google generic search:
+- Fetch https://www.google.com/search?q={EAN}+product with User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0
+- Parse all <h3> tags, take the first meaningful title (longer than 5 chars, shorter than 200)
+- Extract weight/volume with regex: /(\d+\s*(?:ml|l|g|kg|oz|cl|dl))/i
+- Clean title by removing store names (Amazon, eBay, Allegro, Kaufland, Lidl, Tesco, Walmart)
+
+SOURCE 4: Google site:allegro.pl
+- Fetch https://www.google.com/search?q=site:allegro.pl+{EAN} with Chrome User-Agent
+- Parse <h3> tags for product title
+
+SOURCE 5: Google site:ceneo.pl
+- Fetch https://www.google.com/search?q=site:ceneo.pl+{EAN} with Chrome User-Agent
+- Parse <h3> tags for product title
+
+SOURCE 6: Google site:barcodelookup.com
+- Fetch https://www.google.com/search?q=site:barcodelookup.com+{EAN} with Chrome User-Agent
+- Parse <h3> tags for product title
+
+SOURCE 7: Google site:ean-search.org
+- Fetch https://www.google.com/search?q=site:ean-search.org+{EAN} with Chrome User-Agent
+- Parse <h3> tags for product title
+
+RULES:
+- Each source gets max 6 seconds timeout (Google gets 10 seconds)
+- Stop searching as soon as ANY source finds a product with a name
+- Return which source found it in the "source" field
+- Return a "logs" array showing every source tried and whether it succeeded or failed
+- If product is found from external source (not Allegro), still show it in the edit form so user can review and manually select an Allegro category before creating the draft
+- If NOTHING is found anywhere, show a manual entry form
+
+IMPORTANT: The complete search order must be:
+1. Allegro catalog (ALWAYS FIRST, ALWAYS PRIORITY)
+2. Open Food Facts (10 regions)
+3. UPCitemdb
+4. Google generic
+5. Google site:allegro.pl
+6. Google site:ceneo.pl
+7. Google site:barcodelookup.com
+8. Google site:ean-search.org
+
+Keep everything in Polish. Test with EAN 4061461354602 (Flying Power Energy Hell) — this should be found in Open Food Facts (de region).
