@@ -222,6 +222,42 @@ router.get("/matching-categories", async (req, res) => {
   }
 });
 
+// ── GET /api/allegro/category-children?id={parentId} ────────────────────────
+// Returns direct subcategories of a given category (used for Supermarket drill-down)
+router.get("/category-children", async (req, res) => {
+  const { id } = req.query as { id?: string };
+  if (!id?.trim()) {
+    res.status(400).json({ error: "id parameter required" });
+    return;
+  }
+
+  try {
+    const token = await getUserToken();
+    const response = await axios.get(
+      `${ALLEGRO_BASE_URL}/sale/categories?parent.id=${encodeURIComponent(id.trim())}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.allegro.public.v1+json",
+        },
+        timeout: 8000,
+      }
+    );
+    const raw = (response.data as { categories?: Array<{ id: string; name: string; leaf?: boolean }> }).categories || [];
+    res.json({
+      categories: raw.map((c) => ({ id: c.id, name: c.name, leaf: c.leaf ?? false })),
+    });
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number; data?: unknown }; message?: string };
+    req.log.warn({ id, status: e.response?.status, msg: e.message }, "category-children failed");
+    res.status(e.response?.status || 500).json({
+      error: "allegro_error",
+      message: e.message,
+      categories: [],
+    });
+  }
+});
+
 // ── GET /api/allegro/category-parameters/:categoryId ────────────────────────
 // Returns ALL parameters for a category (cached-friendly, used by the form)
 router.get("/category-parameters/:categoryId", async (req, res) => {

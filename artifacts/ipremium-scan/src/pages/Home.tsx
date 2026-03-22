@@ -418,6 +418,21 @@ async function fetchMatchingCategories(name: string): Promise<CategorySuggestion
   }
 }
 
+async function fetchCategoryChildren(parentId: string): Promise<CategorySuggestion[]> {
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  try {
+    const r = await fetch(`${BASE}/api/allegro/category-children?id=${encodeURIComponent(parentId)}`);
+    const d = await r.json();
+    return ((d.categories || []) as Array<{ id: string; name: string; leaf: boolean }>).map((c) => ({
+      id: c.id,
+      name: c.name,
+      leaf: c.leaf,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function fetchCategoryParameters(categoryId: string): Promise<AllegroParam[]> {
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
   try {
@@ -560,29 +575,25 @@ export default function Home() {
         setAutoFilledIds(ai);
         setStep("FORM");
       } else {
-        // External source — suggest category, then fetch parameters
+        // External source — always default to Supermarket category tree
         setStep("FORM");
         setCategoryId(null);
         setCategoryName("");
         setParameters([]);
 
-        const productName = data.productName || "";
-        if (productName) {
-          const [suggestions] = await Promise.all([
-            fetchMatchingCategories(productName),
-          ]);
-          setCategorySuggestions(suggestions);
+        // Find Supermarket top-level category (exact name match)
+        const supermarketResults = await fetchMatchingCategories("Supermarket");
+        const supermarket = supermarketResults.find((c) => c.name === "Supermarket") || supermarketResults[0];
 
-          if (suggestions.length > 0) {
-            const first = suggestions[0];
-            const params = await fetchCategoryParameters(first.id);
-            setCategoryId(first.id);
-            setCategoryName(first.name);
-            setParameters(params);
-            const { formState: fs, autoFilledIds: ai } = buildAutoFilledState(params, {}, ctx);
-            setFormState(fs);
-            setAutoFilledIds(ai);
-          }
+        if (supermarket) {
+          setCategoryId(supermarket.id);
+          setCategoryName(supermarket.name);
+          // Load Supermarket's direct children as the picker options
+          const children = await fetchCategoryChildren(supermarket.id);
+          setCategorySuggestions(children);
+          setShowCategoryPicker(true); // Auto-open so user picks a subcategory
+          // Don't auto-select a subcategory — Supermarket is not a leaf; user must choose
+          setParameters([]);
         }
       }
     } catch (err: unknown) {
