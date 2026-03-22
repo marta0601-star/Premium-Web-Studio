@@ -348,25 +348,126 @@ export async function createAllegroOffer(payload: {
     }
   }
 
-  logger.info(
-    { productId: payload.productId, categoryId: payload.categoryId, fixedDefaults, hasImage: !!offerBody.images },
-    "Creating Allegro offer via product-offers API"
-  );
+  // Always exclude known-bad parameters (never allowed in offer section)
+  const ALWAYS_EXCLUDED = new Set(["224017"]); // Kod producenta — not allowed in offer section
 
-  const response = await axios.post(
-    `${ALLEGRO_BASE_URL}/sale/product-offers`,
-    offerBody,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.allegro.public.v1+json",
-        "Content-Type": "application/vnd.allegro.public.v1+json",
-      },
-      timeout: 15000,
+  // Rebuild offerBody.parameters filtering out excluded IDs
+  function filterParams(excluded: Set<string>) {
+    if (payload.productId) {
+      const allowedOffer = offerParams.filter((p) => !excluded.has(p.id));
+      if (allowedOffer.length > 0) {
+        offerBody.parameters = allowedOffer.map(mapParam);
+      } else {
+        delete offerBody.parameters;
+      }
+      // product-level params stay in productSet (no filtering needed there)
+    } else {
+      const allowed = payload.parameters.filter((p) => !excluded.has(p.id));
+      if (allowed.length > 0) {
+        offerBody.parameters = allowed.map(mapParam);
+      } else {
+        delete offerBody.parameters;
+      }
     }
-  );
+  }
 
-  return response.data;
+  // Apply initial exclusion before first attempt
+  filterParams(ALWAYS_EXCLUDED);
+
+  const MAX_RETRIES = 6;
+  const excluded = new Set(ALWAYS_EXCLUDED);
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    logger.info(
+      {
+        productId: payload.productId,
+        categoryId: payload.categoryId,
+        attempt,
+        excludedParams: [...excluded],
+        hasImage: !!offerBody.images,
+      },
+      "Creating Allegro offer via product-offers API"
+    );
+
+    try {
+      const response = await axios.post(
+        `${ALLEGRO_BASE_URL}/sale/product-offers`,
+        offerBody,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.allegro.public.v1+json",
+            "Content-Type": "application/vnd.allegro.public.v1+json",
+          },
+          timeout: 15000,
+        }
+      );
+      return response.data;
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: {
+          data?: {
+            errors?: Array<{
+              code?: string;
+              message?: string;
+              path?: string;
+              userMessage?: string;
+            }>;
+          };
+          status?: number;
+        };
+        message?: string;
+      };
+
+      const errors = axiosErr.response?.data?.errors || [];
+
+      // Find any ParameterCategoryException errors and extract their parameter IDs
+      const paramErrors = errors.filter(
+        (e) =>
+          e.code === "ParameterCategoryException" ||
+          (e.message && /should not be specified in section/i.test(e.message))
+      );
+
+      if (paramErrors.length === 0 || attempt === MAX_RETRIES) {
+        // Not a parameter issue, or out of retries — rethrow to caller
+        throw err;
+      }
+
+      // Extract parameter IDs from error messages: "Parameter 224017:Kod producenta should not..."
+      let foundNew = false;
+      for (const pe of paramErrors) {
+        const msgMatch = pe.message?.match(/Parameter\s+(\w+):/i);
+        const pathMatch = pe.path?.match(/\/parameters\/(\d+)/);
+
+        if (msgMatch?.[1]) {
+          const paramId = msgMatch[1];
+          if (!excluded.has(paramId)) {
+            logger.warn({ paramId, message: pe.message, attempt }, "Auto-excluding parameter and retrying");
+            excluded.add(paramId);
+            foundNew = true;
+          }
+        } else if (pathMatch?.[1]) {
+          // path like /parameters/2 — look up which param is at that index
+          const idx = parseInt(pathMatch[1], 10);
+          const currentParams = (offerBody.parameters as Array<{ id: string }> | undefined) || [];
+          const paramId = currentParams[idx]?.id;
+          if (paramId && !excluded.has(paramId)) {
+            logger.warn({ paramId, path: pe.path, attempt }, "Auto-excluding parameter (by index) and retrying");
+            excluded.add(paramId);
+            foundNew = true;
+          }
+        }
+      }
+
+      if (!foundNew) {
+        // Couldn't identify which param to remove — rethrow
+        throw err;
+      }
+
+      // Rebuild parameters with the newly excluded IDs and retry
+      filterParams(excluded);
+    }
+  }
 }
 
 // Re-export for convenience so callers that imported from allegro.ts still work
