@@ -345,22 +345,76 @@ export async function createAllegroOffer(payload: {
     }
   }
 
-  // ── Step 2: build offer body ───────────────────────────────────────────────
-  // Parameters that are not allowed in the offer section
-  const ALWAYS_EXCLUDED_FROM_OFFER = new Set(["224017", "225693", "242901"]);
-
+  // ── Step 2: fetch category param flags (describesProduct / describesOffer) ────
   const ALLEGRO_HEADERS = {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.allegro.public.v1+json",
     "Content-Type": "application/vnd.allegro.public.v1+json",
   };
 
+  // paramFlags: map of paramId → {describesProduct, describesOffer}
+  const paramFlags = new Map<string, { describesProduct: boolean; describesOffer: boolean }>();
+  try {
+    const rawData = await getCategoryParameters(payload.categoryId);
+    const rawParams = (
+      rawData as {
+        parameters?: Array<{
+          id: string;
+          options?: { describesOffer?: boolean; describesProduct?: boolean };
+        }>;
+      }
+    ).parameters || [];
+    for (const rp of rawParams) {
+      paramFlags.set(rp.id, {
+        describesProduct: rp.options?.describesProduct ?? false,
+        describesOffer: rp.options?.describesOffer ?? false,
+      });
+    }
+    logger.info({ flagCount: paramFlags.size, categoryId: payload.categoryId }, "Loaded category param flags");
+  } catch (flagErr) {
+    logger.warn({ flagErr }, "Could not fetch category param flags — will rely on retry to correct placement");
+  }
+
+  // ── Step 3: initial split of parameters into product-level vs offer-level ────
   const isNonCatalog = !payload.productId && !!payload.ean;
 
-  const productParamSet = new Set(payload.productParamIds || []);
-  const offerParams = payload.parameters.filter((p) => !productParamSet.has(p.id));
-  const productParams = payload.parameters.filter((p) => productParamSet.has(p.id));
+  // For catalog products we use the productParamIds list from scan
+  const catalogProductParamSet = new Set(payload.productParamIds || []);
 
+  function classifyParam(paramId: string): "product" | "offer" {
+    const flags = paramFlags.get(paramId);
+    if (flags) {
+      if (flags.describesProduct && !flags.describesOffer) return "product";
+      if (flags.describesOffer && !flags.describesProduct) return "offer";
+      if (flags.describesProduct && flags.describesOffer) return "offer"; // both: offer wins
+    }
+    // Fallback: for catalog products use productParamIds, else default offer
+    if (payload.productId && catalogProductParamSet.has(paramId)) return "product";
+    return "offer";
+  }
+
+  // Mutable arrays — the retry loop can move params between these
+  let productLevelParams: AllegroParam[] = [];
+  let offerLevelParams: AllegroParam[] = [];
+
+  for (const p of payload.parameters) {
+    if (classifyParam(p.id) === "product") {
+      productLevelParams.push(p);
+    } else {
+      offerLevelParams.push(p);
+    }
+  }
+
+  logger.info(
+    {
+      productLevelParamIds: productLevelParams.map((p) => p.id),
+      offerLevelParamIds: offerLevelParams.map((p) => p.id),
+      isNonCatalog,
+    },
+    "Initial parameter split"
+  );
+
+  // ── Step 4: build common offer fields (non-parameter parts) ──────────────────
   const commonOfferFields: Record<string, unknown> = {
     name: payload.productName,
     sellingMode: {
@@ -373,7 +427,6 @@ export async function createAllegroOffer(payload: {
     location: { countryCode: "PL" },
   };
 
-  // images at offer level: flat string array per API spec
   if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];
 
   if (payload.description?.trim()) {
@@ -402,76 +455,49 @@ export async function createAllegroOffer(payload: {
     };
   }
 
-  // ── Step 3: choose strategy based on whether we have a catalog product ────────
-
-  let offerBody: Record<string, unknown>;
-
-  if (payload.productId) {
-    // ── Strategy A: link to existing Allegro catalog product via productSet ──
-    const productEntry: Record<string, unknown> = { id: payload.productId };
-    if (productParams.length > 0) productEntry.parameters = productParams.map(mapAllegroParam);
-    offerBody = {
+  // ── Step 5: build the full offer body from current split ─────────────────────
+  function buildOfferBody(): Record<string, unknown> {
+    const body: Record<string, unknown> = {
       ...commonOfferFields,
       category: { id: payload.categoryId },
-      productSet: [{ product: productEntry }],
     };
-    const offerFiltered = offerParams.filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id));
-    if (offerFiltered.length > 0) offerBody.parameters = offerFiltered.map(mapAllegroParam);
-  } else if (isNonCatalog) {
-    // ── Strategy B: propose new product via productSet[0].product ─────────────
-    // Per API spec: productSet[].product accepts full definition OR just id.
-    // images = flat string array, EAN = id + idType:"GTIN"
-    const productProposal: Record<string, unknown> = {
-      name: payload.productName,
-      category: { id: payload.categoryId },
-      parameters: payload.parameters.map(mapAllegroParam),
-    };
-    if (payload.ean) {
-      productProposal.id = payload.ean;
-      productProposal.idType = "GTIN";
-    }
-    if (allegroImageUrl) productProposal.images = [allegroImageUrl];
 
-    offerBody = {
-      ...commonOfferFields,
-      category: { id: payload.categoryId },
-      productSet: [{ product: productProposal }],
-    };
-  } else {
-    // ── Strategy C: no product info — send params directly as offer params ───
-    offerBody = { ...commonOfferFields, category: { id: payload.categoryId } };
-    const filtered = payload.parameters.filter((p) => !ALWAYS_EXCLUDED_FROM_OFFER.has(p.id));
-    if (filtered.length > 0) offerBody.parameters = filtered.map(mapAllegroParam);
+    if (payload.productId) {
+      // Strategy A: existing catalog product
+      const productEntry: Record<string, unknown> = { id: payload.productId };
+      if (productLevelParams.length > 0) productEntry.parameters = productLevelParams.map(mapAllegroParam);
+      body.productSet = [{ product: productEntry }];
+      if (offerLevelParams.length > 0) body.parameters = offerLevelParams.map(mapAllegroParam);
+    } else if (isNonCatalog) {
+      // Strategy B: propose new product via productSet[0].product
+      const productProposal: Record<string, unknown> = {
+        name: payload.productName,
+        category: { id: payload.categoryId },
+      };
+      if (payload.ean) {
+        productProposal.id = payload.ean;
+        productProposal.idType = "GTIN";
+      }
+      if (productLevelParams.length > 0) productProposal.parameters = productLevelParams.map(mapAllegroParam);
+      if (allegroImageUrl) productProposal.images = [allegroImageUrl];
+      body.productSet = [{ product: productProposal }];
+      if (offerLevelParams.length > 0) body.parameters = offerLevelParams.map(mapAllegroParam);
+    } else {
+      // Strategy C: no EAN / no product — all params at offer level
+      if (offerLevelParams.length > 0) body.parameters = offerLevelParams.map(mapAllegroParam);
+    }
+
+    return body;
   }
 
-  // ── Step 4: retry loop (auto-strip bad offer-level params) ──────────────────
-  function filterOfferParams(excluded: Set<string>) {
-    if (isNonCatalog) {
-      // Non-catalog: params live in product.parameters — don't touch them
-      // (Allegro shouldn't complain about product params in product section)
-      return;
-    }
-    if (payload.productId && offerParams.length > 0) {
-      const allowed = offerParams.filter((p) => !excluded.has(p.id));
-      if (allowed.length > 0) {
-        offerBody.parameters = allowed.map(mapAllegroParam);
-      } else {
-        delete offerBody.parameters;
-      }
-    } else if (!payload.productId) {
-      const allowed = payload.parameters.filter((p) => !excluded.has(p.id));
-      if (allowed.length > 0) {
-        offerBody.parameters = allowed.map(mapAllegroParam);
-      } else {
-        delete offerBody.parameters;
-      }
-    }
-  }
+  let offerBody = buildOfferBody();
 
-  const excluded = new Set(ALWAYS_EXCLUDED_FROM_OFFER);
-  filterOfferParams(excluded);
+  // Track which params we have already moved to avoid infinite flip-flopping
+  const movedToOffer = new Set<string>();
+  const movedToProduct = new Set<string>();
+  const droppedEntirely = new Set<string>();
 
-  const MAX_RETRIES = 6;
+  const MAX_RETRIES = 8;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     logger.info(
@@ -479,9 +505,8 @@ export async function createAllegroOffer(payload: {
         strategy: payload.productId ? "catalog" : isNonCatalog ? "product-proposal" : "direct",
         categoryId: payload.categoryId,
         attempt,
-        excludedParams: [...excluded],
-        hasImage: !!allegroImageUrl,
-        hasDescription: !!payload.description,
+        productLevelParamIds: productLevelParams.map((p) => p.id),
+        offerLevelParamIds: offerLevelParams.map((p) => p.id),
         requestBody: JSON.stringify(offerBody),
       },
       "POST /sale/product-offers — full request"
@@ -491,10 +516,7 @@ export async function createAllegroOffer(payload: {
       const response = await axios.post(
         `${ALLEGRO_BASE_URL}/sale/product-offers`,
         offerBody,
-        {
-          headers: ALLEGRO_HEADERS,
-          timeout: 20000,
-        }
+        { headers: ALLEGRO_HEADERS, timeout: 20000 }
       );
       logger.info(
         { status: response.status, responseData: JSON.stringify(response.data) },
@@ -541,29 +563,68 @@ export async function createAllegroOffer(payload: {
         throw err;
       }
 
-      let foundNew = false;
+      let madeChange = false;
+
       for (const pe of paramErrors) {
+        // ── Resolve param ID ─────────────────────────────────────────────────
         const directId = pe.metadata?.parameterId as string | undefined;
         const text = pe.userMessage || pe.message || "";
-        const msgMatch = text.match(/Parameter\s+[`'"]?(\w+):/i);
-        const pathMatch = pe.path?.match(/\/parameters\/(\d+)/);
+        // Message format: "Parameter 11323:Stan should not be specified as in section productSet"
+        const colonIdMatch = text.match(/Parameter\s+(\d+):/i);
+        const wordIdMatch = text.match(/Parameter\s+[`'"]?(\w+):/i);
 
-        let paramId: string | undefined = directId || msgMatch?.[1];
-        if (!paramId && pathMatch?.[1]) {
-          const idx = parseInt(pathMatch[1], 10);
-          const currentParams = (offerBody.parameters as Array<{ id: string }> | undefined) || [];
-          paramId = currentParams[idx]?.id;
+        let paramId: string | undefined = directId || colonIdMatch?.[1] || wordIdMatch?.[1];
+
+        // Path: /productSet/0/product/parameters/N or /parameters/N
+        const productSetPathMatch = pe.path?.match(/productSet.*?\/parameters\/(\d+)/);
+        const offerPathMatch = pe.path?.match(/^\/parameters\/(\d+)/);
+
+        if (!paramId && productSetPathMatch?.[1]) {
+          const idx = parseInt(productSetPathMatch[1], 10);
+          paramId = productLevelParams[idx]?.id;
+        }
+        if (!paramId && offerPathMatch?.[1]) {
+          const idx = parseInt(offerPathMatch[1], 10);
+          paramId = offerLevelParams[idx]?.id;
         }
 
-        if (paramId && !excluded.has(paramId)) {
-          logger.warn({ paramId, userMessage: pe.userMessage, attempt }, "Auto-excluding parameter and retrying");
-          excluded.add(paramId);
-          foundNew = true;
+        if (!paramId) continue;
+
+        // ── Determine direction to move ───────────────────────────────────────
+        const isInProductSection = productLevelParams.some((p) => p.id === paramId);
+        const isInOfferSection = offerLevelParams.some((p) => p.id === paramId);
+        const sectionHint = text.toLowerCase().includes("productsset") || text.toLowerCase().includes("productset") || (pe.path || "").includes("productSet");
+
+        if (isInProductSection && !movedToOffer.has(paramId)) {
+          // Move from product → offer
+          const param = productLevelParams.find((p) => p.id === paramId)!;
+          productLevelParams = productLevelParams.filter((p) => p.id !== paramId);
+          offerLevelParams = [...offerLevelParams, param];
+          movedToOffer.add(paramId);
+          logger.warn({ paramId, text, attempt }, "ParameterCategoryException: moved param product→offer");
+          madeChange = true;
+        } else if (isInOfferSection && !movedToProduct.has(paramId)) {
+          // Move from offer → product
+          const param = offerLevelParams.find((p) => p.id === paramId)!;
+          offerLevelParams = offerLevelParams.filter((p) => p.id !== paramId);
+          productLevelParams = [...productLevelParams, param];
+          movedToProduct.add(paramId);
+          logger.warn({ paramId, text, attempt }, "ParameterCategoryException: moved param offer→product");
+          madeChange = true;
+        } else if (!droppedEntirely.has(paramId)) {
+          // Already moved both ways — drop it entirely
+          productLevelParams = productLevelParams.filter((p) => p.id !== paramId);
+          offerLevelParams = offerLevelParams.filter((p) => p.id !== paramId);
+          droppedEntirely.add(paramId);
+          logger.warn({ paramId, attempt }, "ParameterCategoryException: param dropped from both sections");
+          madeChange = true;
         }
       }
 
-      if (!foundNew) throw err;
-      filterOfferParams(excluded);
+      if (!madeChange) throw err;
+
+      // Rebuild offer body with updated split
+      offerBody = buildOfferBody();
     }
   }
 }
