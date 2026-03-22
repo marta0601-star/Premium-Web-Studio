@@ -133,63 +133,84 @@ async function searchUpcItemdb(ean: string, logs: string[]): Promise<LookupResul
   return null;
 }
 
-async function searchGoogle(ean: string, logs: string[]): Promise<LookupResult | null> {
-  const url = `https://www.google.com/search?q=${encodeURIComponent(ean + " product")}`;
-  logs.push(`[Google] Trying ${url}`);
+const CHROME_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+function extractFromGoogleHtml(
+  html: string,
+  label: string,
+  logs: string[],
+  source: string
+): LookupResult | null {
+  const h3Matches = html.match(/<h3[^>]*>([^<]+)<\/h3>/g) || [];
+  const titles = h3Matches
+    .map((m) => m.replace(/<[^>]+>/g, "").trim())
+    .filter((t) => t.length > 3 && !t.toLowerCase().includes("google"))
+    .map((t) => t.replace(STORE_NAMES_TO_REMOVE, "").trim())
+    .filter((t) => t.length > 3);
+
+  const name = titles[0] || null;
+
+  // Reset regex lastIndex before each use (global flag keeps state)
+  WEIGHT_REGEX.lastIndex = 0;
+  const weightMatch = WEIGHT_REGEX.exec(html);
+  const weight = weightMatch ? weightMatch[0] : null;
+
+  const imgMatch = html.match(/https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*/i);
+  const image = imgMatch ? imgMatch[0] : null;
+
+  if (name) {
+    logs.push(`[${label}] Found: ${name}`);
+    return { found: true, name, brand: null, weight, category: null, image, description: null, source, logs };
+  }
+  logs.push(`[${label}] No usable product name found in results`);
+  return null;
+}
+
+async function googleSearch(
+  query: string,
+  label: string,
+  source: string,
+  logs: string[],
+  timeoutMs = 10000
+): Promise<LookupResult | null> {
+  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  logs.push(`[${label}] Trying ${url}`);
   try {
     const resp = await axios.get(url, {
-      timeout: 10000,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html",
-      },
+      timeout: timeoutMs,
+      headers: { "User-Agent": CHROME_UA, Accept: "text/html" },
     });
-    const html: string = resp.data;
-
-    // Extract h3 tags
-    const h3Matches = html.match(/<h3[^>]*>([^<]+)<\/h3>/g) || [];
-    const titles = h3Matches
-      .map((m) => m.replace(/<[^>]+>/g, "").trim())
-      .filter((t) => t.length > 3 && !t.toLowerCase().includes("google"))
-      .map((t) => t.replace(STORE_NAMES_TO_REMOVE, "").trim())
-      .filter((t) => t.length > 3);
-
-    const name = titles[0] || null;
-
-    // Extract weight from HTML
-    const weightMatches = html.match(WEIGHT_REGEX);
-    const weight = weightMatches ? weightMatches[0] : null;
-
-    // Try to find an image URL
-    const imgMatch = html.match(/https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*/i);
-    const image = imgMatch ? imgMatch[0] : null;
-
-    if (name) {
-      logs.push(`[Google] Found: ${name}`);
-      return {
-        found: true,
-        name,
-        brand: null,
-        weight,
-        category: null,
-        image,
-        description: null,
-        source: "google",
-        logs,
-      };
-    } else {
-      logs.push("[Google] No usable product name found in results");
-    }
+    return extractFromGoogleHtml(resp.data as string, label, logs, source);
   } catch (err: unknown) {
     const e = err as { code?: string; message?: string };
     if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
-      logs.push("[Google] Timeout");
+      logs.push(`[${label}] Timeout`);
     } else {
-      logs.push(`[Google] Error: ${e.message}`);
+      logs.push(`[${label}] Error: ${e.message}`);
     }
+    return null;
   }
-  return null;
+}
+
+async function searchGoogle(ean: string, logs: string[]): Promise<LookupResult | null> {
+  return googleSearch(`${ean} product`, "Google", "google", logs);
+}
+
+async function searchAllegroGoogle(ean: string, logs: string[]): Promise<LookupResult | null> {
+  return googleSearch(`site:allegro.pl ${ean}`, "Allegro/Google", "allegro_google", logs);
+}
+
+async function searchCeneoGoogle(ean: string, logs: string[]): Promise<LookupResult | null> {
+  return googleSearch(`site:ceneo.pl ${ean}`, "Ceneo/Google", "ceneo_google", logs);
+}
+
+async function searchBarcodeLookupGoogle(ean: string, logs: string[]): Promise<LookupResult | null> {
+  return googleSearch(`site:barcodelookup.com ${ean}`, "BarcodeLookup/Google", "barcodelookup_google", logs);
+}
+
+async function searchEanSearchGoogle(ean: string, logs: string[]): Promise<LookupResult | null> {
+  return googleSearch(`site:ean-search.org ${ean}`, "EAN-Search/Google", "ean_search_google", logs);
 }
 
 // GET /ping
@@ -221,12 +242,25 @@ router.get("/lookup", async (req, res) => {
     return;
   }
 
-  // Source 3: Google
+  // Source 3: Google generic
   const googleResult = await searchGoogle(ean, logs);
-  if (googleResult) {
-    res.json(googleResult);
-    return;
-  }
+  if (googleResult) { res.json(googleResult); return; }
+
+  // Source 4: Allegro.pl via Google site: search
+  const allegroResult = await searchAllegroGoogle(ean, logs);
+  if (allegroResult) { res.json(allegroResult); return; }
+
+  // Source 5: Ceneo.pl via Google site: search
+  const ceneoResult = await searchCeneoGoogle(ean, logs);
+  if (ceneoResult) { res.json(ceneoResult); return; }
+
+  // Source 6: barcodelookup.com via Google site: search
+  const barcodeLookupResult = await searchBarcodeLookupGoogle(ean, logs);
+  if (barcodeLookupResult) { res.json(barcodeLookupResult); return; }
+
+  // Source 7: ean-search.org via Google site: search
+  const eanSearchResult = await searchEanSearchGoogle(ean, logs);
+  if (eanSearchResult) { res.json(eanSearchResult); return; }
 
   logs.push("Nie znaleziono produktu w żadnym źródle");
   res.json({ found: false, logs });
