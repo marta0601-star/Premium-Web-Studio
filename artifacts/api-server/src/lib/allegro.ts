@@ -109,32 +109,78 @@ export async function getCategoryName(categoryId: string): Promise<string> {
 
 /**
  * Find the first active offer on Allegro for a given EAN.
- * Returns a direct offer URL like https://allegro.pl/oferta/{id}, or null on failure.
+ * Returns a direct offer URL like https://allegro.pl/oferta/{slug-id}, or null on failure.
+ *
+ * /offers/listing is a PUBLIC endpoint — the seller user token (sale scopes only)
+ * returns 403. We therefore call it without auth first, then fall back to CC token.
  */
 export async function getFirstOfferUrlByEan(ean: string): Promise<string | null> {
-  try {
-    let token: string;
-    try {
-      token = await getUserToken();
-    } catch {
-      token = await getClientCredentialsToken();
-    }
-    const response = await axios.get(`${ALLEGRO_BASE_URL}/offers/listing`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.allegro.public.v1+json",
-      },
-      params: { phrase: ean, limit: 1 },
+  const tryFetch = async (authHeader?: string) => {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.allegro.public.v1+json",
+    };
+    if (authHeader) headers["Authorization"] = authHeader;
+    return axios.get(`${ALLEGRO_BASE_URL}/offers/listing`, {
+      headers,
+      params: { phrase: ean, limit: 1, searchMode: "REGULAR" },
       timeout: 8000,
     });
-    const items = (response.data as { items?: { regular?: Array<{ id?: string }> } }).items;
-    const firstId = items?.regular?.[0]?.id;
-    if (firstId) {
-      return `https://allegro.pl/oferta/${firstId}`;
+  };
+
+  try {
+    // Attempt 1: no auth (public endpoint)
+    let response;
+    try {
+      response = await tryFetch();
+    } catch (noAuthErr: unknown) {
+      const e = noAuthErr as { response?: { status?: number } };
+      logger.warn({ status: e.response?.status }, "getFirstOfferUrlByEan no-auth attempt failed, trying CC token");
+      // Attempt 2: client credentials token
+      const ccToken = await getClientCredentialsToken();
+      response = await tryFetch(`Bearer ${ccToken}`);
+    }
+
+    // Log the raw top-level keys and first item so we can inspect structure
+    const data = response.data as Record<string, unknown>;
+    const items = data.items as { regular?: unknown[]; promoted?: unknown[] } | undefined;
+    const firstRegular = items?.regular?.[0] as Record<string, unknown> | undefined;
+    const firstPromoted = items?.promoted?.[0] as Record<string, unknown> | undefined;
+    const firstItem = firstRegular ?? firstPromoted;
+
+    logger.info(
+      {
+        topLevelKeys: Object.keys(data),
+        itemsRegularCount: items?.regular?.length ?? 0,
+        itemsPromotedCount: items?.promoted?.length ?? 0,
+        firstItemKeys: firstItem ? Object.keys(firstItem) : [],
+        firstItemId: firstItem?.id,
+        firstItemUrl: firstItem?.url,
+        firstItemSlug: firstItem?.slug,
+        firstItemName: firstItem?.name,
+      },
+      "getFirstOfferUrlByEan raw response"
+    );
+
+    if (!firstItem) return null;
+
+    // Build direct URL: prefer explicit url/slug field, otherwise use id
+    if (typeof firstItem.url === "string" && firstItem.url.includes("allegro.pl")) {
+      return firstItem.url;
+    }
+    const slug = typeof firstItem.slug === "string" ? firstItem.slug : null;
+    const id = typeof firstItem.id === "string" ? firstItem.id : null;
+    if (id) {
+      return slug
+        ? `https://allegro.pl/oferta/${slug}-${id}`
+        : `https://allegro.pl/oferta/${id}`;
     }
     return null;
-  } catch (err) {
-    logger.warn({ err }, "getFirstOfferUrlByEan failed");
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number; data?: unknown }; message?: string };
+    logger.warn(
+      { status: e.response?.status, data: e.response?.data, msg: e.message },
+      "getFirstOfferUrlByEan failed"
+    );
     return null;
   }
 }
