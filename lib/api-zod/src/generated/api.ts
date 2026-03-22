@@ -16,6 +16,33 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary Ping
+ */
+export const PingResponse = zod.object({
+  status: zod.string(),
+});
+
+/**
+ * Searches Open Food Facts, UPCitemdb, and Google in order until a product is found
+ * @summary Lookup product by EAN
+ */
+export const LookupProductQueryParams = zod.object({
+  ean: zod.coerce.string().describe("EAN barcode code"),
+});
+
+export const LookupProductResponse = zod.object({
+  found: zod.boolean(),
+  name: zod.string().nullish(),
+  brand: zod.string().nullish(),
+  weight: zod.string().nullish(),
+  category: zod.string().nullish(),
+  image: zod.string().nullish(),
+  description: zod.string().nullish(),
+  source: zod.string().nullish(),
+  logs: zod.array(zod.string()),
+});
+
+/**
  * Fetches product details from Allegro catalog by EAN and returns required category parameters
  * @summary Scan EAN barcode
  */

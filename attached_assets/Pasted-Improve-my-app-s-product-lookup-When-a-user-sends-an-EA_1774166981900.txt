@@ -1,0 +1,37 @@
+Improve my app's product lookup. When a user sends an EAN to /api/lookup, search these sources IN ORDER until a product is found:
+
+SOURCE 1: Open Food Facts API - search ALL these regions one by one:
+- https://world.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://de.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://pl.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://fr.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://es.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://cz.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://sk.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://it.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://nl.openfoodfacts.org/api/v2/product/{EAN}.json
+- https://hu.openfoodfacts.org/api/v2/product/{EAN}.json
+
+For each region, check if data.status === 1 and data.product exists. Extract: product_name (try product_name, product_name_de, product_name_pl, product_name_en, product_name_fr, product_name_sk), brands, quantity (as weight), categories, image_front_url. Stop as soon as one region returns a valid product with a name.
+
+SOURCE 2: UPCitemdb free trial API:
+- https://api.upcitemdb.com/prod/trial/lookup?upc={EAN}
+Extract: title, brand, weight, category, images[0]
+
+SOURCE 3: Google Search scraping as last resort:
+- Fetch https://www.google.com/search?q={EAN}+product with a Chrome User-Agent header
+- Parse <h3> tags from the HTML to get product titles
+- Extract weight/volume using regex for patterns like 100g, 250ml, 1L, 500g
+- Try to find image URLs in the response
+- Clean up the title by removing store names like Amazon, eBay, Allegro, Kaufland etc.
+
+IMPORTANT RULES:
+- Each source gets a 6 second timeout (Google gets 10 seconds)
+- Return a JSON with: found, name, brand, weight, category, image, description, source
+- Also return a "logs" array showing which sources were tried and what happened
+- If nothing is found anywhere, return {found: false, logs: [...]}
+- The server must bind to 0.0.0.0 on process.env.PORT || 5000
+- Keep the existing index.html frontend, do not change it
+- Add a GET /ping endpoint that returns {status: "ok"}
+
+Also make sure the Run command is set to "node index.js" and the app is configured as a web server so the .replit.app URL works.

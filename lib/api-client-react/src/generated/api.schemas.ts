@@ -14,6 +14,18 @@ export interface ErrorResponse {
   message: string;
 }
 
+export interface LookupResult {
+  found: boolean;
+  name?: string | null;
+  brand?: string | null;
+  weight?: string | null;
+  category?: string | null;
+  image?: string | null;
+  description?: string | null;
+  source?: string | null;
+  logs: string[];
+}
+
 export type CategoryParameterType =
   (typeof CategoryParameterType)[keyof typeof CategoryParameterType];
 
@@ -76,6 +88,17 @@ export interface CreateOfferResponse {
   status: string;
   message: string;
 }
+
+export type Ping200 = {
+  status: string;
+};
+
+export type LookupProductParams = {
+  /**
+   * EAN barcode code
+   */
+  ean: string;
+};
 
 export type ScanEanParams = {
   /**

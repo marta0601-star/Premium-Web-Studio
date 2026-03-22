@@ -21,6 +21,9 @@ import type {
   CreateOfferResponse,
   ErrorResponse,
   HealthStatus,
+  LookupProductParams,
+  LookupResult,
+  Ping200,
   ScanEanParams,
   ScanResult,
 } from "./api.schemas";
@@ -102,6 +105,164 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Ping
+ */
+export const getPingUrl = () => {
+  return `/api/ping`;
+};
+
+export const ping = async (options?: RequestInit): Promise<Ping200> => {
+  return customFetch<Ping200>(getPingUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getPingQueryKey = () => {
+  return [`/api/ping`] as const;
+};
+
+export const getPingQueryOptions = <
+  TData = Awaited<ReturnType<typeof ping>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof ping>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getPingQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof ping>>> = ({
+    signal,
+  }) => ping({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof ping>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type PingQueryResult = NonNullable<Awaited<ReturnType<typeof ping>>>;
+export type PingQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Ping
+ */
+
+export function usePing<
+  TData = Awaited<ReturnType<typeof ping>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof ping>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getPingQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Searches Open Food Facts, UPCitemdb, and Google in order until a product is found
+ * @summary Lookup product by EAN
+ */
+export const getLookupProductUrl = (params: LookupProductParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/lookup?${stringifiedParams}`
+    : `/api/lookup`;
+};
+
+export const lookupProduct = async (
+  params: LookupProductParams,
+  options?: RequestInit,
+): Promise<LookupResult> => {
+  return customFetch<LookupResult>(getLookupProductUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getLookupProductQueryKey = (params?: LookupProductParams) => {
+  return [`/api/lookup`, ...(params ? [params] : [])] as const;
+};
+
+export const getLookupProductQueryOptions = <
+  TData = Awaited<ReturnType<typeof lookupProduct>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: LookupProductParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupProduct>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getLookupProductQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupProduct>>> = ({
+    signal,
+  }) => lookupProduct(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof lookupProduct>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type LookupProductQueryResult = NonNullable<
+  Awaited<ReturnType<typeof lookupProduct>>
+>;
+export type LookupProductQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Lookup product by EAN
+ */
+
+export function useLookupProduct<
+  TData = Awaited<ReturnType<typeof lookupProduct>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: LookupProductParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupProduct>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getLookupProductQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

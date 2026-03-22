@@ -11,6 +11,8 @@ tags:
     description: Health operations
   - name: allegro
     description: Allegro operations
+  - name: lookup
+    description: Product lookup operations
 paths:
   /healthz:
     get:
@@ -25,6 +27,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /ping:
+    get:
+      operationId: ping
+      tags: [health]
+      summary: Ping
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                required:
+                  - status
+
+  /lookup:
+    get:
+      operationId: lookupProduct
+      tags: [lookup]
+      summary: Lookup product by EAN
+      description: Searches Open Food Facts, UPCitemdb, and Google in order until a product is found
+      parameters:
+        - name: ean
+          in: query
+          required: true
+          schema:
+            type: string
+          description: EAN barcode code
+      responses:
+        "200":
+          description: Lookup result (found or not found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /allegro/scan:
     get:
@@ -111,6 +158,40 @@ components:
       required:
         - error
         - message
+
+    LookupResult:
+      type: object
+      properties:
+        found:
+          type: boolean
+        name:
+          type: string
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+        weight:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        image:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+        logs:
+          type: array
+          items:
+            type: string
+      required:
+        - found
+        - logs
 
     CategoryParameter:
       type: object
