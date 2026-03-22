@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 declare const Quagga: {
   init: (config: unknown, callback: (err: unknown) => void) => void;
@@ -30,6 +30,9 @@ function isValidEAN(code: string): boolean {
   return checkDigit === parseInt(code[code.length - 1]);
 }
 
+const PATCH_SIZES = ["medium", "large", "small"] as const;
+type PatchSize = typeof PATCH_SIZES[number];
+
 interface BarcodeScannerProps {
   onScan: (text: string) => void;
 }
@@ -37,11 +40,16 @@ interface BarcodeScannerProps {
 export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
+
   const stoppedRef = useRef(false);
+  const patchIdxRef = useRef(0);
+  const lastDetectRef = useRef(Date.now());
+  const rotateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    stoppedRef.current = false;
+  const [showHint, setShowHint] = useState(false);
 
+  function startQuagga(patchSize: PatchSize, onScanCallback: (code: string) => void) {
     let lastCode = "";
     let readCount = 0;
 
@@ -56,25 +64,27 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
         .map((x) => x.error as number);
       if (errors.length > 0) {
         const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
-        if (avgError > 0.10) return;
+        if (avgError > 0.12) return;
       }
 
-      // Must be valid EAN length
       if (code.length !== 8 && code.length !== 13) return;
-
-      // EAN checksum validation
       if (!isValidEAN(code)) return;
 
-      // Same code 3 times in a row
+      // Reset hint timer on any valid candidate
+      lastDetectRef.current = Date.now();
+      setShowHint(false);
+
+      // Same code 2 times in a row
       if (code === lastCode) {
         readCount++;
-        if (readCount >= 3) {
+        if (readCount >= 2) {
           stoppedRef.current = true;
-          Quagga.stop();
+          if (rotateTimerRef.current) clearInterval(rotateTimerRef.current);
+          if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+          Quagga.offDetected(onDetected);
+          try { Quagga.stop(); } catch { /* ignore */ }
           if (navigator.vibrate) navigator.vibrate(100);
-          onScanRef.current(code);
-          lastCode = "";
-          readCount = 0;
+          onScanCallback(code);
         }
       } else {
         lastCode = code;
@@ -94,11 +104,15 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
             height: { ideal: 720 },
           },
         },
+        locator: {
+          patchSize,
+          halfSample: true,
+        },
         decoder: {
           readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader"],
         },
         locate: true,
-        frequency: 10,
+        frequency: 20,
       },
       (err) => {
         if (err) {
@@ -107,18 +121,56 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
         }
         if (!stoppedRef.current) {
           Quagga.start();
+          Quagga.onDetected(onDetected);
         }
       }
     );
+  }
 
-    Quagga.onDetected(onDetected);
+  useEffect(() => {
+    stoppedRef.current = false;
+    patchIdxRef.current = 0;
+    lastDetectRef.current = Date.now();
+
+    startQuagga(PATCH_SIZES[0], (code) => {
+      onScanRef.current(code);
+    });
+
+    // Every 5 seconds with no valid read → rotate patchSize + show hint
+    rotateTimerRef.current = setInterval(() => {
+      if (stoppedRef.current) return;
+      const elapsed = Date.now() - lastDetectRef.current;
+      if (elapsed >= 5000) {
+        setShowHint(true);
+        // Rotate patchSize
+        patchIdxRef.current = (patchIdxRef.current + 1) % PATCH_SIZES.length;
+        const nextPatch = PATCH_SIZES[patchIdxRef.current];
+        console.log("[Quagga] Rotating patchSize →", nextPatch);
+        try { Quagga.stop(); } catch { /* ignore */ }
+        startQuagga(nextPatch, (code) => {
+          onScanRef.current(code);
+        });
+        lastDetectRef.current = Date.now();
+      }
+    }, 5000);
 
     return () => {
       stoppedRef.current = true;
-      Quagga.offDetected(onDetected);
+      if (rotateTimerRef.current) clearInterval(rotateTimerRef.current);
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
       try { Quagga.stop(); } catch { /* ignore */ }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div id="reader" />;
+  return (
+    <div className="w-full">
+      <div id="reader" />
+      {showHint && (
+        <p className="mt-2 text-center text-sm text-amber-400/80 font-medium">
+          Skúste priblížiť alebo oddialiť telefón
+        </p>
+      )}
+    </div>
+  );
 }
