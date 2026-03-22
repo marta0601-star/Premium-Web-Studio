@@ -88,6 +88,7 @@ export const ScanEanResponse = zod.object({
 export const CreateOfferBody = zod.object({
   productId: zod.string().nullable().optional(),
   categoryId: zod.string(),
+  categoryName: zod.string().optional(),
   productName: zod.string(),
   parameters: zod.array(
     zod.object({

@@ -699,6 +699,7 @@ export default function Home() {
     const payload: CreateOfferRequest = {
       productId: scannedData.productId,
       categoryId: categoryId as string,
+      categoryName: categoryName || undefined,
       productName: scannedData.productName as string,
       parameters: parameters_payload,
       productParamIds,

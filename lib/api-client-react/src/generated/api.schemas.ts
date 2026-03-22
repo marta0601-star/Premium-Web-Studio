@@ -79,6 +79,7 @@ export interface ParameterValue {
 export interface CreateOfferRequest {
   productId?: string | null;
   categoryId: string;
+  categoryName?: string;
   productName: string;
   parameters: ParameterValue[];
   productParamIds?: string[];

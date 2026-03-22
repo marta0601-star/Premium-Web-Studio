@@ -2,12 +2,7 @@ import axios from "axios";
 import { logger } from "./logger";
 import { getUserToken, setUserToken } from "./allegro-auth";
 import { getSellerSettings } from "./settings";
-import {
-  detectBrand,
-  detectVolume,
-  detectCategoryKeyword,
-  ensureMinWords,
-} from "./auto-detect";
+import { detectVolume } from "./auto-detect";
 
 const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID;
 const ALLEGRO_CLIENT_SECRET = process.env.ALLEGRO_CLIENT_SECRET;
@@ -331,6 +326,7 @@ async function createAllegroProduct(opts: {
 export async function createAllegroOffer(payload: {
   productId?: string | null;
   categoryId: string;
+  categoryName?: string;
   productName: string;
   parameters: AllegroParam[];
   productParamIds?: string[];
@@ -341,14 +337,47 @@ export async function createAllegroOffer(payload: {
   const token = await getUserToken();
 
   // ── Ensure product name has ≥ 3 words (Allegro requirement) ──────────────────
-  const _brand = detectBrand(payload.productName, null);
-  const _vol = detectVolume(payload.productName, null);
-  const _kw = detectCategoryKeyword(payload.productName);
-  const paddedName = ensureMinWords(payload.productName, _brand, _kw, _vol);
-  if (paddedName !== payload.productName) {
-    logger.info({ original: payload.productName, padded: paddedName }, "Product name padded to meet 3-word minimum");
+  const _words = payload.productName.trim().split(/\s+/).filter((w) => w.length > 0);
+  if (_words.length < 3) {
+    // Append words from categoryName until we reach 3 words
+    if (payload.categoryName) {
+      const catWords = payload.categoryName.trim().split(/\s+/).filter((w) => w.length > 0);
+      for (const w of catWords) {
+        if (_words.length >= 3) break;
+        if (!_words.some((ew) => ew.toLowerCase() === w.toLowerCase())) {
+          _words.push(w);
+        }
+      }
+    }
+    // Fallback: append volume/weight detected from name
+    if (_words.length < 3) {
+      const _vol = detectVolume(payload.productName, null);
+      if (_vol) {
+        const hasVol = /\d+\s*(?:ml|l|g|kg|cl)/i.test(_words.join(" "));
+        if (!hasVol) {
+          const suffix =
+            _vol.unit === "ml"
+              ? _vol.value >= 1000
+                ? `${(_vol.value / 1000).toString().replace(".", ",")}l`
+                : `${_vol.value}ml`
+              : _vol.value >= 1000
+              ? `${(_vol.value / 1000).toString().replace(".", ",")}kg`
+              : `${_vol.value}g`;
+          _words.push(suffix);
+        }
+      }
+    }
+    // Last resort: append EAN to guarantee uniqueness
+    if (_words.length < 3 && payload.ean) {
+      _words.push(payload.ean);
+    }
+    const paddedName = _words.join(" ");
+    logger.info(
+      { original: payload.productName, padded: paddedName },
+      "Product name padded to meet 3-word minimum"
+    );
+    payload = { ...payload, productName: paddedName };
   }
-  payload = { ...payload, productName: paddedName };
 
   if (!fixedDefaults.shippingRateId && !fixedDefaults.returnPolicyId && !fixedDefaults.impliedWarrantyId) {
     await loadFixedDefaults();
