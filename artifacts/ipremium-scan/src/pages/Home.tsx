@@ -469,17 +469,6 @@ async function fetchCategoryParameters(categoryId: string): Promise<AllegroParam
   }
 }
 
-// ── Auto-description builder ─────────────────────────────────────────────────
-
-function buildAutoDescription(
-  _productName: string | null | undefined,
-  _brand: string | null | undefined,
-  _weight: string | null | undefined,
-  ean: string
-): string {
-  return `EAN: ${ean}`;
-}
-
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -585,7 +574,7 @@ export default function Home() {
       const data = await scanMutation.mutateAsync(trimmed) as ExtendedScanResult;
       setScannedData(data);
       setProductParamIds(data.productParamIds || []);
-      setDescription(buildAutoDescription(data.productName, data.brand, data.weight, trimmed));
+      setDescription(`EAN: ${trimmed}`);
 
       const kind = getSourceKind(data.source);
       setScanHistory((prev) => {
@@ -647,8 +636,7 @@ export default function Home() {
         setCategorySuggestions(children);
         setShowCategoryPicker(true); // Auto-open picker so user picks the right subcategory
       }
-    } catch (err: unknown) {
-      console.error(err);
+    } catch {
       setErrorMsg("Nie znaleziono produktu o podanym kodzie EAN lub wystąpił błąd serwera.");
       setScanHistory((prev) => {
         const without = prev.filter((e) => e.ean !== trimmed);

@@ -1,6 +1,6 @@
 import axios from "axios";
 import { logger } from "./logger";
-import { getUserToken, setUserToken } from "./allegro-auth";
+import { getUserToken } from "./allegro-auth";
 import { getSellerSettings } from "./settings";
 import { detectVolume } from "./auto-detect";
 
@@ -8,7 +8,8 @@ const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID;
 const ALLEGRO_CLIENT_SECRET = process.env.ALLEGRO_CLIENT_SECRET;
 const ALLEGRO_BASE_URL = "https://api.allegro.pl";
 
-// Client Credentials token (limited scopes: offers + settings only)
+// ── ALLEGRO AUTH ────────────────────────────────────────────────────────────
+
 let ccToken: string | null = null;
 let ccTokenExpiry: number = 0;
 
@@ -44,8 +45,7 @@ export async function getClientCredentialsToken(): Promise<string> {
   return ccToken as string;
 }
 
-// Legacy export so existing code keeps compiling
-export const getAllegroToken = getClientCredentialsToken;
+// ── PRODUCT CATALOG ─────────────────────────────────────────────────────────
 
 /**
  * Search Allegro product catalog by EAN.
@@ -90,6 +90,8 @@ export async function searchCatalogByEan(ean: string) {
   return { products: [], totalCount: 0 };
 }
 
+// ── CATEGORY ────────────────────────────────────────────────────────────────
+
 export async function getCategoryName(categoryId: string): Promise<string> {
   let token: string;
   try {
@@ -107,83 +109,7 @@ export async function getCategoryName(categoryId: string): Promise<string> {
   return (response.data as { name?: string }).name ?? "";
 }
 
-/**
- * Find the first active offer on Allegro for a given EAN.
- * Returns a direct offer URL like https://allegro.pl/oferta/{slug-id}, or null on failure.
- *
- * /offers/listing is a PUBLIC endpoint — the seller user token (sale scopes only)
- * returns 403. We therefore call it without auth first, then fall back to CC token.
- */
-export async function getFirstOfferUrlByEan(ean: string): Promise<string | null> {
-  const tryFetch = async (authHeader?: string) => {
-    const headers: Record<string, string> = {
-      Accept: "application/vnd.allegro.public.v1+json",
-    };
-    if (authHeader) headers["Authorization"] = authHeader;
-    return axios.get(`${ALLEGRO_BASE_URL}/offers/listing`, {
-      headers,
-      params: { phrase: ean, limit: 1, searchMode: "REGULAR" },
-      timeout: 8000,
-    });
-  };
-
-  try {
-    // Attempt 1: no auth (public endpoint)
-    let response;
-    try {
-      response = await tryFetch();
-    } catch (noAuthErr: unknown) {
-      const e = noAuthErr as { response?: { status?: number } };
-      logger.warn({ status: e.response?.status }, "getFirstOfferUrlByEan no-auth attempt failed, trying CC token");
-      // Attempt 2: client credentials token
-      const ccToken = await getClientCredentialsToken();
-      response = await tryFetch(`Bearer ${ccToken}`);
-    }
-
-    // Log the raw top-level keys and first item so we can inspect structure
-    const data = response.data as Record<string, unknown>;
-    const items = data.items as { regular?: unknown[]; promoted?: unknown[] } | undefined;
-    const firstRegular = items?.regular?.[0] as Record<string, unknown> | undefined;
-    const firstPromoted = items?.promoted?.[0] as Record<string, unknown> | undefined;
-    const firstItem = firstRegular ?? firstPromoted;
-
-    logger.info(
-      {
-        topLevelKeys: Object.keys(data),
-        itemsRegularCount: items?.regular?.length ?? 0,
-        itemsPromotedCount: items?.promoted?.length ?? 0,
-        firstItemKeys: firstItem ? Object.keys(firstItem) : [],
-        firstItemId: firstItem?.id,
-        firstItemUrl: firstItem?.url,
-        firstItemSlug: firstItem?.slug,
-        firstItemName: firstItem?.name,
-      },
-      "getFirstOfferUrlByEan raw response"
-    );
-
-    if (!firstItem) return null;
-
-    // Build direct URL: prefer explicit url/slug field, otherwise use id
-    if (typeof firstItem.url === "string" && firstItem.url.includes("allegro.pl")) {
-      return firstItem.url;
-    }
-    const slug = typeof firstItem.slug === "string" ? firstItem.slug : null;
-    const id = typeof firstItem.id === "string" ? firstItem.id : null;
-    if (id) {
-      return slug
-        ? `https://allegro.pl/oferta/${slug}-${id}`
-        : `https://allegro.pl/oferta/${id}`;
-    }
-    return null;
-  } catch (err: unknown) {
-    const e = err as { response?: { status?: number; data?: unknown }; message?: string };
-    logger.warn(
-      { status: e.response?.status, data: e.response?.data, msg: e.message },
-      "getFirstOfferUrlByEan failed"
-    );
-    return null;
-  }
-}
+// ── CATEGORY PARAMETERS ─────────────────────────────────────────────────────
 
 export async function getCategoryParameters(categoryId: string) {
   // This endpoint requires a user-level token; fall back to CC if none available
@@ -208,7 +134,7 @@ export async function getCategoryParameters(categoryId: string) {
   return response.data;
 }
 
-// ── Fixed defaults — resolved once at startup and cached ─────────────────────
+// ── OFFER DEFAULTS ───────────────────────────────────────────────────────────
 
 interface FixedDefaults {
   shippingRateId: string | null;
@@ -281,6 +207,8 @@ export async function loadFixedDefaults(): Promise<void> {
   }
 }
 
+// ── IMAGE UPLOAD ─────────────────────────────────────────────────────────────
+
 export async function uploadImageToAllegro(imageUrl: string): Promise<string | null> {
   try {
     const token = await getUserToken();
@@ -333,6 +261,8 @@ export async function uploadImageBinaryToAllegro(
     return null;
   }
 }
+
+// ── OFFER CREATION ───────────────────────────────────────────────────────────
 
 type AllegroParam = { id: string; values?: string[]; valuesIds?: string[] };
 
@@ -862,5 +792,3 @@ export async function createAllegroOffer(payload: {
   }
 }
 
-// Re-export for convenience so callers that imported from allegro.ts still work
-export { setUserToken };

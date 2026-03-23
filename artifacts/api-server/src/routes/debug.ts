@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import axios from "axios";
-import { getAllegroToken } from "../lib/allegro";
+import { getClientCredentialsToken } from "../lib/allegro";
 import { getUserToken, getUserTokenStatus } from "../lib/allegro-auth";
 
 const router: IRouter = Router();
@@ -109,11 +109,11 @@ router.get("/debug/allegro-search/:ean", async (req, res) => {
       token = await getUserToken();
       tokenSource = "device_flow_user_token";
     } catch {
-      token = await getAllegroToken();
+      token = await getClientCredentialsToken();
       tokenSource = "client_credentials_fallback";
     }
   } else {
-    token = await getAllegroToken();
+    token = await getClientCredentialsToken();
     tokenSource = "client_credentials_only";
   }
 

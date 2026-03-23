@@ -115,10 +115,7 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
         frequency: 20,
       },
       (err) => {
-        if (err) {
-          console.error("[Quagga] Init error:", err);
-          return;
-        }
+        if (err) return;
         if (!stoppedRef.current) {
           Quagga.start();
           Quagga.onDetected(onDetected);
@@ -145,7 +142,6 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
         // Rotate patchSize
         patchIdxRef.current = (patchIdxRef.current + 1) % PATCH_SIZES.length;
         const nextPatch = PATCH_SIZES[patchIdxRef.current];
-        console.log("[Quagga] Rotating patchSize →", nextPatch);
         try { Quagga.stop(); } catch { /* ignore */ }
         startQuagga(nextPatch, (code) => {
           onScanRef.current(code);
