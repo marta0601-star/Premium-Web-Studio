@@ -189,7 +189,7 @@ router.get("/scan", async (req, res) => {
     // ── Step 3b: Resolve Allegro category via matching-categories API ─────────
     let detectedCategoryId = "73973"; // fallback: Produkty spożywcze
     let detectedCategoryName = "Produkty spożywcze";
-    const searchPhrase = categoryKeyword || cleanedName;
+    const searchPhrase = cleanedName || categoryKeyword;
 
     try {
       const token = await getUserToken();
@@ -359,6 +359,35 @@ router.get("/category-children", async (req, res) => {
       message: e.message,
       categories: [],
     });
+  }
+});
+
+// ── GET /api/allegro/category-search?q=phrase ────────────────────────────────
+// Returns categories matching a phrase (used by the category picker search box)
+router.get("/category-search", async (req, res) => {
+  const { q } = req.query as { q?: string };
+  if (!q?.trim()) {
+    res.json({ categories: [] });
+    return;
+  }
+  try {
+    const token = await getUserToken();
+    const response = await axios.get(
+      `${ALLEGRO_BASE_URL}/sale/matching-categories?name=${encodeURIComponent(q.trim())}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.allegro.public.v1+json",
+        },
+        timeout: 5000,
+      }
+    );
+    const cats = (response.data as { matchingCategories?: Array<{ id: string; name: string; leaf?: boolean }> }).matchingCategories || [];
+    res.json({ categories: cats.map((c) => ({ id: c.id, name: c.name, leaf: c.leaf ?? true })) });
+  } catch (err: unknown) {
+    const e = err as { message?: string };
+    req.log.warn({ q, msg: e.message }, "category-search failed");
+    res.json({ categories: [] });
   }
 });
 
