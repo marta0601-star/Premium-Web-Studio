@@ -241,15 +241,33 @@ function friendlySourceName(source: string | null | undefined): string {
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
+function buildAllegroProductUrl(productId: string, productName: string): string {
+  const idNoDashes = productId.replace(/-/g, "");
+  const slug = productName
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80);
+  return `https://allegro.pl/produkt/${slug}-${idNoDashes}`;
+}
+
 function SourceBanner({
   source,
   productId,
+  productName,
 }: {
   source: string | null | undefined;
   productId?: string | null;
+  productName?: string | null;
 }) {
   const kind = getSourceKind(source);
   if (kind === "allegro") {
+    const allegroUrl =
+      productId && productName
+        ? buildAllegroProductUrl(productId, productName)
+        : null;
     return (
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 mb-6">
         <span className="text-green-400 text-lg leading-none">✅</span>
@@ -257,9 +275,9 @@ function SourceBanner({
           <p className="text-green-300 font-semibold text-sm">Produkt znaleziony w katalogu Allegro</p>
           {productId && <p className="text-green-400/70 text-xs mt-0.5 font-mono truncate">ID: {productId}</p>}
         </div>
-        {productId && (
+        {allegroUrl && (
           <a
-            href={`https://allegro.pl/product/${productId}`}
+            href={allegroUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-300 text-xs font-semibold transition-colors shrink-0"
@@ -838,7 +856,7 @@ export default function Home() {
             <motion.div key="form-step" initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -40 }} transition={{ duration: 0.4, ease: "easeOut" }} className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-10 shadow-2xl">
 
               {/* Source Banner */}
-              <SourceBanner source={scannedData.source} productId={scannedData.productId} />
+              <SourceBanner source={scannedData.source} productId={scannedData.productId} productName={scannedData.productName} />
 
               {/* Product header */}
               <div className="flex flex-col md:flex-row gap-8 mb-8">
