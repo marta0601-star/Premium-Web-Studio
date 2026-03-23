@@ -242,7 +242,6 @@ function friendlySourceName(source: string | null | undefined): string {
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function buildAllegroProductUrl(productId: string, productName: string): string {
-  const idNoDashes = productId.replace(/-/g, "");
   const slug = productName
     .toLowerCase()
     .replace(/[^\w\s-]/g, "")
@@ -250,7 +249,7 @@ function buildAllegroProductUrl(productId: string, productName: string): string 
     .replace(/[\s_]+/g, "-")
     .replace(/-+/g, "-")
     .slice(0, 80);
-  return `https://allegro.pl/produkt/${slug}-${idNoDashes}`;
+  return `https://allegro.pl/produkt/${slug}-${productId}`;
 }
 
 function SourceBanner({
