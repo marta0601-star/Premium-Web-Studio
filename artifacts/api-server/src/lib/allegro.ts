@@ -210,8 +210,10 @@ export async function loadFixedDefaults(): Promise<void> {
 // ── IMAGE UPLOAD ─────────────────────────────────────────────────────────────
 
 export async function uploadImageToAllegro(imageUrl: string): Promise<string | null> {
+  const token = await getUserToken();
+
+  // Try 1: ask Allegro to fetch the image by URL
   try {
-    const token = await getUserToken();
     const resp = await axios.post(
       "https://upload.allegro.pl/sale/images",
       { url: imageUrl },
@@ -221,28 +223,58 @@ export async function uploadImageToAllegro(imageUrl: string): Promise<string | n
           "Content-Type": "application/vnd.allegro.public.v1+json",
           Accept: "application/vnd.allegro.public.v1+json",
         },
-        timeout: 30000,
+        timeout: 20000,
       }
     );
-    const data = resp.data as { location?: string; url?: string };
-    const allegroUrl = data.location || data.url || null;
-    logger.info({ imageUrl, allegroUrl }, "Image uploaded to Allegro");
-    return allegroUrl;
-  } catch (err: unknown) {
-    logger.warn({ err, imageUrl }, "Failed to upload image URL to Allegro");
+    const urlResult = resp.data as { location?: string; url?: string };
+    const allegroUrl = urlResult.location || urlResult.url || null;
+    if (allegroUrl) {
+      logger.info({ imageUrl, allegroUrl }, "Image uploaded to Allegro via URL");
+      return allegroUrl;
+    }
+  } catch (urlErr: unknown) {
+    const e = urlErr as { response?: { status?: number; data?: unknown }; message?: string };
+    logger.warn(
+      { status: e.response?.status, data: e.response?.data, msg: e.message, imageUrl },
+      "URL-based image upload failed — falling back to binary fetch"
+    );
+  }
+
+  // Try 2: fetch the image ourselves and upload as binary
+  try {
+    const imgResp = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+      timeout: 15000,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        Accept: "image/*,*/*",
+      },
+    });
+    const contentType = (
+      (imgResp.headers["content-type"] as string) || "image/jpeg"
+    )
+      .split(";")[0]
+      .trim();
+    const buffer = Buffer.from(imgResp.data as ArrayBuffer);
+    logger.info({ imageUrl, bytes: buffer.length, contentType }, "Fetched image — uploading as binary");
+    return await uploadImageBinaryToAllegro(buffer, contentType);
+  } catch (binaryErr: unknown) {
+    const e = binaryErr as { message?: string };
+    logger.warn({ msg: e.message, imageUrl }, "Binary image upload fallback also failed");
     return null;
   }
 }
 
 export async function uploadImageBinaryToAllegro(
-  data: Buffer,
+  imageBuffer: Buffer,
   contentType: string
 ): Promise<string | null> {
   try {
     const token = await getUserToken();
     const resp = await axios.post(
       "https://upload.allegro.pl/sale/images",
-      data,
+      imageBuffer,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -252,8 +284,8 @@ export async function uploadImageBinaryToAllegro(
         timeout: 30000,
       }
     );
-    const data = resp.data as { location?: string; url?: string };
-    const allegroUrl = data.location || data.url || null;
+    const result = resp.data as { location?: string; url?: string };
+    const allegroUrl = result.location || result.url || null;
     logger.info({ allegroUrl }, "Binary image uploaded to Allegro");
     return allegroUrl;
   } catch (err: unknown) {
