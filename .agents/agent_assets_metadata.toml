@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Fm2sWWNy0r_ps6TXEostx"
+uri = "file://ipremium-scan-source.tar.gz"
+type = "unspecified"
+title = "iPremium Scan — kod źródłowy"
