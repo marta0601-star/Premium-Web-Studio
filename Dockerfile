@@ -8,7 +8,7 @@ COPY . .
 
 RUN rm -f pnpm-lock.yaml
 RUN pnpm install
-RUN pnpm run build
+RUN pnpm --filter @workspace/api-server run build
 
 EXPOSE 3000
 
