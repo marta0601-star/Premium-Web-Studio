@@ -6,7 +6,8 @@ WORKDIR /app
 
 COPY . .
 
-RUN pnpm install --no-frozen-lockfile
+RUN rm -f pnpm-lock.yaml
+RUN pnpm install
 RUN pnpm run build
 
 EXPOSE 3000
