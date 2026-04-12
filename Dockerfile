@@ -8,6 +8,7 @@ COPY . .
 
 RUN rm -f pnpm-lock.yaml
 RUN pnpm install
+RUN pnpm --filter @workspace/ipremium-scan run build
 RUN pnpm --filter @workspace/api-server run build
 
 EXPOSE 3000
