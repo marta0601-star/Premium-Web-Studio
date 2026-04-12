@@ -46559,47 +46559,6 @@ async function pollDeviceFlow() {
   }
 }
 
-// src/lib/settings.ts
-import fs2 from "fs";
-import path2 from "path";
-var SETTINGS_FILE = path2.resolve(process.cwd(), "settings.json");
-function readSettings() {
-  try {
-    if (fs2.existsSync(SETTINGS_FILE)) {
-      return JSON.parse(fs2.readFileSync(SETTINGS_FILE, "utf-8"));
-    }
-  } catch (err) {
-    logger.warn({ err }, "Failed to read settings.json");
-  }
-  return {};
-}
-function writeSettings(settings) {
-  try {
-    fs2.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf-8");
-  } catch (err) {
-    logger.error({ err }, "Failed to write settings.json");
-    throw err;
-  }
-}
-function getSellerSettings() {
-  const s = readSettings();
-  if (s.seller?.city && s.seller?.postCode && s.seller?.state) {
-    return s.seller;
-  }
-  const city = process.env.SELLER_CITY;
-  const postCode = process.env.SELLER_POSTCODE;
-  const state = process.env.SELLER_STATE;
-  if (city && postCode && state) {
-    return { city, postCode, state };
-  }
-  return null;
-}
-function saveSellerSettings(seller) {
-  const existing = readSettings();
-  writeSettings({ ...existing, seller });
-  logger.info({ seller }, "Seller settings saved");
-}
-
 // src/lib/auto-detect.ts
 var CATEGORY_KEYWORD_MAP = [
   { patterns: ["energy drink", "nap\xF3j energetyczny", "energetyk", "energy 2", "energy 4", "energy 6", "energy 8", "energy 10", "energy 12", "energy 24", "energy 48", "energy plus", "energy zero"], keyword: "Napoje energetyczne" },
@@ -47087,15 +47046,12 @@ async function createAllegroOffer(payload) {
     stock: { available: 1, unit: "UNIT" },
     publication: { status: "ACTIVE" },
     payments: { invoice: "VAT" },
-    location: (() => {
-      const loc = getSellerSettings();
-      return {
-        countryCode: "PL",
-        ...loc?.city ? { city: loc.city } : {},
-        ...loc?.postCode ? { postCode: loc.postCode } : {},
-        ...loc?.state ? { province: loc.state } : {}
-      };
-    })()
+    location: {
+      countryCode: "PL",
+      city: "Wroc\u0142aw",
+      postCode: "50-202",
+      province: "dolno\u015Bl\u0105skie"
+    }
   };
   if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];
   if (payload.description?.trim()) {
@@ -47668,6 +47624,47 @@ async function lookupEan(ean) {
   }
   logs.push("Nie znaleziono produktu w \u017Cadnym \u017Ar\xF3dle");
   return { found: false, logs };
+}
+
+// src/lib/settings.ts
+import fs2 from "fs";
+import path2 from "path";
+var SETTINGS_FILE = path2.resolve(process.cwd(), "settings.json");
+function readSettings() {
+  try {
+    if (fs2.existsSync(SETTINGS_FILE)) {
+      return JSON.parse(fs2.readFileSync(SETTINGS_FILE, "utf-8"));
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to read settings.json");
+  }
+  return {};
+}
+function writeSettings(settings) {
+  try {
+    fs2.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf-8");
+  } catch (err) {
+    logger.error({ err }, "Failed to write settings.json");
+    throw err;
+  }
+}
+function getSellerSettings() {
+  const s = readSettings();
+  if (s.seller?.city && s.seller?.postCode && s.seller?.state) {
+    return s.seller;
+  }
+  const city = process.env.SELLER_CITY;
+  const postCode = process.env.SELLER_POSTCODE;
+  const state = process.env.SELLER_STATE;
+  if (city && postCode && state) {
+    return { city, postCode, state };
+  }
+  return null;
+}
+function saveSellerSettings(seller) {
+  const existing = readSettings();
+  writeSettings({ ...existing, seller });
+  logger.info({ seller }, "Seller settings saved");
 }
 
 // src/routes/allegro.ts

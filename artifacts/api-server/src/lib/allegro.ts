@@ -1,7 +1,6 @@
 import axios from "axios";
 import { logger } from "./logger";
 import { getUserToken } from "./allegro-auth";
-import { getSellerSettings } from "./settings";
 import { detectVolume } from "./auto-detect";
 
 const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID;
@@ -516,15 +515,12 @@ export async function createAllegroOffer(payload: {
     stock: { available: 1, unit: "UNIT" },
     publication: { status: "ACTIVE" },
     payments: { invoice: "VAT" },
-    location: (() => {
-      const loc = getSellerSettings();
-      return {
-        countryCode: "PL",
-        ...(loc?.city ? { city: loc.city } : {}),
-        ...(loc?.postCode ? { postCode: loc.postCode } : {}),
-        ...(loc?.state ? { province: loc.state } : {}),
-      };
-    })(),
+    location: {
+      countryCode: "PL",
+      city: "Wrocław",
+      postCode: "50-202",
+      province: "dolnośląskie",
+    },
   };
 
   if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];
