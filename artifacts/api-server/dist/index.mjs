@@ -47050,7 +47050,7 @@ async function createAllegroOffer(payload) {
       countryCode: "PL",
       city: "Wroc\u0142aw",
       postCode: "50-202",
-      province: "dolno\u015Bl\u0105skie"
+      province: "DOLNOSLASKIE"
     }
   };
   if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];

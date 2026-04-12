@@ -519,7 +519,7 @@ export async function createAllegroOffer(payload: {
       countryCode: "PL",
       city: "Wrocław",
       postCode: "50-202",
-      province: "dolnośląskie",
+      province: "DOLNOSLASKIE",
     },
   };
 
