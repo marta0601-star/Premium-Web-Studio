@@ -24,6 +24,7 @@ router.get("/auth/status", (_req, res) => {
 
   res.json({
     hasUserToken: status.hasToken,
+    needsReAuth: status.needsReAuth ?? false,
     tokenExpiresInMs: status.expiresInMs ?? null,
     tokenScopes: status.scopes ?? null,
     hasPendingDeviceFlow: !!pending,

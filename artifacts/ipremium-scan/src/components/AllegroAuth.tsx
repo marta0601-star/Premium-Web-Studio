@@ -7,6 +7,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface AuthStatus {
   hasUserToken: boolean;
+  needsReAuth: boolean;
   tokenExpiresInMs: number | null;
   tokenScopes: string[] | null;
   hasPendingDeviceFlow: boolean;
@@ -59,6 +60,13 @@ export function AllegroAuthBanner() {
     const id = setInterval(fetchStatus, 30_000);
     return () => clearInterval(id);
   }, [fetchStatus]);
+
+  // Auto-expand and show re-auth prompt when the refresh token has expired
+  useEffect(() => {
+    if (status?.needsReAuth) {
+      setExpanded(true);
+    }
+  }, [status?.needsReAuth]);
 
   // Poll device flow when active
   useEffect(() => {
@@ -155,19 +163,27 @@ export function AllegroAuthBanner() {
         <div className="flex items-center gap-3">
           {status.hasUserToken ? (
             <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
+          ) : status.needsReAuth ? (
+            <ShieldX className="w-4 h-4 text-red-400 shrink-0" />
           ) : (
             <ShieldX className="w-4 h-4 text-amber-400 shrink-0" />
           )}
           <span className="text-sm font-medium text-white/70">
             {status.hasUserToken
               ? `Allegro: autoryzowany (wygasa za ${expiresHours}h)`
+              : status.needsReAuth
+              ? "Allegro: token wygasł — wymagana ponowna autoryzacja"
               : "Allegro: wymagana autoryzacja konta"}
           </span>
         </div>
         <div className="flex items-center gap-2">
           {!status.hasUserToken && (
-            <span className="text-xs font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-              Połącz konto
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+              status.needsReAuth
+                ? "text-red-400 bg-red-400/10 border-red-400/20"
+                : "text-amber-400 bg-amber-400/10 border-amber-400/20"
+            }`}>
+              {status.needsReAuth ? "Odśwież autoryzację" : "Połącz konto"}
             </span>
           )}
           {expanded ? (
@@ -196,7 +212,7 @@ export function AllegroAuthBanner() {
                     <ShieldCheck className="w-5 h-5 text-green-400 shrink-0" />
                     <div>
                       <p className="text-sm font-semibold text-green-400">Konto Allegro połączone</p>
-                      <p className="text-xs text-white/50 mt-0.5">Token wygasa za {expiresHours} godzin. Odświeżany automatycznie.</p>
+                      <p className="text-xs text-white/50 mt-0.5">Token wygasa za {expiresHours} godzin. Odświeżany automatycznie (przy 80% czasu życia).</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -214,18 +230,33 @@ export function AllegroAuthBanner() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <div className="flex items-start gap-3">
-                      <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-amber-400">Autoryzacja wymagana do katalogu Allegro</p>
-                        <p className="text-xs text-white/50 mt-1">
-                          Wyszukiwanie produktów w katalogu Allegro wymaga połączenia z Twoim kontem sprzedawcy.
-                          Do czasu autoryzacji dane produktu są pobierane z zewnętrznych źródeł (Open Food Facts, Google itp.).
-                        </p>
+                  {status.needsReAuth ? (
+                    <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <div className="flex items-start gap-3">
+                        <ShieldX className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-semibold text-red-400">Token odświeżania wygasł</p>
+                          <p className="text-xs text-white/50 mt-1">
+                            Token dostępu nie mógł zostać odświeżony — token odświeżania wygasł lub został unieważniony.
+                            Wymagana jest ponowna autoryzacja konta Allegro.
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <div className="flex items-start gap-3">
+                        <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-semibold text-amber-400">Autoryzacja wymagana do katalogu Allegro</p>
+                          <p className="text-xs text-white/50 mt-1">
+                            Wyszukiwanie produktów w katalogu Allegro wymaga połączenia z Twoim kontem sprzedawcy.
+                            Do czasu autoryzacji dane produktu są pobierane z zewnętrznych źródeł (Open Food Facts, Google itp.).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {error && (
                     <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
