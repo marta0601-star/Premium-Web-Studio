@@ -390,11 +390,11 @@ function CategoryPicker({
   onSelect: (cat: CategorySuggestion) => void;
   onClose: () => void;
 }) {
-  const [query, setQuery] = React.useState("");
-  const [searchResults, setSearchResults] = React.useState<CategorySuggestion[]>([]);
-  const [searching, setSearching] = React.useState(false);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<CategorySuggestion[]>([]);
+  const [searching, setSearching] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!query.trim()) {
       setSearchResults([]);
       return;
