@@ -47542,6 +47542,8 @@ async function lookupEan(ean) {
   const [
     offResult,
     upcResult,
+    beautyResult,
+    petResult,
     imgEan,
     imgEanProduct,
     imgCeneo,
@@ -47549,14 +47551,16 @@ async function lookupEan(ean) {
   ] = await Promise.all([
     searchOpenFoodFacts(ean, logs).catch(() => null),
     searchUpcItemdb(ean, logs).catch(() => null),
+    searchOpenFactsApi(`https://world.openbeautyfacts.org/api/v2/product/${ean}.json`, "OpenBeautyFacts", ean, logs).catch(() => null),
+    searchOpenFactsApi(`https://world.openpetfoodfacts.org/api/v2/product/${ean}.json`, "OpenPetFoodFacts", ean, logs).catch(() => null),
     searchGoogleImagesUrl(ean, "GoogleImg/EAN", logs),
     searchGoogleImagesUrl(`${ean} produkt`, "GoogleImg/EAN+produkt", logs),
     searchGoogleImagesUrl(`site:ceneo.pl ${ean}`, "GoogleImg/Ceneo", logs),
     searchGoogleImagesUrl(`site:allegro.pl ${ean}`, "GoogleImg/Allegro", logs)
   ]);
-  const structuredResult = offResult || upcResult;
+  const structuredResult = offResult || beautyResult || petResult || upcResult;
   const googleImage = imgEan || imgEanProduct || imgCeneo || imgAllegro || null;
-  const structuredImage = offResult?.image || upcResult?.image || null;
+  const structuredImage = offResult?.image || beautyResult?.image || petResult?.image || upcResult?.image || null;
   let image = structuredImage || googleImage;
   if (structuredResult?.name && !image) {
     logs.push(`[ImageHunt] Searching by name: ${structuredResult.name}`);
@@ -47606,10 +47610,7 @@ async function lookupEan(ean) {
     googleTextSearch(`site:buycott.com ${ean}`, "Google/Buycott", logs).catch(() => null),
     googleTextSearch(`site:codecheck.info ${ean}`, "Google/Codecheck", logs).catch(() => null),
     googleTextSearch(`site:cosmetify.com ${ean}`, "Google/Cosmetify", logs).catch(() => null),
-    // Additional product APIs
-    searchOpenFactsApi(`https://world.openbeautyfacts.org/api/v2/product/${ean}.json`, "OpenBeautyFacts", ean, logs).catch(() => null),
-    searchOpenFactsApi(`https://world.openpetfoodfacts.org/api/v2/product/${ean}.json`, "OpenPetFoodFacts", ean, logs).catch(() => null),
-    // Google Shopping
+    // Google Shopping (OpenBeautyFacts + OpenPetFoodFacts already ran in Phase 1)
     searchGoogleShopping(ean, logs).catch(() => null)
   ]);
   const phase4Hit = phase4Results.find((r) => r?.name);

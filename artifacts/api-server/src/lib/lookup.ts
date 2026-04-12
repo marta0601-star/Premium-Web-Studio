@@ -391,10 +391,14 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
   const logs: string[] = [`Szukam EAN: ${ean}`];
 
   // ── Phase 1: All sources run in parallel ──────────────────────────────────
-  // Structured sources (name + image) and image-specific searches start together
+  // Structured sources (name + image) and image-specific searches start together.
+  // OpenBeautyFacts and OpenPetFoodFacts are included here alongside OpenFoodFacts
+  // so cosmetics / pet-food products are found in the first round.
   const [
     offResult,
     upcResult,
+    beautyResult,
+    petResult,
     imgEan,
     imgEanProduct,
     imgCeneo,
@@ -402,18 +406,20 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
   ] = await Promise.all([
     searchOpenFoodFacts(ean, logs).catch(() => null),
     searchUpcItemdb(ean, logs).catch(() => null),
+    searchOpenFactsApi(`https://world.openbeautyfacts.org/api/v2/product/${ean}.json`, "OpenBeautyFacts", ean, logs).catch(() => null),
+    searchOpenFactsApi(`https://world.openpetfoodfacts.org/api/v2/product/${ean}.json`, "OpenPetFoodFacts", ean, logs).catch(() => null),
     searchGoogleImagesUrl(ean, "GoogleImg/EAN", logs),
     searchGoogleImagesUrl(`${ean} produkt`, "GoogleImg/EAN+produkt", logs),
     searchGoogleImagesUrl(`site:ceneo.pl ${ean}`, "GoogleImg/Ceneo", logs),
     searchGoogleImagesUrl(`site:allegro.pl ${ean}`, "GoogleImg/Allegro", logs),
   ]);
 
-  // Best name from structured sources
-  const structuredResult = offResult || upcResult;
+  // Best name from structured sources (food → beauty → pet → upc)
+  const structuredResult = offResult || beautyResult || petResult || upcResult;
 
   // Best image: structured source first, then Google Images results
   const googleImage = imgEan || imgEanProduct || imgCeneo || imgAllegro || null;
-  const structuredImage = offResult?.image || upcResult?.image || null;
+  const structuredImage = offResult?.image || beautyResult?.image || petResult?.image || upcResult?.image || null;
   let image = structuredImage || googleImage;
 
   // ── Phase 2: If we have name but no image yet, search by name ────────────
@@ -475,10 +481,7 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
     googleTextSearch(`site:buycott.com ${ean}`, "Google/Buycott", logs).catch(() => null),
     googleTextSearch(`site:codecheck.info ${ean}`, "Google/Codecheck", logs).catch(() => null),
     googleTextSearch(`site:cosmetify.com ${ean}`, "Google/Cosmetify", logs).catch(() => null),
-    // Additional product APIs
-    searchOpenFactsApi(`https://world.openbeautyfacts.org/api/v2/product/${ean}.json`, "OpenBeautyFacts", ean, logs).catch(() => null),
-    searchOpenFactsApi(`https://world.openpetfoodfacts.org/api/v2/product/${ean}.json`, "OpenPetFoodFacts", ean, logs).catch(() => null),
-    // Google Shopping
+    // Google Shopping (OpenBeautyFacts + OpenPetFoodFacts already ran in Phase 1)
     searchGoogleShopping(ean, logs).catch(() => null),
   ]);
 

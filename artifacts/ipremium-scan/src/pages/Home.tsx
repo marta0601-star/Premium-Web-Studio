@@ -542,6 +542,7 @@ export default function Home() {
   const [allegroImageUrl, setAllegroImageUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [description, setDescription] = useState<string>("");
+  const [productTitle, setProductTitle] = useState<string>("");
 
   const scanMutation = useScanBarcode();
   const submitMutation = useSubmitOffer();
@@ -687,13 +688,42 @@ export default function Home() {
           setCategorySuggestions(children);
         });
       }
-    } catch {
-      setErrorMsg("Nie znaleziono produktu o podanym kodzie EAN lub wystąpił błąd serwera.");
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { error?: string } };
+      const isNotFound = apiErr?.data?.error === "not_found";
+
       setScanHistory((prev) => {
         const without = prev.filter((e) => e.ean !== trimmed);
         return [{ ean: trimmed, productName: "Nie znaleziono", source: null, kind: "manual", ts: Date.now() }, ...without].slice(0, 10);
       });
-      setStep("SCAN");
+
+      if (isNotFound) {
+        // Product not found anywhere — open an empty form for full manual entry
+        setScannedData({
+          productId: null,
+          productName: "",
+          categoryId: null,
+          categoryName: "",
+          images: [],
+          parameters: [],
+          prefillValues: {},
+          productParamIds: [],
+          source: null,
+          ean: trimmed,
+        });
+        setProductTitle("");
+        setCategoryId(null);
+        setCategoryName("");
+        setParameters([]);
+        setFormState({});
+        setAutoFilledIds(new Set());
+        setShowCategoryPicker(true); // auto-open picker so user can immediately select category
+        setDescription(`EAN: ${trimmed}`);
+        setStep("FORM");
+      } else {
+        setErrorMsg("Wystąpił błąd serwera podczas pobierania danych. Spróbuj ponownie.");
+        setStep("SCAN");
+      }
     }
   }, [scanMutation, userImagePreviewUrl]);
 
@@ -721,12 +751,13 @@ export default function Home() {
         ean: currentEan,
         brand: scannedData.brand,
         weight: scannedData.weight,
-        productName: scannedData.productName,
+        // For manual entry, scannedData.productName is "" — use productTitle instead
+        productName: scannedData.productName || productTitle,
         country,
       };
       await applyCategory(cat.id, cat.name, [], scannedData.prefillValues || {}, ctx, true);
     },
-    [scannedData, currentEan, applyCategory]
+    [scannedData, currentEan, productTitle, applyCategory]
   );
 
   const updateForm = useCallback((id: string, value: Partial<ParameterValue>) => {
@@ -742,6 +773,17 @@ export default function Home() {
     setErrorMsg(null);
     setAllegroErrors([]);
 
+    // For manual entry, productTitle is the name entered by the user
+    const resolvedProductName = (productTitle.trim() || scannedData.productName || "").trim();
+    if (!resolvedProductName) {
+      setErrorMsg("Wprowadź nazwę produktu.");
+      return;
+    }
+    if (!categoryId) {
+      setErrorMsg("Wybierz kategorię produktu.");
+      return;
+    }
+
     const parameters_payload = Object.values(formState).filter(
       (p) =>
         (p.values && p.values.length > 0 && p.values[0] !== "") ||
@@ -756,7 +798,7 @@ export default function Home() {
       productId: scannedData.productId,
       categoryId: categoryId as string,
       categoryName: categoryName || undefined,
-      productName: scannedData.productName as string,
+      productName: resolvedProductName,
       parameters: parameters_payload,
       productParamIds,
       imageUrl: resolvedImageUrl || undefined,
@@ -813,6 +855,7 @@ export default function Home() {
     setAllegroImageUrl(null);
     setImageUploading(false);
     setDescription("");
+    setProductTitle("");
     setStep("SCAN");
   };
 
@@ -967,7 +1010,11 @@ export default function Home() {
                   )}
                   {allegroImageUrl && (
                     <p className="text-green-400/70 text-xs mt-2 text-center flex items-center justify-center gap-1">
-                      <CheckCheck className="w-3 h-3" /> Zdjęcie gotowe
+                      <CheckCheck className="w-3 h-3" />
+                      Zdjęcie gotowe
+                      {scannedData?.source && scannedData.source !== "allegro_catalog" && (
+                        <span className="text-white/30 ml-1">· {friendlySourceName(scannedData.source)}</span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -1006,7 +1053,26 @@ export default function Home() {
                     )}
                   </div>
 
-                  <h2 className="text-2xl sm:text-3xl font-display text-white leading-tight">{scannedData.productName}</h2>
+                  {/* Product name — editable input for manual entry, static heading otherwise */}
+                  {(!scannedData.productId && !scannedData.productName) ? (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-white/40">
+                        Nazwa produktu <span className="text-primary">*</span>
+                      </label>
+                      <PremiumInput
+                        value={productTitle}
+                        onChange={(e) => setProductTitle(e.target.value)}
+                        placeholder="Wpisz pełną nazwę produktu..."
+                      />
+                      {submitAttempted && !productTitle.trim() && (
+                        <p className="text-red-400 text-xs flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Nazwa jest wymagana
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <h2 className="text-2xl sm:text-3xl font-display text-white leading-tight">{scannedData.productName}</h2>
+                  )}
 
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                     {scannedData.productId && (
