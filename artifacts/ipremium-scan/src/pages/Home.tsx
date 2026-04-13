@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useScanBarcode, useSubmitOffer } from "@/hooks/use-allegro";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
-import { PremiumButton, PremiumInput, PremiumSelect, PremiumSwitch } from "@/components/ui-custom";
+import { PremiumButton, PremiumInput, PremiumSwitch, CustomSelect } from "@/components/ui-custom";
 import { AllegroAuthBanner } from "@/components/AllegroAuth";
 import { LocationSetup } from "@/components/LocationSetup";
 import type { CreateOfferRequest, ParameterValue } from "@workspace/api-client-react";
@@ -99,10 +99,18 @@ function fuzzyMatchOption(
 ): string | null {
   if (!query || !options.length) return null;
   const q = query.toLowerCase().trim();
+  // 1. Exact match
   const exact = options.find((o) => o.name.toLowerCase() === q);
   if (exact) return exact.id;
-  const partial = options.find((o) => o.name.toLowerCase().includes(q) || q.includes(o.name.toLowerCase()));
-  if (partial) return partial.id;
+  // 2. Option name contains query
+  const optContains = options.find((o) => o.name.toLowerCase().includes(q));
+  if (optContains) return optContains.id;
+  // 3. Query contains option name — only if option name is ≥4 chars (avoids "Bio" matching "Schlossblick Bio Wasser")
+  const qContains = options.find((o) => {
+    const n = o.name.toLowerCase();
+    return n.length >= 4 && q.includes(n);
+  });
+  if (qContains) return qContains.id;
   return null;
 }
 
@@ -188,7 +196,30 @@ function buildAutoFilledState(
   const autoFilledIds = new Set<string>();
 
   for (const param of params) {
-    // 1. Allegro catalog prefill (highest priority)
+    const nameLower = param.name.toLowerCase();
+    const isBrandParam = /marka|brand|producent/.test(nameLower);
+
+    // Brand parameters: always prefer ctx.brand from product lookup over Allegro catalog prefill.
+    // The Allegro catalog can match a completely different product for the same EAN,
+    // resulting in a wrong brand being populated (e.g. CHAOKOH for a German water brand).
+    if (isBrandParam && ctx.brand) {
+      if (param.type === "dictionary") {
+        const matched = fuzzyMatchOption(param.options, ctx.brand);
+        if (matched) {
+          formState[param.id] = { id: param.id, valuesIds: [matched] };
+          autoFilledIds.add(param.id);
+        } else {
+          // Brand not in options list — leave empty so user selects manually
+          formState[param.id] = { id: param.id };
+        }
+      } else if (param.type === "string") {
+        formState[param.id] = { id: param.id, values: [ctx.brand] };
+        autoFilledIds.add(param.id);
+      }
+      continue; // Skip Allegro catalog prefill for brand
+    }
+
+    // 1. Allegro catalog prefill (highest priority for non-brand params)
     const catalogValues = prefillValues[param.id];
     if (catalogValues && catalogValues.length > 0) {
       if (param.type === "dictionary") {
@@ -1155,17 +1186,13 @@ export default function Home() {
                                     </label>
 
                                     {param.type === "dictionary" && param.options.length > 0 ? (
-                                      <PremiumSelect
+                                      <CustomSelect
                                         value={formState[param.id]?.valuesIds?.[0] || ""}
-                                        onChange={(e) => updateForm(param.id, { valuesIds: [e.target.value] })}
+                                        onChange={(v) => updateForm(param.id, { valuesIds: [v] })}
+                                        options={param.options.map((opt) => ({ value: opt.id, label: opt.name }))}
                                         required={param.required}
                                         className={borderClass}
-                                      >
-                                        <option value="" disabled className="bg-background text-white/50">Wybierz wartość...</option>
-                                        {param.options.map((opt) => (
-                                          <option key={opt.id} value={opt.id} className="bg-background text-white">{opt.name}</option>
-                                        ))}
-                                      </PremiumSelect>
+                                      />
                                     ) : param.type === "boolean" ? (
                                       <div className={`flex h-12 items-center px-4 rounded-xl bg-black/20 border ${isAutoFilled ? "border-green-500/50" : "border-white/5"}`}>
                                         <PremiumSwitch

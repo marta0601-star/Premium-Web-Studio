@@ -1,4 +1,4 @@
-import React, { forwardRef } from "react";
+import React, { forwardRef, useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Loader2 } from "lucide-react";
 
@@ -71,6 +71,93 @@ export const PremiumSelect = forwardRef<HTMLSelectElement, React.SelectHTMLAttri
   }
 );
 PremiumSelect.displayName = "PremiumSelect";
+
+// Custom JS dropdown — works reliably on iOS/Android (avoids native <select> compositing bugs)
+export const CustomSelect = ({
+  value,
+  onChange,
+  options,
+  placeholder = "Wybierz wartość...",
+  required,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string; disabled?: boolean }>;
+  placeholder?: string;
+  required?: boolean;
+  className?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const selected = options.find((o) => o.value === value && !o.disabled);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "w-full px-4 py-3.5 rounded-xl bg-black/40 border border-white/10 text-white text-left flex items-center justify-between gap-2",
+          "focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-black/60",
+          "transition-all duration-200 cursor-pointer touch-manipulation select-none",
+          !selected && "text-white/40",
+          className
+        )}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        required={required}
+      >
+        <span className="truncate text-sm">{selected ? selected.label : placeholder}</span>
+        <ChevronDown className={cn("w-5 h-5 text-white/50 shrink-0 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute top-full left-0 right-0 z-50 mt-1 bg-zinc-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden"
+        >
+          <div className="max-h-60 overflow-y-auto overscroll-contain">
+            {options.filter((o) => !o.disabled).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={opt.value === value}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={cn(
+                  "w-full px-4 py-3 text-left text-sm border-b border-white/5 last:border-0",
+                  "hover:bg-white/10 active:bg-white/20 transition-colors touch-manipulation",
+                  opt.value === value
+                    ? "text-primary font-semibold bg-primary/10"
+                    : "text-white"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const PremiumSwitch = ({ checked, onChange }: { checked: boolean; onChange: (c: boolean) => void }) => {
   return (
