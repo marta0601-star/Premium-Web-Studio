@@ -187,8 +187,8 @@ router.get("/scan", async (req, res) => {
     );
 
     // ── Step 3b: Resolve Allegro category via matching-categories API ─────────
-    let detectedCategoryId = "73973"; // fallback: Produkty spożywcze
-    let detectedCategoryName = "Produkty spożywcze";
+    let detectedCategoryId = "258832"; // fallback: Supermarket (correct Allegro root)
+    let detectedCategoryName = "Supermarket";
     const searchPhrase = cleanedName || categoryKeyword;
 
     try {
@@ -337,16 +337,17 @@ router.get("/category-children", async (req, res) => {
 
   try {
     const token = await getUserToken();
-    const response = await axios.get(
-      `${ALLEGRO_BASE_URL}/sale/categories?parent.id=${encodeURIComponent(id.trim())}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.allegro.public.v1+json",
-        },
-        timeout: 8000,
-      }
-    );
+    // "root" is a special value that fetches top-level categories (no parent.id filter)
+    const apiUrl = id.trim() === "root"
+      ? `${ALLEGRO_BASE_URL}/sale/categories`
+      : `${ALLEGRO_BASE_URL}/sale/categories?parent.id=${encodeURIComponent(id.trim())}`;
+    const response = await axios.get(apiUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.allegro.public.v1+json",
+      },
+      timeout: 8000,
+    });
     const raw = (response.data as { categories?: Array<{ id: string; name: string; leaf?: boolean }> }).categories || [];
     res.json({
       categories: raw.map((c) => ({ id: c.id, name: c.name, leaf: c.leaf ?? false })),

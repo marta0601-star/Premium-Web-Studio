@@ -47787,8 +47787,8 @@ router2.get("/scan", async (req, res) => {
       { rawName, cleanedName, detectedBrand, detectedVolume, categoryKeyword },
       "Auto-detection results"
     );
-    let detectedCategoryId = "73973";
-    let detectedCategoryName = "Produkty spo\u017Cywcze";
+    let detectedCategoryId = "258832";
+    let detectedCategoryName = "Supermarket";
     const searchPhrase = cleanedName || categoryKeyword;
     try {
       const token = await getUserToken();
@@ -47918,16 +47918,14 @@ router2.get("/category-children", async (req, res) => {
   }
   try {
     const token = await getUserToken();
-    const response = await axios_default.get(
-      `${ALLEGRO_BASE_URL2}/sale/categories?parent.id=${encodeURIComponent(id.trim())}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.allegro.public.v1+json"
-        },
-        timeout: 8e3
-      }
-    );
+    const apiUrl = id.trim() === "root" ? `${ALLEGRO_BASE_URL2}/sale/categories` : `${ALLEGRO_BASE_URL2}/sale/categories?parent.id=${encodeURIComponent(id.trim())}`;
+    const response = await axios_default.get(apiUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.allegro.public.v1+json"
+      },
+      timeout: 8e3
+    });
     const raw = response.data.categories || [];
     res.json({
       categories: raw.map((c) => ({ id: c.id, name: c.name, leaf: c.leaf ?? false }))

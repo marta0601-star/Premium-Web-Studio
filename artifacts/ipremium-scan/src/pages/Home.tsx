@@ -649,8 +649,8 @@ export default function Home() {
       } else {
         // External source — backend auto-detects category and loads params
         setStep("FORM");
-        const defaultCatId = data.categoryId || "73973";
-        const defaultCatName = data.categoryName || "Produkty spożywcze";
+        const defaultCatId = data.categoryId || "258832";
+        const defaultCatName = data.categoryName || "Supermarket";
         setCategoryId(defaultCatId);
         setCategoryName(defaultCatName);
 
@@ -718,6 +718,8 @@ export default function Home() {
         setFormState({});
         setAutoFilledIds(new Set());
         setShowCategoryPicker(true); // auto-open picker so user can immediately select category
+        // Pre-load Supermarket subcategories so the picker is immediately useful
+        fetchCategoryChildren("258832").then(setCategorySuggestions);
         setDescription(`EAN: ${trimmed}`);
         setStep("FORM");
       } else {
@@ -1036,7 +1038,15 @@ export default function Home() {
                       )}
                       <button
                         type="button"
-                        onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+                        onClick={async () => {
+                          const opening = !showCategoryPicker;
+                          setShowCategoryPicker(opening);
+                          // When opening with no suggestions yet, default to Supermarket subcategories
+                          if (opening && categorySuggestions.length === 0) {
+                            const children = await fetchCategoryChildren("258832");
+                            setCategorySuggestions(children);
+                          }
+                        }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/80 text-xs transition-colors"
                       >
                         <Edit2 className="w-3 h-3" /> Zmień kategorię
