@@ -30,3 +30,15 @@ timeoutMs = 20000
 [userenv.shared]
 ALLEGRO_CLIENT_ID = "f309375859d343608638a5bb44c2b5b4"
 ALLEGRO_CLIENT_SECRET = "Q8zXqxwA8fsUlO4x0KLAOMlDZXzNxnMClB4HJ7q1bBbeOjfmWYQYqqPJ6RAlVi4x"
+
+[[ports]]
+localPort = 8080
+externalPort = 80
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 20381
+externalPort = 3000

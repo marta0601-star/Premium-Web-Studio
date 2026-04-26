@@ -806,10 +806,17 @@ export default function Home() {
     setErrorMsg(null);
     setAllegroErrors([]);
 
-    // For manual entry, productTitle is the name entered by the user
-    const resolvedProductName = (productTitle.trim() || scannedData.productName || "").trim();
+    // Resolve product name from multiple sources (priority order):
+    // 1. productTitle (manual text input shown when product is not found externally)
+    // 2. scannedData.productName (from external lookup or Allegro catalog)
+    // 3. "Nazwa handlowa" / "Nazwa produktu" category parameter filled in the form
+    const namedParam = parameters.find((p) =>
+      /^(nazwa handlowa|nazwa produktu)$/i.test(p.name.trim())
+    );
+    const nameFromParam = namedParam ? (formState[namedParam.id]?.values?.[0] ?? "") : "";
+    const resolvedProductName = (productTitle.trim() || scannedData.productName || nameFromParam || "").trim();
     if (!resolvedProductName) {
-      setErrorMsg("Wprowadź nazwę produktu.");
+      setErrorMsg("Wprowadź nazwę produktu (pole 'Nazwa handlowa' lub nagłówek produktu).");
       return;
     }
     if (!categoryId) {

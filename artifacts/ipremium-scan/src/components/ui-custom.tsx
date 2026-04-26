@@ -72,7 +72,9 @@ export const PremiumSelect = forwardRef<HTMLSelectElement, React.SelectHTMLAttri
 );
 PremiumSelect.displayName = "PremiumSelect";
 
-// Custom JS dropdown — works reliably on iOS/Android (avoids native <select> compositing bugs)
+// CustomSelect — pure-JS dropdown, works reliably on iOS/Android.
+// When options.length > 50 a live search box is shown so large dictionaries
+// (e.g. 12 000+ brand entries) stay usable without rendering thousands of nodes.
 export const CustomSelect = ({
   value,
   onChange,
@@ -88,11 +90,26 @@ export const CustomSelect = ({
   required?: boolean;
   className?: string;
 }) => {
+  const SEARCH_THRESHOLD = 50; // show search box above this count
+  const MAX_VISIBLE = 60;      // max rows rendered at once
+
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const selected = options.find((o) => o.value === value && !o.disabled);
+  const allActive = options.filter((o) => !o.disabled);
+  const isLarge = allActive.length > SEARCH_THRESHOLD;
 
+  const visible = isLarge
+    ? allActive
+        .filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+        .slice(0, MAX_VISIBLE)
+    : allActive;
+
+  const selected = allActive.find((o) => o.value === value);
+
+  // Close on outside tap/click
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | TouchEvent) => {
@@ -108,11 +125,23 @@ export const CustomSelect = ({
     };
   }, [open]);
 
+  // Auto-focus search when opening a large list
+  useEffect(() => {
+    if (open && isLarge) {
+      setTimeout(() => searchRef.current?.focus(), 30);
+    }
+    if (!open) setSearch("");
+  }, [open, isLarge]);
+
+  const handleToggle = () => setOpen((o) => !o);
+  const handleSelect = (v: string) => { onChange(v); setOpen(false); };
+
   return (
     <div ref={wrapperRef} className="relative w-full">
+      {/* Trigger button */}
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleToggle}
         className={cn(
           "w-full px-4 py-3.5 rounded-xl bg-black/40 border border-white/10 text-white text-left flex items-center justify-between gap-2",
           "focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-black/60",
@@ -128,19 +157,39 @@ export const CustomSelect = ({
         <ChevronDown className={cn("w-5 h-5 text-white/50 shrink-0 transition-transform duration-200", open && "rotate-180")} />
       </button>
 
+      {/* Dropdown panel */}
       {open && (
         <div
           role="listbox"
           className="absolute top-full left-0 right-0 z-50 mt-1 bg-zinc-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden"
         >
+          {/* Search box — only for large lists */}
+          {isLarge && (
+            <div className="px-3 py-2 border-b border-white/10">
+              <input
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Szukaj..."
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
+              />
+            </div>
+          )}
+
           <div className="max-h-60 overflow-y-auto overscroll-contain">
-            {options.filter((o) => !o.disabled).map((opt) => (
+            {visible.length === 0 && (
+              <p className="px-4 py-6 text-center text-sm text-white/40">
+                {isLarge ? "Brak wyników dla podanej frazy" : "Brak opcji"}
+              </p>
+            )}
+            {visible.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 role="option"
                 aria-selected={opt.value === value}
-                onClick={() => { onChange(opt.value); setOpen(false); }}
+                onClick={() => handleSelect(opt.value)}
                 className={cn(
                   "w-full px-4 py-3 text-left text-sm border-b border-white/5 last:border-0",
                   "hover:bg-white/10 active:bg-white/20 transition-colors touch-manipulation",
@@ -152,6 +201,11 @@ export const CustomSelect = ({
                 {opt.label}
               </button>
             ))}
+            {isLarge && visible.length === MAX_VISIBLE && (
+              <p className="px-4 py-2 text-center text-xs text-white/30">
+                Wyświetlono {MAX_VISIBLE} z {allActive.length} — zawęź frazę
+              </p>
+            )}
           </div>
         </div>
       )}
