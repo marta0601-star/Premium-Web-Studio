@@ -15,6 +15,11 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Railway terminates HTTPS at the edge proxy and forwards plain HTTP to the
+// container. Without trust proxy, req.secure is false and cookie-session with
+// `secure: true` refuses to set Set-Cookie — login returns 200 but no cookie.
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,
@@ -43,10 +48,12 @@ app.use(express.urlencoded({ extended: true }));
 // without it we fall back to a per-process random key, which means cookies
 // invalidate on every restart — fail-secure but bad UX, hence the warning.
 const COOKIE_SECRET =
-  process.env.COOKIE_SECRET ?? crypto.randomBytes(32).toString("hex");
-if (!process.env.COOKIE_SECRET) {
+  process.env.SESSION_SECRET ??
+  process.env.COOKIE_SECRET ??
+  crypto.randomBytes(32).toString("hex");
+if (!process.env.SESSION_SECRET && !process.env.COOKIE_SECRET) {
   logger.warn(
-    "COOKIE_SECRET env var not set — using random per-process key. Sessions will not survive a restart.",
+    "Neither SESSION_SECRET nor COOKIE_SECRET env var is set — using random per-process key. Sessions will not survive a restart.",
   );
 }
 app.use(
