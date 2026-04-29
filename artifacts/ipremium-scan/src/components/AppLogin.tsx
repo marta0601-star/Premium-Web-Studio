@@ -124,6 +124,8 @@ export default function AppLogin({ children }: { children: ReactNode }) {
             border: "1px solid #ddd",
             borderRadius: 6,
             outline: "none",
+            color: "#111",
+            background: "#fff",
           }}
         />
 
