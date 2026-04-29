@@ -1,5 +1,12 @@
-import express, { type Express } from "express";
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import cors from "cors";
+import cookieSession from "cookie-session";
+import crypto from "crypto";
 import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs";
@@ -31,8 +38,52 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ── App-level session cookie (single shared password gate) ───────────────────
+// COOKIE_SECRET should be set in production (Railway). On a fresh boot
+// without it we fall back to a per-process random key, which means cookies
+// invalidate on every restart — fail-secure but bad UX, hence the warning.
+const COOKIE_SECRET =
+  process.env.COOKIE_SECRET ?? crypto.randomBytes(32).toString("hex");
+if (!process.env.COOKIE_SECRET) {
+  logger.warn(
+    "COOKIE_SECRET env var not set — using random per-process key. Sessions will not survive a restart.",
+  );
+}
+app.use(
+  cookieSession({
+    name: "ipremium_session",
+    keys: [COOKIE_SECRET],
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  }),
+);
+
+// ── /api auth gate ───────────────────────────────────────────────────────────
+// Paths are RELATIVE to the /api mount (Express strips the prefix before the
+// middleware runs), so the whitelist uses /healthz, /auth/login, etc.
+const PUBLIC_API_PATHS = new Set<string>([
+  "/healthz",
+  "/auth/login",
+  "/auth/logout",
+  "/auth/allegro/callback", // Allegro redirects here from external OAuth flow
+]);
+
+function requireAppAuth(req: Request, res: Response, next: NextFunction): void {
+  if (PUBLIC_API_PATHS.has(req.path)) {
+    next();
+    return;
+  }
+  if (req.session?.authed === true) {
+    next();
+    return;
+  }
+  res.status(401).json({ error: "unauthorized" });
+}
+
 // ── API routes (must be before static files) ─────────────────────────────────
-app.use("/api", router);
+app.use("/api", requireAppAuth, router);
 
 // ── Static frontend ───────────────────────────────────────────────────────────
 // Resolve relative to the api-server working directory
