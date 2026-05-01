@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useScanBarcode, useSubmitOffer } from "@/hooks/use-allegro";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { isValidEAN } from "@/lib/ean";
 import { PremiumButton, PremiumInput, PremiumSwitch, CustomSelect } from "@/components/ui-custom";
 import { AllegroAuthBanner } from "@/components/AllegroAuth";
 import { LocationSetup } from "@/components/LocationSetup";
@@ -947,7 +948,20 @@ export default function Home() {
                 <span className="text-xs font-semibold tracking-wider text-white/40 uppercase">LUB RĘCZNIE</span>
                 <div className="h-px bg-white/10 flex-1" />
               </div>
-              <form onSubmit={(e) => { e.preventDefault(); handleScan(manualEan); }} className="max-w-sm mx-auto space-y-4">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const trimmed = manualEan.trim();
+                  if (!isValidEAN(trimmed)) {
+                    setErrorMsg(
+                      "Nieprawidłowy kod EAN — wpisz 8 lub 13 cyfr i sprawdź cyfrę kontrolną."
+                    );
+                    return;
+                  }
+                  handleScan(trimmed);
+                }}
+                className="max-w-sm mx-auto space-y-4"
+              >
                 {errorMsg && (
                   <div className="p-3 rounded-lg bg-destructive/20 border border-destructive/50 text-destructive-foreground text-sm text-center">{errorMsg}</div>
                 )}
