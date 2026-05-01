@@ -1,20 +1,32 @@
+/**
+ * Hybrid EAN scanner — native BarcodeDetector first, ZXing fallback.
+ *
+ *   • Chrome/Edge (desktop + Android), Samsung Internet → native
+ *     BarcodeDetector. On Android Chrome the underlying engine is Google
+ *     ML Kit, which is *materially* faster and more accurate than any
+ *     JS-side decoder we can ship.
+ *
+ *   • iOS Safari, Firefox, anything else → @zxing/browser
+ *     (BrowserMultiFormatReader). Same WASM-free pure-JS decoder used
+ *     by html5-qrcode under the hood, but here we drive it directly so
+ *     we can constrain to EAN/UPC and pass our own MediaStreamConstraints.
+ *
+ * The component preserves the UX from the previous Quagga-based version:
+ * laser-line overlay (CSS already in src/index.css), 100 ms vibration on
+ * success, "skúste priblížiť…" hint after 5 s of nothing, classified
+ * camera-error screen with a retry button.
+ *
+ * Stable-read guard: the same EAN must arrive twice in a row before we
+ * commit, which on the native path corresponds to ~33 ms between detects
+ * and on ZXing to ~100-200 ms — still imperceptible to the user but kills
+ * the rare false-positive on a half-occluded code.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { isValidEAN } from "@/lib/ean";
 
-declare const Quagga: {
-  init: (config: unknown, callback: (err: unknown) => void) => void;
-  start: () => void;
-  stop: () => void;
-  onDetected: (callback: (result: QuaggaResult) => void) => void;
-  offDetected: (callback: (result: QuaggaResult) => void) => void;
-};
-
-interface QuaggaResult {
-  codeResult: {
-    code: string;
-    decodedCodes: { error?: number }[];
-  };
-}
+// ── Camera-error classification ──────────────────────────────────────────────
 
 type CameraError = "permission" | "no_camera" | "in_use" | "other";
 
@@ -36,151 +48,258 @@ const CAMERA_ERROR_MESSAGES: Record<CameraError, string> = {
   other: "Kameru sa nepodarilo spustiť. Skúste obnoviť stránku alebo použite manuálny vstup nižšie.",
 };
 
-const PATCH_SIZES = ["medium", "large", "small"] as const;
-type PatchSize = typeof PATCH_SIZES[number];
+// ── Native BarcodeDetector typings ───────────────────────────────────────────
+// The W3C Shape Detection API isn't in lib.dom.d.ts yet (k 2026-05), so we
+// declare just the surface we use. Format identifiers follow the spec —
+// lowercase with underscores.
+
+interface NativeDetectedBarcode {
+  rawValue: string;
+  format: string;
+}
+
+interface NativeBarcodeDetector {
+  detect(source: HTMLVideoElement): Promise<NativeDetectedBarcode[]>;
+}
+
+interface NativeBarcodeDetectorCtor {
+  new (init: { formats: string[] }): NativeBarcodeDetector;
+  getSupportedFormats(): Promise<string[]>;
+}
+
+const NATIVE_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
+
+const ZXING_FORMATS: BarcodeFormat[] = [
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+];
+
+const VIDEO_CONSTRAINTS: MediaStreamConstraints = {
+  video: {
+    facingMode: "environment",
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+  },
+};
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 interface BarcodeScannerProps {
   onScan: (text: string) => void;
 }
 
+type EngineKind = "native" | "zxing";
+
 export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const stoppedRef = useRef(false);
-  const patchIdxRef = useRef(0);
   const lastDetectRef = useRef(Date.now());
-  const rotateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const lastCodeRef = useRef("");
+  const readCountRef = useRef(0);
 
   const [showHint, setShowHint] = useState(false);
   const [cameraError, setCameraError] = useState<CameraError | null>(null);
   // Bumped by retryCamera to force the boot useEffect to re-run after the
-  // user dismisses an error and the #reader div re-mounts.
+  // user dismisses an error and the <video> element re-mounts.
   const [bootCount, setBootCount] = useState(0);
+  const [engine, setEngine] = useState<EngineKind | null>(null);
 
-  function startQuagga(patchSize: PatchSize, onScanCallback: (code: string) => void) {
-    let lastCode = "";
-    let readCount = 0;
+  // Single sink for both native + zxing detections. Same code 2× in a row →
+  // commit, vibrate, tear down. Anything else just resets the streak.
+  const handleDetected = useCallback((rawCode: string) => {
+    if (stoppedRef.current) return;
+    const code = rawCode.trim();
+    if (!isValidEAN(code)) return;
 
-    function onDetected(result: QuaggaResult) {
-      if (stoppedRef.current) return;
+    lastDetectRef.current = Date.now();
+    setShowHint(false);
 
-      const code = result.codeResult.code;
+    if (code === lastCodeRef.current) {
+      readCountRef.current++;
+      if (readCountRef.current >= 2) {
+        stoppedRef.current = true;
+        if (typeof navigator.vibrate === "function") navigator.vibrate(100);
+        cleanupRef.current?.();
+        cleanupRef.current = null;
+        onScanRef.current(code);
+      }
+    } else {
+      lastCodeRef.current = code;
+      readCountRef.current = 1;
+    }
+  }, []);
 
-      // Confidence check
-      const errors = result.codeResult.decodedCodes
-        .filter((x) => x.error !== undefined)
-        .map((x) => x.error as number);
-      if (errors.length > 0) {
-        const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
-        if (avgError > 0.12) return;
+  useEffect(() => {
+    let aborted = false;
+    stoppedRef.current = false;
+    lastCodeRef.current = "";
+    readCountRef.current = 0;
+    lastDetectRef.current = Date.now();
+
+    // ── Native BarcodeDetector path ────────────────────────────────────────
+    async function bootNative(Ctor: NativeBarcodeDetectorCtor) {
+      const stream = await navigator.mediaDevices.getUserMedia(VIDEO_CONSTRAINTS);
+      if (aborted) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const videoEl = videoRef.current;
+      if (!videoEl) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      videoEl.srcObject = stream;
+      try {
+        await videoEl.play();
+      } catch {
+        /* iOS sometimes throws AbortError when play() is interrupted by
+           a quick teardown — harmless, srcObject is still attached. */
       }
 
-      if (code.length !== 8 && code.length !== 13) return;
-      if (!isValidEAN(code)) return;
+      const detector = new Ctor({ formats: NATIVE_FORMATS });
 
-      // Reset hint timer on any valid candidate
-      lastDetectRef.current = Date.now();
-      setShowHint(false);
+      // Prefer requestVideoFrameCallback when present (Chromium) — it fires
+      // exactly once per painted frame, so we never decode the same image
+      // twice. Fall back to rAF on older Chromium / Edge.
+      const useRVFC = "requestVideoFrameCallback" in HTMLVideoElement.prototype;
+      let rafId: number | null = null;
+      let inFlight = false;
 
-      // Same code 2 times in a row
-      if (code === lastCode) {
-        readCount++;
-        if (readCount >= 2) {
-          stoppedRef.current = true;
-          if (rotateTimerRef.current) clearInterval(rotateTimerRef.current);
-          if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-          Quagga.offDetected(onDetected);
-          try { Quagga.stop(); } catch { /* ignore */ }
-          if (navigator.vibrate) navigator.vibrate(100);
-          onScanCallback(code);
+      const tick = () => {
+        if (aborted || stoppedRef.current) return;
+        if (!inFlight && videoEl.readyState >= 2) {
+          inFlight = true;
+          detector
+            .detect(videoEl)
+            .then((codes) => {
+              for (const c of codes) {
+                if (c.rawValue) handleDetected(c.rawValue);
+                if (stoppedRef.current) break;
+              }
+            })
+            .catch(() => {
+              /* per-frame decode errors are routine — ignore */
+            })
+            .finally(() => {
+              inFlight = false;
+            });
         }
-      } else {
-        lastCode = code;
-        readCount = 1;
+        if (useRVFC) {
+          rafId = (
+            videoEl as HTMLVideoElement & {
+              requestVideoFrameCallback: (cb: () => void) => number;
+            }
+          ).requestVideoFrameCallback(tick);
+        } else {
+          rafId = requestAnimationFrame(tick);
+        }
+      };
+      tick();
+
+      cleanupRef.current = () => {
+        if (rafId !== null) {
+          if (useRVFC) {
+            const cancel = (
+              videoEl as HTMLVideoElement & {
+                cancelVideoFrameCallback?: (id: number) => void;
+              }
+            ).cancelVideoFrameCallback;
+            cancel?.call(videoEl, rafId);
+          } else {
+            cancelAnimationFrame(rafId);
+          }
+          rafId = null;
+        }
+        videoEl.srcObject = null;
+        stream.getTracks().forEach((t) => t.stop());
+      };
+    }
+
+    // ── ZXing fallback path ────────────────────────────────────────────────
+    async function bootZxing() {
+      const hints = new Map<DecodeHintType, unknown>();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, ZXING_FORMATS);
+      const reader = new BrowserMultiFormatReader(hints);
+      const videoEl = videoRef.current;
+      if (!videoEl) return;
+
+      let controls: IScannerControls | null = null;
+      controls = await reader.decodeFromConstraints(
+        VIDEO_CONSTRAINTS,
+        videoEl,
+        (result) => {
+          if (aborted || stoppedRef.current) return;
+          if (result) handleDetected(result.getText());
+        },
+      );
+
+      if (aborted) {
+        try { controls.stop(); } catch { /* ignore */ }
+        return;
+      }
+
+      cleanupRef.current = () => {
+        try { controls?.stop(); } catch { /* ignore */ }
+      };
+    }
+
+    // ── Engine selection ───────────────────────────────────────────────────
+    async function boot() {
+      try {
+        const Ctor = (
+          window as unknown as { BarcodeDetector?: NativeBarcodeDetectorCtor }
+        ).BarcodeDetector;
+
+        if (Ctor && typeof Ctor.getSupportedFormats === "function") {
+          const supported = await Ctor.getSupportedFormats();
+          if (supported.includes("ean_13") && supported.includes("ean_8")) {
+            console.info("[BarcodeScanner] engine: native BarcodeDetector");
+            setEngine("native");
+            await bootNative(Ctor);
+            return;
+          }
+          console.info(
+            "[BarcodeScanner] BarcodeDetector present but missing EAN — falling back to ZXing",
+          );
+        } else {
+          console.info("[BarcodeScanner] no BarcodeDetector — using ZXing");
+        }
+        setEngine("zxing");
+        await bootZxing();
+      } catch (err) {
+        if (!aborted) setCameraError(classifyCameraError(err));
       }
     }
 
-    Quagga.init(
-      {
-        inputStream: {
-          name: "Live",
-          type: "LiveStream",
-          target: document.querySelector("#reader"),
-          constraints: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        },
-        locator: {
-          patchSize,
-          halfSample: true,
-        },
-        decoder: {
-          readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader"],
-        },
-        locate: true,
-        frequency: 20,
-      },
-      (err) => {
-        if (err) {
-          // getUserMedia / Quagga init failed — surface to the user instead
-          // of silently dying. Mark stopped so the patchSize-rotation timer
-          // doesn't keep retrying behind the scenes.
-          stoppedRef.current = true;
-          if (rotateTimerRef.current) clearInterval(rotateTimerRef.current);
-          setCameraError(classifyCameraError(err));
-          return;
-        }
-        if (!stoppedRef.current) {
-          Quagga.start();
-          Quagga.onDetected(onDetected);
-        }
+    boot();
+
+    // 5 s without any detection → encourage the user to adjust distance.
+    const hintInterval = setInterval(() => {
+      if (stoppedRef.current) return;
+      if (Date.now() - lastDetectRef.current >= 5000) {
+        setShowHint(true);
       }
-    );
-  }
+    }, 1000);
+
+    return () => {
+      aborted = true;
+      stoppedRef.current = true;
+      clearInterval(hintInterval);
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    };
+  }, [bootCount, handleDetected]);
 
   const retryCamera = useCallback(() => {
     setCameraError(null);
     setBootCount((n) => n + 1);
   }, []);
-
-  useEffect(() => {
-    stoppedRef.current = false;
-    patchIdxRef.current = 0;
-    lastDetectRef.current = Date.now();
-
-    startQuagga(PATCH_SIZES[0], (code) => {
-      onScanRef.current(code);
-    });
-
-    // Every 5 seconds with no valid read → rotate patchSize + show hint
-    rotateTimerRef.current = setInterval(() => {
-      if (stoppedRef.current) return;
-      const elapsed = Date.now() - lastDetectRef.current;
-      if (elapsed >= 5000) {
-        setShowHint(true);
-        // Rotate patchSize
-        patchIdxRef.current = (patchIdxRef.current + 1) % PATCH_SIZES.length;
-        const nextPatch = PATCH_SIZES[patchIdxRef.current];
-        try { Quagga.stop(); } catch { /* ignore */ }
-        startQuagga(nextPatch, (code) => {
-          onScanRef.current(code);
-        });
-        lastDetectRef.current = Date.now();
-      }
-    }, 5000);
-
-    return () => {
-      stoppedRef.current = true;
-      if (rotateTimerRef.current) clearInterval(rotateTimerRef.current);
-      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-      try { Quagga.stop(); } catch { /* ignore */ }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootCount]);
 
   if (cameraError) {
     return (
@@ -204,6 +323,12 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
   return (
     <div className="w-full">
       <div id="reader">
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+        />
         {/* Visible scan-line overlay — `.laser-line` keyframes already live in
             src/index.css; the absolute/colour utilities here just give the
             element height, position and a primary-tinted hairline so the
@@ -216,6 +341,11 @@ export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
       {showHint && (
         <p className="mt-2 text-center text-sm text-amber-400/80 font-medium">
           Skúste priblížiť alebo oddialiť telefón
+        </p>
+      )}
+      {engine && (
+        <p className="mt-1 text-center text-[10px] text-white/30 font-mono uppercase tracking-wider">
+          Engine: {engine === "native" ? "native BarcodeDetector" : "ZXing fallback"}
         </p>
       )}
     </div>
