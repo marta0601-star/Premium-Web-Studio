@@ -4,13 +4,17 @@
  * Audit (2026-05) — what's actually working in the wild:
  *
  *   STRUCTURED APIS (reliable, JSON, low false-positive rate)
+ *     ✓ Allegro Search API (OAuth)        — official, requires user token,
+ *       same /sale/products?phrase= endpoint as the Catalog step but called
+ *       again here so an Allegro hit can still surface when the upstream
+ *       Step 1 in routes/allegro.ts had a transient 5xx/network error
  *     ✓ OpenFoodFacts (world.* + regional pl/de/fr/es/cz/sk/it/nl/hu)
  *     ✓ OpenBeautyFacts, OpenPetFoodFacts (cosmetics, pet food)
  *     ✓ UPCitemDB trial endpoint — rate-limited (~100/day per IP) but free
  *
  *   DIRECT E-COMMERCE SCRAPING (fragile but high-value for PL market)
- *     ~ Allegro listing (https://allegro.pl/listing?string=<ean>) — works,
- *       Akamai sometimes returns a captcha but Chrome UA is usually OK
+ *     ✗ Allegro listing scraping          — REMOVED, replaced by the
+ *       Search API above (no Akamai captchas, structured JSON, ToS-safe)
  *     ~ Ceneo (https://www.ceneo.pl/;szukaj-<ean>) — works, parseable HTML
  *     ~ Skapiec (https://www.skapiec.pl/szukaj?szukaj=<ean>) — works
  *
@@ -24,7 +28,8 @@
  *
  *   IMAGE-ONLY FALLBACKS (kick in when name found but image missing)
  *     ~ Bing Images — easier to scrape than Google, looser bot detection
- *     ~ Allegro listing (image from search result) — best for PL products
+ *     ✓ Allegro Search by name — same official API, just queried by the
+ *       product name we already extracted; first images[0].url wins
  *     ! Google Images (kept as final fallback)
  *
  * What changed from the previous implementation:
@@ -42,6 +47,7 @@
  *     full trace exposed via the new `debug` field for production triage.
  */
 import axios, { type AxiosResponse } from "axios";
+import { getUserToken } from "./allegro-auth";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -73,7 +79,7 @@ const RETRY_BACKOFF_MS = [200, 600];
 // Source names that originate from / strongly cover the Polish market.
 // Used by the scorer to nudge PL-specific results above international ones.
 const POLISH_SOURCES: ReadonlySet<string> = new Set([
-  "allegro_listing",
+  "allegro_search",
   "ceneo_listing",
   "skapiec_listing",
   "google_allegro",
@@ -86,6 +92,15 @@ const POLISH_SOURCES: ReadonlySet<string> = new Set([
   "google_amazon_pl",
   "google_empik",
 ]);
+
+// Sources backed by an official, vendor-supported API (vs. HTML scraping).
+// They get a small ranking bonus on the assumption that their data is more
+// stable and consistent than what we can pull out of search-result HTML.
+const TRUSTED_SOURCES: ReadonlySet<string> = new Set([
+  "allegro_search",
+]);
+
+const ALLEGRO_API_BASE = "https://api.allegro.pl";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -571,42 +586,105 @@ async function fetchHtml(
   }
 }
 
-async function searchAllegroListing(
-  ean: string,
+/**
+ * Allegro Search API call against /sale/products?phrase=<phrase>.
+ *
+ * Used for both the EAN lookup in Phase A (`source: "allegro_search"`) and
+ * the by-name image fallback later in the pipeline. Replaces the old HTML
+ * scraping of allegro.pl/listing — same data, but ToS-safe, structured
+ * JSON, no Akamai captchas.
+ *
+ * Auth: the same OAuth user token used by the Catalog step in
+ * routes/allegro.ts. If no token is available (user hasn't authorised
+ * Allegro yet, or the refresh token expired) we silently return null —
+ * letting the rest of the pipeline (Ceneo, Skapiec, OFF, …) carry on.
+ *
+ * Failure modes that should NOT fall back to scraping:
+ *   401 / 403 — propagate as silent miss; user needs to re-authorise.
+ *   5xx / network error — silent miss; the per-source timeout already
+ *   bounds how long we wait.
+ */
+async function searchAllegroByPhrase(
+  phrase: string,
+  sourceTag: string,
+  label: string,
   logs: string[],
   signal: AbortSignal,
 ): Promise<LookupResult | null> {
-  const url = `https://allegro.pl/listing?string=${encodeURIComponent(ean)}`;
-  const html = await fetchHtml(url, "AllegroListing", logs, signal);
-  if (!html) return null;
-  // Allegro listing pages: actual product titles live inside an <a
-  // itemprop="url"><h2>…</h2></a> or in [data-role=offer-title]. Drop the
-  // generic <h2>…</h2> fallback — it picks up section headings on empty
-  // searches.
-  const titleMatch =
-    html.match(/<a[^>]+itemprop=["']url["'][^>]*>\s*<h2[^>]*>([^<]+)<\/h2>/) ||
-    html.match(/<h2[^>]+data-role=["']offer-title["'][^>]*>([^<]+)<\/h2>/);
-  const imgMatch =
-    html.match(/<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/) ||
-    html.match(/<img[^>]+data-src=["'](https:\/\/[^"']*allegroimg[^"']+)["']/) ||
-    html.match(/(https:\/\/a\.allegroimg\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
-  const rawName = titleMatch?.[1]?.trim().replace(/\s+/g, " ") || null;
-  const name = isLikelyProductName(rawName, ean) ? rawName : null;
-  const image = imgMatch?.[1] || null;
-  if (!name && !image) {
-    logs.push("[AllegroListing] No products in HTML");
+  let token: string;
+  try {
+    token = await getUserToken();
+  } catch {
+    logs.push(`[${label}] No Allegro user token available — skipping`);
     return null;
   }
-  logs.push(`[AllegroListing] Found: ${name ?? "<no name>"}${image ? " (image)" : ""}`);
+
+  const url = `${ALLEGRO_API_BASE}/sale/products?phrase=${encodeURIComponent(phrase)}&language=pl-PL`;
+  logs.push(`[${label}] GET ${url}`);
+
+  let resp: AxiosResponse;
+  try {
+    resp = await httpGet(url, {
+      timeoutMs: PER_SOURCE_TIMEOUT_MS,
+      signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.allegro.public.v1+json",
+      },
+    });
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number }; code?: string; message?: string };
+    const status = e.response?.status;
+    if (status === 401 || status === 403) {
+      logs.push(`[${label}] ${status} — token rejected, skipping`);
+      return null;
+    }
+    logs.push(`[${label}] Error: ${status ?? e.code ?? e.message}`);
+    return null;
+  }
+
+  const data = resp.data as {
+    products?: Array<{
+      id?: string;
+      name?: string;
+      category?: { id?: string; name?: string };
+      images?: Array<{ url?: string }>;
+      parameters?: Array<{ name?: string; values?: string[] }>;
+    }>;
+  };
+  const products = data.products ?? [];
+  if (products.length === 0) {
+    logs.push(`[${label}] No products`);
+    return null;
+  }
+
+  const p = products[0];
+  const name = typeof p.name === "string" ? p.name.trim() : null;
+  const image = p.images?.[0]?.url ?? null;
+  const category = p.category?.name ?? null;
+  // Brand is exposed as a parameter named "Marka" (PL) in Allegro's catalog.
+  // Some categories use other field names; pick the first that smells right.
+  const brandParam = (p.parameters ?? []).find((par) => {
+    const n = (par.name ?? "").toLowerCase();
+    return n === "marka" || n === "brand" || n === "producent" || n === "manufacturer";
+  });
+  const brand = brandParam?.values?.[0] ?? null;
+
+  if (!name && !image) {
+    logs.push(`[${label}] First product had neither name nor image`);
+    return null;
+  }
+  logs.push(`[${label}] Found: ${name ?? "<no name>"}${image ? " (image)" : ""}`);
+
   return {
     found: true,
     name,
-    brand: null,
+    brand,
     weight: null,
-    category: null,
+    category,
     image,
     description: null,
-    source: "allegro_listing",
+    source: sourceTag,
     logs,
   };
 }
@@ -781,23 +859,19 @@ async function searchBingImages(
   return fallback ? { image: fallback } : null;
 }
 
-async function searchAllegroImagesByName(
+/**
+ * Image-only fallback: re-query the Allegro Search API by the product name
+ * we already pulled out of another source (OFF / UPCitemDB / …) and use
+ * the first hit's images[0].url. Same official endpoint as the EAN lookup
+ * above, so the same auth + silent-skip rules apply.
+ */
+async function searchAllegroImageByName(
   name: string,
   logs: string[],
   signal: AbortSignal,
 ): Promise<{ image: string } | null> {
-  const url = `https://allegro.pl/listing?string=${encodeURIComponent(name)}`;
-  const html = await fetchHtml(url, "AllegroImg", logs, signal);
-  if (!html) return null;
-  const m =
-    html.match(/<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/) ||
-    html.match(/(https:\/\/a\.allegroimg\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
-  if (!m?.[1]) {
-    logs.push("[AllegroImg] No image in listing");
-    return null;
-  }
-  logs.push(`[AllegroImg] via listing: ${m[1].slice(0, 80)}`);
-  return { image: m[1] };
+  const r = await searchAllegroByPhrase(name, "allegro_search", "AllegroImg", logs, signal);
+  return r?.image ? { image: r.image } : null;
 }
 
 // ── Scoring ──────────────────────────────────────────────────────────────────
@@ -833,6 +907,10 @@ function scoreResult(r: LookupResult, sourceName: string): ScoreOutcome {
   if (POLISH_SOURCES.has(sourceName)) {
     score += 5;
     reasons.push("+5 PL source");
+  }
+  if (TRUSTED_SOURCES.has(sourceName)) {
+    score += 2;
+    reasons.push("+2 trusted source");
   }
   if (r.brand) {
     score += 3;
@@ -870,7 +948,9 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
       searchOpenFactsApi("world.openpetfoodfacts.org", "OpenPetFoodFacts", ean, logs, s),
     ),
     trackSource("upcitemdb", sources, (s) => searchUpcItemdb(ean, logs, s)),
-    trackSource("allegro_listing", sources, (s) => searchAllegroListing(ean, logs, s)),
+    trackSource("allegro_search", sources, (s) =>
+      searchAllegroByPhrase(ean, "allegro_search", "AllegroSearch", logs, s),
+    ),
     trackSource("ceneo_listing", sources, (s) => searchCeneoListing(ean, logs, s)),
     trackSource("skapiec_listing", sources, (s) => searchSkapiecListing(ean, logs, s)),
   ]);
@@ -978,7 +1058,7 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
       const fromAllegro = await trackSource(
         "allegro_images_name",
         sources,
-        (s) => searchAllegroImagesByName(winner.name!, logs, s),
+        (s) => searchAllegroImageByName(winner.name!, logs, s),
       );
       if (fromAllegro?.image) image = fromAllegro.image;
     }

@@ -48547,7 +48547,7 @@ var PER_SOURCE_TIMEOUT_MS = 3e3;
 var PER_SOURCE_TIMEOUT_LONG_MS = 5e3;
 var RETRY_BACKOFF_MS = [200, 600];
 var POLISH_SOURCES = /* @__PURE__ */ new Set([
-  "allegro_listing",
+  "allegro_search",
   "ceneo_listing",
   "skapiec_listing",
   "google_allegro",
@@ -48560,6 +48560,10 @@ var POLISH_SOURCES = /* @__PURE__ */ new Set([
   "google_amazon_pl",
   "google_empik"
 ]);
+var TRUSTED_SOURCES = /* @__PURE__ */ new Set([
+  "allegro_search"
+]);
+var ALLEGRO_API_BASE = "https://api.allegro.pl";
 function eanVariants(ean) {
   const s = ean.replace(/\D/g, "");
   const set = /* @__PURE__ */ new Set([s]);
@@ -48862,29 +48866,65 @@ async function fetchHtml(url2, label, logs, signal, timeoutMs = PER_SOURCE_TIMEO
     return null;
   }
 }
-async function searchAllegroListing(ean, logs, signal) {
-  const url2 = `https://allegro.pl/listing?string=${encodeURIComponent(ean)}`;
-  const html = await fetchHtml(url2, "AllegroListing", logs, signal);
-  if (!html) return null;
-  const titleMatch = html.match(/<a[^>]+itemprop=["']url["'][^>]*>\s*<h2[^>]*>([^<]+)<\/h2>/) || html.match(/<h2[^>]+data-role=["']offer-title["'][^>]*>([^<]+)<\/h2>/);
-  const imgMatch = html.match(/<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/) || html.match(/<img[^>]+data-src=["'](https:\/\/[^"']*allegroimg[^"']+)["']/) || html.match(/(https:\/\/a\.allegroimg\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
-  const rawName = titleMatch?.[1]?.trim().replace(/\s+/g, " ") || null;
-  const name = isLikelyProductName(rawName, ean) ? rawName : null;
-  const image = imgMatch?.[1] || null;
-  if (!name && !image) {
-    logs.push("[AllegroListing] No products in HTML");
+async function searchAllegroByPhrase(phrase, sourceTag, label, logs, signal) {
+  let token;
+  try {
+    token = await getUserToken();
+  } catch {
+    logs.push(`[${label}] No Allegro user token available \u2014 skipping`);
     return null;
   }
-  logs.push(`[AllegroListing] Found: ${name ?? "<no name>"}${image ? " (image)" : ""}`);
+  const url2 = `${ALLEGRO_API_BASE}/sale/products?phrase=${encodeURIComponent(phrase)}&language=pl-PL`;
+  logs.push(`[${label}] GET ${url2}`);
+  let resp;
+  try {
+    resp = await httpGet(url2, {
+      timeoutMs: PER_SOURCE_TIMEOUT_MS,
+      signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.allegro.public.v1+json"
+      }
+    });
+  } catch (err) {
+    const e = err;
+    const status = e.response?.status;
+    if (status === 401 || status === 403) {
+      logs.push(`[${label}] ${status} \u2014 token rejected, skipping`);
+      return null;
+    }
+    logs.push(`[${label}] Error: ${status ?? e.code ?? e.message}`);
+    return null;
+  }
+  const data = resp.data;
+  const products = data.products ?? [];
+  if (products.length === 0) {
+    logs.push(`[${label}] No products`);
+    return null;
+  }
+  const p = products[0];
+  const name = typeof p.name === "string" ? p.name.trim() : null;
+  const image = p.images?.[0]?.url ?? null;
+  const category = p.category?.name ?? null;
+  const brandParam = (p.parameters ?? []).find((par) => {
+    const n = (par.name ?? "").toLowerCase();
+    return n === "marka" || n === "brand" || n === "producent" || n === "manufacturer";
+  });
+  const brand = brandParam?.values?.[0] ?? null;
+  if (!name && !image) {
+    logs.push(`[${label}] First product had neither name nor image`);
+    return null;
+  }
+  logs.push(`[${label}] Found: ${name ?? "<no name>"}${image ? " (image)" : ""}`);
   return {
     found: true,
     name,
-    brand: null,
+    brand,
     weight: null,
-    category: null,
+    category,
     image,
     description: null,
-    source: "allegro_listing",
+    source: sourceTag,
     logs
   };
 }
@@ -48999,17 +49039,9 @@ async function searchBingImages(query, logs, signal) {
   const fallback = extractImageUrl(html, "BingImg", logs);
   return fallback ? { image: fallback } : null;
 }
-async function searchAllegroImagesByName(name, logs, signal) {
-  const url2 = `https://allegro.pl/listing?string=${encodeURIComponent(name)}`;
-  const html = await fetchHtml(url2, "AllegroImg", logs, signal);
-  if (!html) return null;
-  const m = html.match(/<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/) || html.match(/(https:\/\/a\.allegroimg\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
-  if (!m?.[1]) {
-    logs.push("[AllegroImg] No image in listing");
-    return null;
-  }
-  logs.push(`[AllegroImg] via listing: ${m[1].slice(0, 80)}`);
-  return { image: m[1] };
+async function searchAllegroImageByName(name, logs, signal) {
+  const r = await searchAllegroByPhrase(name, "allegro_search", "AllegroImg", logs, signal);
+  return r?.image ? { image: r.image } : null;
 }
 function scoreResult(r, sourceName) {
   let score = 0;
@@ -49027,6 +49059,10 @@ function scoreResult(r, sourceName) {
   if (POLISH_SOURCES.has(sourceName)) {
     score += 5;
     reasons.push("+5 PL source");
+  }
+  if (TRUSTED_SOURCES.has(sourceName)) {
+    score += 2;
+    reasons.push("+2 trusted source");
   }
   if (r.brand) {
     score += 3;
@@ -49059,7 +49095,11 @@ async function lookupEan(ean) {
       (s) => searchOpenFactsApi("world.openpetfoodfacts.org", "OpenPetFoodFacts", ean, logs, s)
     ),
     trackSource("upcitemdb", sources, (s) => searchUpcItemdb(ean, logs, s)),
-    trackSource("allegro_listing", sources, (s) => searchAllegroListing(ean, logs, s)),
+    trackSource(
+      "allegro_search",
+      sources,
+      (s) => searchAllegroByPhrase(ean, "allegro_search", "AllegroSearch", logs, s)
+    ),
     trackSource("ceneo_listing", sources, (s) => searchCeneoListing(ean, logs, s)),
     trackSource("skapiec_listing", sources, (s) => searchSkapiecListing(ean, logs, s))
   ]);
@@ -49135,7 +49175,7 @@ async function lookupEan(ean) {
       const fromAllegro = await trackSource(
         "allegro_images_name",
         sources,
-        (s) => searchAllegroImagesByName(winner.name, logs, s)
+        (s) => searchAllegroImageByName(winner.name, logs, s)
       );
       if (fromAllegro?.image) image = fromAllegro.image;
     }
