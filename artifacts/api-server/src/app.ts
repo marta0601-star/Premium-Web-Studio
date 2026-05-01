@@ -11,6 +11,7 @@ import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs";
 import router from "./routes";
+import oauthPublicRouter from "./routes/oauth-public";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -67,6 +68,14 @@ app.use(
   }),
 );
 
+// ── Public Allegro OAuth router ──────────────────────────────────────────────
+// Mounted BEFORE the /api password gate so /auth/allegro/login and
+// /auth/allegro/callback work even when the user has no app session — the
+// callback comes from allegro.pl as a top-level cross-site redirect and the
+// authorization_code is short-lived (~60 s), so any extra hop through the
+// password form would burn the window.
+app.use(oauthPublicRouter);
+
 // ── /api auth gate ───────────────────────────────────────────────────────────
 // Paths are RELATIVE to the /api mount (Express strips the prefix before the
 // middleware runs), so the whitelist uses /healthz, /auth/login, etc.
@@ -74,7 +83,6 @@ const PUBLIC_API_PATHS = new Set<string>([
   "/healthz",
   "/auth/login",
   "/auth/logout",
-  "/auth/allegro/callback", // Allegro redirects here from external OAuth flow
 ]);
 
 function requireAppAuth(req: Request, res: Response, next: NextFunction): void {

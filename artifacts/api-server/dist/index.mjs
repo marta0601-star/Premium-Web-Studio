@@ -16288,9 +16288,9 @@ var require_object_inspect = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/side-channel-list@1.0.0/node_modules/side-channel-list/index.js
+// ../../node_modules/.pnpm/side-channel-list@1.0.1/node_modules/side-channel-list/index.js
 var require_side_channel_list = __commonJS({
-  "../../node_modules/.pnpm/side-channel-list@1.0.0/node_modules/side-channel-list/index.js"(exports, module) {
+  "../../node_modules/.pnpm/side-channel-list@1.0.1/node_modules/side-channel-list/index.js"(exports, module) {
     "use strict";
     var inspect = require_object_inspect();
     var $TypeError = require_type();
@@ -16350,9 +16350,8 @@ var require_side_channel_list = __commonJS({
           }
         },
         "delete": function(key) {
-          var root = $o && $o.next;
           var deletedNode = listDelete($o, key);
-          if (deletedNode && root && root === deletedNode) {
+          if (deletedNode && $o && !$o.next) {
             $o = void 0;
           }
           return !!deletedNode;
@@ -16835,9 +16834,9 @@ var require_get_proto = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/hasown@2.0.2/node_modules/hasown/index.js
+// ../../node_modules/.pnpm/hasown@2.0.3/node_modules/hasown/index.js
 var require_hasown = __commonJS({
-  "../../node_modules/.pnpm/hasown@2.0.2/node_modules/hasown/index.js"(exports, module) {
+  "../../node_modules/.pnpm/hasown@2.0.3/node_modules/hasown/index.js"(exports, module) {
     "use strict";
     var call = Function.prototype.call;
     var $hasOwn = Object.prototype.hasOwnProperty;
@@ -17368,9 +17367,9 @@ var require_side_channel = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/formats.js
+// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/formats.js
 var require_formats = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/formats.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/formats.js"(exports, module) {
     "use strict";
     var replace = String.prototype.replace;
     var percentTwenties = /%20/g;
@@ -17394,9 +17393,9 @@ var require_formats = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/utils.js
+// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/utils.js
 var require_utils2 = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/utils.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/utils.js"(exports, module) {
     "use strict";
     var formats = require_formats();
     var getSideChannel = require_side_channel();
@@ -17658,9 +17657,9 @@ var require_utils2 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/stringify.js
+// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/stringify.js
 var require_stringify = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/stringify.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/stringify.js"(exports, module) {
     "use strict";
     var getSideChannel = require_side_channel();
     var utils = require_utils2();
@@ -17941,9 +17940,9 @@ var require_stringify = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/parse.js
+// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/parse.js
 var require_parse = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/parse.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/parse.js"(exports, module) {
     "use strict";
     var utils = require_utils2();
     var has = Object.prototype.hasOwnProperty;
@@ -17995,9 +17994,9 @@ var require_parse = __commonJS({
       var limit = options.parameterLimit === Infinity ? void 0 : options.parameterLimit;
       var parts = cleanStr.split(
         options.delimiter,
-        options.throwOnLimitExceeded ? limit + 1 : limit
+        options.throwOnLimitExceeded && typeof limit !== "undefined" ? limit + 1 : limit
       );
-      if (options.throwOnLimitExceeded && parts.length > limit) {
+      if (options.throwOnLimitExceeded && typeof limit !== "undefined" && parts.length > limit) {
         throw new RangeError("Parameter limit exceeded. Only " + limit + " parameter" + (limit === 1 ? "" : "s") + " allowed.");
       }
       var skipIndex = -1;
@@ -18240,9 +18239,9 @@ var require_parse = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/index.js
+// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/index.js
 var require_lib2 = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.0/node_modules/qs/lib/index.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/index.js"(exports, module) {
     "use strict";
     var stringify = require_stringify();
     var parse = require_parse();
@@ -18551,7 +18550,7 @@ var require_finalhandler = __commonJS({
     var encodeUrl = require_encodeurl();
     var escapeHtml = require_escape_html();
     var onFinished = require_on_finished();
-    var parseUrl = require_parseurl();
+    var parseUrl2 = require_parseurl();
     var statuses = require_statuses();
     var isFinished = onFinished.isFinished;
     function createHtmlDocument(message) {
@@ -18624,7 +18623,7 @@ var require_finalhandler = __commonJS({
     }
     function getResourceName(req) {
       try {
-        return parseUrl.original(req).pathname;
+        return parseUrl2.original(req).pathname;
       } catch (e) {
         return "resource";
       }
@@ -18769,14 +18768,14 @@ var require_etag = __commonJS({
   "../../node_modules/.pnpm/etag@1.8.1/node_modules/etag/index.js"(exports, module) {
     "use strict";
     module.exports = etag;
-    var crypto2 = __require("crypto");
+    var crypto4 = __require("crypto");
     var Stats = __require("fs").Stats;
     var toString3 = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash = crypto2.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash = crypto4.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash + '"';
     }
@@ -19846,9 +19845,9 @@ var require_is_promise = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/path-to-regexp@8.3.0/node_modules/path-to-regexp/dist/index.js
+// ../../node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/dist/index.js
 var require_dist = __commonJS({
-  "../../node_modules/.pnpm/path-to-regexp@8.3.0/node_modules/path-to-regexp/dist/index.js"(exports) {
+  "../../node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/dist/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.PathError = exports.TokenData = void 0;
@@ -19861,19 +19860,7 @@ var require_dist = __commonJS({
     var NOOP_VALUE = (value) => value;
     var ID_START = /^[$_\p{ID_Start}]$/u;
     var ID_CONTINUE = /^[$\u200c\u200d\p{ID_Continue}]$/u;
-    var SIMPLE_TOKENS = {
-      // Groups.
-      "{": "{",
-      "}": "}",
-      // Reserved.
-      "(": "(",
-      ")": ")",
-      "[": "[",
-      "]": "]",
-      "+": "+",
-      "?": "?",
-      "!": "!"
-    };
+    var ID = /^[$_\p{ID_Start}][$\u200c\u200d\p{ID_Continue}]*$/u;
     function escapeText(str) {
       return str.replace(/[{}()\[\]+?!:*\\]/g, "\\$&");
     }
@@ -19901,97 +19888,90 @@ var require_dist = __commonJS({
     function parse(str, options = {}) {
       const { encodePath = NOOP_VALUE } = options;
       const chars = [...str];
-      const tokens = [];
       let index = 0;
-      let pos = 0;
-      function name() {
-        let value = "";
-        if (ID_START.test(chars[index])) {
-          do {
-            value += chars[index++];
-          } while (ID_CONTINUE.test(chars[index]));
-        } else if (chars[index] === '"') {
-          let quoteStart = index;
-          while (index++ < chars.length) {
-            if (chars[index] === '"') {
-              index++;
-              quoteStart = 0;
-              break;
-            }
-            if (chars[index] === "\\")
-              index++;
-            value += chars[index];
-          }
-          if (quoteStart) {
-            throw new PathError(`Unterminated quote at index ${quoteStart}`, str);
-          }
-        }
-        if (!value) {
-          throw new PathError(`Missing parameter name at index ${index}`, str);
-        }
-        return value;
-      }
-      while (index < chars.length) {
-        const value = chars[index];
-        const type = SIMPLE_TOKENS[value];
-        if (type) {
-          tokens.push({ type, index: index++, value });
-        } else if (value === "\\") {
-          tokens.push({ type: "escape", index: index++, value: chars[index++] });
-        } else if (value === ":") {
-          tokens.push({ type: "param", index: index++, value: name() });
-        } else if (value === "*") {
-          tokens.push({ type: "wildcard", index: index++, value: name() });
-        } else {
-          tokens.push({ type: "char", index: index++, value });
-        }
-      }
-      tokens.push({ type: "end", index, value: "" });
-      function consumeUntil(endType) {
+      function consumeUntil(end) {
         const output = [];
-        while (true) {
-          const token = tokens[pos++];
-          if (token.type === endType)
-            break;
-          if (token.type === "char" || token.type === "escape") {
-            let path4 = token.value;
-            let cur = tokens[pos];
-            while (cur.type === "char" || cur.type === "escape") {
-              path4 += cur.value;
-              cur = tokens[++pos];
+        let path4 = "";
+        function writePath() {
+          if (!path4)
+            return;
+          output.push({
+            type: "text",
+            value: encodePath(path4)
+          });
+          path4 = "";
+        }
+        while (index < chars.length) {
+          const value = chars[index++];
+          if (value === end) {
+            writePath();
+            return output;
+          }
+          if (value === "\\") {
+            if (index === chars.length) {
+              throw new PathError(`Unexpected end after \\ at index ${index}`, str);
             }
-            output.push({
-              type: "text",
-              value: encodePath(path4)
-            });
+            path4 += chars[index++];
             continue;
           }
-          if (token.type === "param" || token.type === "wildcard") {
-            output.push({
-              type: token.type,
-              name: token.value
-            });
+          if (value === ":" || value === "*") {
+            const type = value === ":" ? "param" : "wildcard";
+            let name = "";
+            if (ID_START.test(chars[index])) {
+              do {
+                name += chars[index++];
+              } while (ID_CONTINUE.test(chars[index]));
+            } else if (chars[index] === '"') {
+              let quoteStart = index;
+              while (index < chars.length) {
+                if (chars[++index] === '"') {
+                  index++;
+                  quoteStart = 0;
+                  break;
+                }
+                if (chars[index] === "\\")
+                  index++;
+                name += chars[index];
+              }
+              if (quoteStart) {
+                throw new PathError(`Unterminated quote at index ${quoteStart}`, str);
+              }
+            }
+            if (!name) {
+              throw new PathError(`Missing parameter name at index ${index}`, str);
+            }
+            writePath();
+            output.push({ type, name });
             continue;
           }
-          if (token.type === "{") {
+          if (value === "{") {
+            writePath();
             output.push({
               type: "group",
               tokens: consumeUntil("}")
             });
             continue;
           }
-          throw new PathError(`Unexpected ${token.type} at index ${token.index}, expected ${endType}`, str);
+          if (value === "}" || value === "(" || value === ")" || value === "[" || value === "]" || value === "+" || value === "?" || value === "!") {
+            throw new PathError(`Unexpected ${value} at index ${index - 1}`, str);
+          }
+          path4 += value;
         }
+        if (end) {
+          throw new PathError(`Unexpected end at index ${index}, expected ${end}`, str);
+        }
+        writePath();
         return output;
       }
-      return new TokenData(consumeUntil("end"), str);
+      return new TokenData(consumeUntil(""), str);
     }
     function compile(path4, options = {}) {
       const { encode: encode3 = encodeURIComponent, delimiter = DEFAULT_DELIMITER } = options;
       const data = typeof path4 === "object" ? path4 : parse(path4, options);
       const fn = tokensToFunction(data.tokens, delimiter, encode3);
       return function path5(params = {}) {
-        const [path6, ...missing] = fn(params);
+        const missing = [];
+        const path6 = fn(params, missing);
         if (missing.length) {
           throw new TypeError(`Missing parameters: ${missing.join(", ")}`);
         }
@@ -20000,55 +19980,61 @@ var require_dist = __commonJS({
     }
     function tokensToFunction(tokens, delimiter, encode3) {
       const encoders = tokens.map((token) => tokenToFunction(token, delimiter, encode3));
-      return (data) => {
-        const result = [""];
+      return (data, missing) => {
+        let result = "";
         for (const encoder of encoders) {
-          const [value, ...extras] = encoder(data);
-          result[0] += value;
-          result.push(...extras);
+          result += encoder(data, missing);
         }
         return result;
       };
     }
     function tokenToFunction(token, delimiter, encode3) {
       if (token.type === "text")
-        return () => [token.value];
+        return () => token.value;
       if (token.type === "group") {
         const fn = tokensToFunction(token.tokens, delimiter, encode3);
-        return (data) => {
-          const [value, ...missing] = fn(data);
-          if (!missing.length)
-            return [value];
-          return [""];
+        return (data, missing) => {
+          const len = missing.length;
+          const value = fn(data, missing);
+          if (missing.length === len)
+            return value;
+          missing.length = len;
+          return "";
         };
       }
       const encodeValue = encode3 || NOOP_VALUE;
       if (token.type === "wildcard" && encode3 !== false) {
-        return (data) => {
+        return (data, missing) => {
           const value = data[token.name];
-          if (value == null)
-            return ["", token.name];
+          if (value == null) {
+            missing.push(token.name);
+            return "";
+          }
           if (!Array.isArray(value) || value.length === 0) {
             throw new TypeError(`Expected "${token.name}" to be a non-empty array`);
           }
-          return [
-            value.map((value2, index) => {
-              if (typeof value2 !== "string") {
-                throw new TypeError(`Expected "${token.name}/${index}" to be a string`);
-              }
-              return encodeValue(value2);
-            }).join(delimiter)
-          ];
+          let result = "";
+          for (let i = 0; i < value.length; i++) {
+            if (typeof value[i] !== "string") {
+              throw new TypeError(`Expected "${token.name}/${i}" to be a string`);
+            }
+            if (i > 0)
+              result += delimiter;
+            result += encodeValue(value[i]);
+          }
+          return result;
         };
       }
-      return (data) => {
+      return (data, missing) => {
         const value = data[token.name];
-        if (value == null)
-          return ["", token.name];
+        if (value == null) {
+          missing.push(token.name);
+          return "";
+        }
         if (typeof value !== "string") {
           throw new TypeError(`Expected "${token.name}" to be a string`);
         }
-        return [encodeValue(value)];
+        return encodeValue(value);
       };
     }
     function match(path4, options = {}) {
@@ -20080,106 +20066,134 @@ var require_dist = __commonJS({
     function pathToRegexp(path4, options = {}) {
       const { delimiter = DEFAULT_DELIMITER, end = true, sensitive = false, trailing = true } = options;
       const keys = [];
-      const flags = sensitive ? "" : "i";
-      const sources = [];
-      for (const input of pathsToArray(path4, [])) {
-        const data = typeof input === "object" ? input : parse(input, options);
-        for (const tokens of flatten(data.tokens, 0, [])) {
-          sources.push(toRegExpSource(tokens, delimiter, keys, data.originalPath));
+      let source = "";
+      let combinations = 0;
+      function process2(path5) {
+        if (Array.isArray(path5)) {
+          for (const p of path5)
+            process2(p);
+          return;
         }
+        const data = typeof path5 === "object" ? path5 : parse(path5, options);
+        flatten(data.tokens, 0, [], (tokens) => {
+          if (combinations >= 256) {
+            throw new PathError("Too many path combinations", data.originalPath);
+          }
+          if (combinations > 0)
+            source += "|";
+          source += toRegExpSource(tokens, delimiter, keys, data.originalPath);
+          combinations++;
+        });
       }
-      let pattern = `^(?:${sources.join("|")})`;
+      process2(path4);
+      let pattern = `^(?:${source})`;
       if (trailing)
-        pattern += `(?:${escape2(delimiter)}$)?`;
-      pattern += end ? "$" : `(?=${escape2(delimiter)}|$)`;
-      const regexp = new RegExp(pattern, flags);
-      return { regexp, keys };
+        pattern += "(?:" + escape2(delimiter) + "$)?";
+      pattern += end ? "$" : "(?=" + escape2(delimiter) + "|$)";
+      return { regexp: new RegExp(pattern, sensitive ? "" : "i"), keys };
     }
-    function pathsToArray(paths, init) {
-      if (Array.isArray(paths)) {
-        for (const p of paths)
-          pathsToArray(p, init);
-      } else {
-        init.push(paths);
-      }
-      return init;
-    }
-    function* flatten(tokens, index, init) {
-      if (index === tokens.length) {
-        return yield init;
-      }
-      const token = tokens[index];
-      if (token.type === "group") {
-        for (const seq of flatten(token.tokens, 0, init.slice())) {
-          yield* flatten(tokens, index + 1, seq);
+    function flatten(tokens, index, result, callback) {
+      while (index < tokens.length) {
+        const token = tokens[index++];
+        if (token.type === "group") {
+          const len = result.length;
+          flatten(token.tokens, 0, result, (seq) => flatten(tokens, index, seq, callback));
+          result.length = len;
+          continue;
         }
-      } else {
-        init.push(token);
+        result.push(token);
       }
-      yield* flatten(tokens, index + 1, init);
+      callback(result);
     }
     function toRegExpSource(tokens, delimiter, keys, originalPath) {
       let result = "";
       let backtrack = "";
-      let isSafeSegmentParam = true;
-      for (const token of tokens) {
+      let wildcardBacktrack = "";
+      let prevCaptureType = 0;
+      let hasSegmentCapture = 0;
+      let index = 0;
+      function hasInSegment(index2, type) {
+        while (index2 < tokens.length) {
+          const token = tokens[index2++];
+          if (token.type === type)
+            return true;
+          if (token.type === "text") {
+            if (token.value.includes(delimiter))
+              break;
+          }
+        }
+        return false;
+      }
+      function peekText(index2) {
+        let result2 = "";
+        while (index2 < tokens.length) {
+          const token = tokens[index2++];
+          if (token.type !== "text")
+            break;
+          result2 += token.value;
+        }
+        return result2;
+      }
+      while (index < tokens.length) {
+        const token = tokens[index++];
         if (token.type === "text") {
           result += escape2(token.value);
           backtrack += token.value;
-          isSafeSegmentParam || (isSafeSegmentParam = token.value.includes(delimiter));
+          if (prevCaptureType === 2)
+            wildcardBacktrack += token.value;
+          if (token.value.includes(delimiter))
+            hasSegmentCapture = 0;
           continue;
         }
         if (token.type === "param" || token.type === "wildcard") {
-          if (!isSafeSegmentParam && !backtrack) {
+          if (prevCaptureType && !backtrack) {
             throw new PathError(`Missing text before "${token.name}" ${token.type}`, originalPath);
           }
           if (token.type === "param") {
-            result += `(${negate(delimiter, isSafeSegmentParam ? "" : backtrack)}+)`;
+            result += hasSegmentCapture & 2 ? `(${negate(delimiter, backtrack)}+)` : hasInSegment(index, "wildcard") ? `(${negate(delimiter, peekText(index))}+)` : hasSegmentCapture & 1 ? `(${negate(delimiter, backtrack)}+|${escape2(backtrack)})` : `(${negate(delimiter, "")}+)`;
+            hasSegmentCapture |= prevCaptureType = 1;
           } else {
-            result += `([\\s\\S]+)`;
+            result += hasSegmentCapture & 2 ? `(${negate(backtrack, "")}+)` : wildcardBacktrack ? `(${negate(wildcardBacktrack, "")}+|${negate(delimiter, "")}+)` : `([^]+)`;
+            wildcardBacktrack = "";
+            hasSegmentCapture |= prevCaptureType = 2;
           }
           keys.push(token);
           backtrack = "";
-          isSafeSegmentParam = false;
           continue;
         }
+        throw new TypeError(`Unknown token type: ${token.type}`);
       }
       return result;
     }
-    function negate(delimiter, backtrack) {
-      if (backtrack.length < 2) {
-        if (delimiter.length < 2)
-          return `[^${escape2(delimiter + backtrack)}]`;
-        return `(?:(?!${escape2(delimiter)})[^${escape2(backtrack)}])`;
-      }
-      if (delimiter.length < 2) {
-        return `(?:(?!${escape2(backtrack)})[^${escape2(delimiter)}])`;
-      }
-      return `(?:(?!${escape2(backtrack)}|${escape2(delimiter)})[\\s\\S])`;
+    function negate(a, b) {
+      if (b.length > a.length)
+        return negate(b, a);
+      if (a === b)
+        b = "";
+      if (b.length > 1)
+        return `(?:(?!${escape2(a)}|${escape2(b)})[^])`;
+      if (a.length > 1)
+        return `(?:(?!${escape2(a)})[^${escape2(b)}])`;
+      return `[^${escape2(a + b)}]`;
     }
-    function stringifyTokens(tokens) {
+    function stringifyTokens(tokens, index) {
       let value = "";
-      let i = 0;
-      function name(value2) {
-        const isSafe = isNameSafe(value2) && isNextNameSafe(tokens[i]);
-        return isSafe ? value2 : JSON.stringify(value2);
-      }
-      while (i < tokens.length) {
-        const token = tokens[i++];
+      while (index < tokens.length) {
+        const token = tokens[index++];
         if (token.type === "text") {
           value += escapeText(token.value);
           continue;
         }
         if (token.type === "group") {
-          value += `{${stringifyTokens(token.tokens)}}`;
+          value += "{" + stringifyTokens(token.tokens, 0) + "}";
           continue;
         }
         if (token.type === "param") {
-          value += `:${name(token.name)}`;
+          value += ":" + stringifyName(token.name, tokens[index]);
           continue;
         }
         if (token.type === "wildcard") {
-          value += `*${name(token.name)}`;
+          value += "*" + stringifyName(token.name, tokens[index]);
           continue;
         }
         throw new TypeError(`Unknown token type: ${token.type}`);
@@ -20187,16 +20201,15 @@ var require_dist = __commonJS({
       return value;
     }
     function stringify(data) {
-      return stringifyTokens(data.tokens);
+      return stringifyTokens(data.tokens, 0);
     }
-    function isNameSafe(name) {
-      const [first, ...rest] = name;
-      return ID_START.test(first) && rest.every((char) => ID_CONTINUE.test(char));
-    }
-    function isNextNameSafe(token) {
-      if (token && token.type === "text")
-        return !ID_CONTINUE.test(token.value[0]);
-      return true;
+    function stringifyName(name, next) {
+      if (!ID.test(name))
+        return JSON.stringify(name);
+      if ((next === null || next === void 0 ? void 0 : next.type) === "text" && ID_CONTINUE.test(next.value[0])) {
+        return JSON.stringify(name);
+      }
+      return name;
     }
   }
 });
@@ -20478,34 +20491,34 @@ var require_router = __commonJS({
     var isPromise = require_is_promise();
     var Layer = require_layer();
     var { METHODS } = __require("node:http");
-    var parseUrl = require_parseurl();
+    var parseUrl2 = require_parseurl();
     var Route = require_route();
     var debug = require_src()("router");
     var deprecate = require_depd()("router");
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router8;
+    module.exports = Router9;
     module.exports.Route = Route;
-    function Router8(options) {
-      if (!(this instanceof Router8)) {
-        return new Router8(options);
+    function Router9(options) {
+      if (!(this instanceof Router9)) {
+        return new Router9(options);
       }
       const opts = options || {};
-      function router8(req, res, next) {
-        router8.handle(req, res, next);
+      function router9(req, res, next) {
+        router9.handle(req, res, next);
       }
-      Object.setPrototypeOf(router8, this);
-      router8.caseSensitive = opts.caseSensitive;
-      router8.mergeParams = opts.mergeParams;
-      router8.params = {};
-      router8.strict = opts.strict;
-      router8.stack = [];
-      return router8;
+      Object.setPrototypeOf(router9, this);
+      router9.caseSensitive = opts.caseSensitive;
+      router9.mergeParams = opts.mergeParams;
+      router9.params = {};
+      router9.strict = opts.strict;
+      router9.stack = [];
+      return router9;
     }
-    Router8.prototype = function() {
+    Router9.prototype = function() {
     };
-    Router8.prototype.param = function param(name, fn) {
+    Router9.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20525,7 +20538,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router8.prototype.handle = function handle(req, res, callback) {
+    Router9.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20652,7 +20665,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router8.prototype.use = function use(handler) {
+    Router9.prototype.use = function use(handler) {
       let offset = 0;
       let path4 = "/";
       if (typeof handler !== "function") {
@@ -20685,7 +20698,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router8.prototype.route = function route(path4) {
+    Router9.prototype.route = function route(path4) {
       const route2 = new Route(path4);
       const layer = new Layer(path4, {
         sensitive: this.caseSensitive,
@@ -20700,7 +20713,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router8.prototype[method] = function(path4) {
+      Router9.prototype[method] = function(path4) {
         const route = this.route(path4);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -20716,7 +20729,7 @@ var require_router = __commonJS({
     }
     function getPathname(req) {
       try {
-        return parseUrl(req).pathname;
+        return parseUrl2(req).pathname;
       } catch (err) {
         return void 0;
       }
@@ -20883,13 +20896,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve2 = __require("node:path").resolve;
     var once = require_once();
-    var Router8 = require_router();
+    var Router9 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router8 = null;
+      var router9 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -20898,13 +20911,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router8 === null) {
-            router8 = new Router8({
+          if (router9 === null) {
+            router9 = new Router9({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router8;
+          return router9;
         }
       });
     };
@@ -20975,15 +20988,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router8 = this.router;
+      var router9 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router8.use(path4, fn2);
+          return router9.use(path4, fn2);
         }
         debug(".use app under %s", path4);
         fn2.mountpath = path4;
         fn2.parent = this;
-        router8.use(path4, function mounted_app(req, res, next) {
+        router9.use(path4, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -22025,16 +22038,14 @@ var require_request = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/content-disposition@1.0.1/node_modules/content-disposition/index.js
+// ../../node_modules/.pnpm/content-disposition@1.1.0/node_modules/content-disposition/index.js
 var require_content_disposition = __commonJS({
-  "../../node_modules/.pnpm/content-disposition@1.0.1/node_modules/content-disposition/index.js"(exports, module) {
+  "../../node_modules/.pnpm/content-disposition@1.1.0/node_modules/content-disposition/index.js"(exports, module) {
     "use strict";
     module.exports = contentDisposition;
     module.exports.parse = parse;
-    var basename = __require("path").basename;
+    var utf8Decoder = new TextDecoder("utf-8");
     var ENCODE_URL_ATTR_CHAR_REGEXP = /[\x00-\x20"'()*,/:;<=>?@[\\\]{}\x7f]/g;
-    var HEX_ESCAPE_REGEXP = /%[0-9A-Fa-f]{2}/;
-    var HEX_ESCAPE_REPLACE_REGEXP = /%([0-9A-Fa-f]{2})/g;
     var NON_LATIN1_REGEXP = /[^\x20-\x7e\xa0-\xff]/g;
     var QESC_REGEXP = /\\([\u0000-\u007f])/g;
     var QUOTE_REGEXP = /([\\"])/g;
@@ -22070,7 +22081,7 @@ var require_content_disposition = __commonJS({
       var isQuotedString = TEXT_REGEXP.test(name);
       var fallbackName = typeof fallback !== "string" ? fallback && getlatin1(name) : basename(fallback);
       var hasFallback = typeof fallbackName === "string" && fallbackName !== name;
-      if (hasFallback || !isQuotedString || HEX_ESCAPE_REGEXP.test(name)) {
+      if (hasFallback || !isQuotedString || hasHexEscape(name)) {
         params["filename*"] = name;
       }
       if (isQuotedString || hasFallback) {
@@ -22097,26 +22108,32 @@ var require_content_disposition = __commonJS({
       return string;
     }
     function decodefield(str) {
-      var match = EXT_VALUE_REGEXP.exec(str);
+      const match = EXT_VALUE_REGEXP.exec(str);
       if (!match) {
         throw new TypeError("invalid extended field value");
       }
-      var charset = match[1].toLowerCase();
-      var encoded = match[2];
-      var value;
-      var binary = encoded.replace(HEX_ESCAPE_REPLACE_REGEXP, pdecode);
+      const charset = match[1].toLowerCase();
+      const encoded = match[2];
       switch (charset) {
-        case "iso-8859-1":
-          value = getlatin1(binary);
-          break;
+        case "iso-8859-1": {
+          const binary = decodeHexEscapes(encoded);
+          return getlatin1(binary);
+        }
         case "utf-8":
-        case "utf8":
-          value = Buffer.from(binary, "binary").toString("utf8");
-          break;
-        default:
-          throw new TypeError("unsupported charset in extended field");
+        case "utf8": {
+          try {
+            return decodeURIComponent(encoded);
+          } catch {
+            const binary = decodeHexEscapes(encoded);
+            const bytes = new Uint8Array(binary.length);
+            for (let idx = 0; idx < binary.length; idx++) {
+              bytes[idx] = binary.charCodeAt(idx);
+            }
+            return utf8Decoder.decode(bytes);
+          }
+        }
       }
-      return value;
+      throw new TypeError("unsupported charset in extended field");
     }
     function getlatin1(val) {
       return String(val).replace(NON_LATIN1_REGEXP, "?");
@@ -22166,9 +22183,6 @@ var require_content_disposition = __commonJS({
       }
       return new ContentDisposition(type, params);
     }
-    function pdecode(str, hex) {
-      return String.fromCharCode(parseInt(hex, 16));
-    }
     function pencode(char) {
       return "%" + String(char).charCodeAt(0).toString(16).toUpperCase();
     }
@@ -22185,23 +22199,68 @@ var require_content_disposition = __commonJS({
       this.type = type;
       this.parameters = parameters;
     }
+    function basename(path4) {
+      const normalized = path4.replaceAll("\\", "/");
+      let end = normalized.length;
+      while (end > 0 && normalized[end - 1] === "/") {
+        end--;
+      }
+      if (end === 0) {
+        return "";
+      }
+      let start = end - 1;
+      while (start >= 0 && normalized[start] !== "/") {
+        start--;
+      }
+      return normalized.slice(start + 1, end);
+    }
+    function isHexDigit(char) {
+      const code = char.charCodeAt(0);
+      return code >= 48 && code <= 57 || // 0-9
+      code >= 65 && code <= 70 || // A-F
+      code >= 97 && code <= 102;
+    }
+    function hasHexEscape(str) {
+      const maxIndex = str.length - 3;
+      let lastIndex = -1;
+      while ((lastIndex = str.indexOf("%", lastIndex + 1)) !== -1 && lastIndex <= maxIndex) {
+        if (isHexDigit(str[lastIndex + 1]) && isHexDigit(str[lastIndex + 2])) {
+          return true;
+        }
+      }
+      return false;
+    }
+    function decodeHexEscapes(str) {
+      const firstEscape = str.indexOf("%");
+      if (firstEscape === -1) return str;
+      let result = str.slice(0, firstEscape);
+      for (let idx = firstEscape; idx < str.length; idx++) {
+        if (str[idx] === "%" && idx + 2 < str.length && isHexDigit(str[idx + 1]) && isHexDigit(str[idx + 2])) {
+          result += String.fromCharCode(Number.parseInt(str[idx + 1] + str[idx + 2], 16));
+          idx += 2;
+        } else {
+          result += str[idx];
+        }
+      }
+      return result;
+    }
   }
 });
 
 // ../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js"(exports) {
-    var crypto2 = __require("crypto");
+    var crypto4 = __require("crypto");
     exports.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto2.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto4.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports.unsign = function(input, secret) {
       if ("string" != typeof input) throw new TypeError("Signed cookie string must be provided.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
       var tentativeValue = input.slice(0, input.lastIndexOf(".")), expectedInput = exports.sign(tentativeValue, secret), expectedBuffer = Buffer.from(expectedInput), inputBuffer = Buffer.from(input);
-      return expectedBuffer.length === inputBuffer.length && crypto2.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
+      return expectedBuffer.length === inputBuffer.length && crypto4.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
     };
   }
 });
@@ -23404,7 +23463,7 @@ var require_serve_static = __commonJS({
     "use strict";
     var encodeUrl = require_encodeurl();
     var escapeHtml = require_escape_html();
-    var parseUrl = require_parseurl();
+    var parseUrl2 = require_parseurl();
     var resolve2 = __require("path").resolve;
     var send = require_send();
     var url2 = __require("url");
@@ -23438,8 +23497,8 @@ var require_serve_static = __commonJS({
           return;
         }
         var forwardError = !fallthrough;
-        var originalUrl = parseUrl.original(req);
-        var path4 = parseUrl(req).pathname;
+        var originalUrl = parseUrl2.original(req);
+        var path4 = parseUrl2(req).pathname;
         if (path4 === "/" && originalUrl.pathname.substr(-1) !== "/") {
           path4 = "";
         }
@@ -23485,7 +23544,7 @@ var require_serve_static = __commonJS({
           this.error(404);
           return;
         }
-        var originalUrl = parseUrl.original(this.req);
+        var originalUrl = parseUrl2.original(this.req);
         originalUrl.path = null;
         originalUrl.pathname = collapseLeadingSlashes(originalUrl.pathname + "/");
         var loc = encodeUrl(url2.format(originalUrl));
@@ -23510,7 +23569,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router8 = require_router();
+    var Router9 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23532,8 +23591,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router8.Route;
-    exports.Router = Router8;
+    exports.Route = Router9.Route;
+    exports.Router = Router9;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -23825,6 +23884,907 @@ var require_lib3 = __commonJS({
       }
       module.exports = middlewareWrapper;
     })();
+  }
+});
+
+// ../../node_modules/.pnpm/safe-buffer@5.2.1/node_modules/safe-buffer/index.js
+var require_safe_buffer = __commonJS({
+  "../../node_modules/.pnpm/safe-buffer@5.2.1/node_modules/safe-buffer/index.js"(exports, module) {
+    var buffer = __require("buffer");
+    var Buffer2 = buffer.Buffer;
+    function copyProps(src, dst) {
+      for (var key in src) {
+        dst[key] = src[key];
+      }
+    }
+    if (Buffer2.from && Buffer2.alloc && Buffer2.allocUnsafe && Buffer2.allocUnsafeSlow) {
+      module.exports = buffer;
+    } else {
+      copyProps(buffer, exports);
+      exports.Buffer = SafeBuffer;
+    }
+    function SafeBuffer(arg, encodingOrOffset, length) {
+      return Buffer2(arg, encodingOrOffset, length);
+    }
+    SafeBuffer.prototype = Object.create(Buffer2.prototype);
+    copyProps(Buffer2, SafeBuffer);
+    SafeBuffer.from = function(arg, encodingOrOffset, length) {
+      if (typeof arg === "number") {
+        throw new TypeError("Argument must not be a number");
+      }
+      return Buffer2(arg, encodingOrOffset, length);
+    };
+    SafeBuffer.alloc = function(size, fill, encoding) {
+      if (typeof size !== "number") {
+        throw new TypeError("Argument must be a number");
+      }
+      var buf = Buffer2(size);
+      if (fill !== void 0) {
+        if (typeof encoding === "string") {
+          buf.fill(fill, encoding);
+        } else {
+          buf.fill(fill);
+        }
+      } else {
+        buf.fill(0);
+      }
+      return buf;
+    };
+    SafeBuffer.allocUnsafe = function(size) {
+      if (typeof size !== "number") {
+        throw new TypeError("Argument must be a number");
+      }
+      return Buffer2(size);
+    };
+    SafeBuffer.allocUnsafeSlow = function(size) {
+      if (typeof size !== "number") {
+        throw new TypeError("Argument must be a number");
+      }
+      return buffer.SlowBuffer(size);
+    };
+  }
+});
+
+// ../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/common.js
+var require_common2 = __commonJS({
+  "../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/common.js"(exports, module) {
+    "use strict";
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce2;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms();
+      Object.keys(env).forEach(function(key) {
+        createDebug[key] = env[key];
+      });
+      createDebug.instances = [];
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        var hash = 0;
+        for (var i = 0; i < namespace.length; i++) {
+          hash = (hash << 5) - hash + namespace.charCodeAt(i);
+          hash |= 0;
+        }
+        return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        var prevTime;
+        function debug() {
+          if (!debug.enabled) {
+            return;
+          }
+          for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+            args[_key] = arguments[_key];
+          }
+          var self2 = debug;
+          var curr = Number(/* @__PURE__ */ new Date());
+          var ms = curr - (prevTime || curr);
+          self2.diff = ms;
+          self2.prev = prevTime;
+          self2.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          var index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
+            if (match === "%%") {
+              return match;
+            }
+            index++;
+            var formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              var val = args[index];
+              match = formatter.call(self2, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self2, args);
+          var logFn = self2.log || createDebug.log;
+          logFn.apply(self2, args);
+        }
+        debug.namespace = namespace;
+        debug.enabled = createDebug.enabled(namespace);
+        debug.useColors = createDebug.useColors();
+        debug.color = selectColor(namespace);
+        debug.destroy = destroy;
+        debug.extend = extend2;
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug);
+        }
+        createDebug.instances.push(debug);
+        return debug;
+      }
+      function destroy() {
+        var index = createDebug.instances.indexOf(this);
+        if (index !== -1) {
+          createDebug.instances.splice(index, 1);
+          return true;
+        }
+        return false;
+      }
+      function extend2(namespace, delimiter) {
+        return createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.names = [];
+        createDebug.skips = [];
+        var i;
+        var split = (typeof namespaces === "string" ? namespaces : "").split(/[\s,]+/);
+        var len = split.length;
+        for (i = 0; i < len; i++) {
+          if (!split[i]) {
+            continue;
+          }
+          namespaces = split[i].replace(/\*/g, ".*?");
+          if (namespaces[0] === "-") {
+            createDebug.skips.push(new RegExp("^" + namespaces.substr(1) + "$"));
+          } else {
+            createDebug.names.push(new RegExp("^" + namespaces + "$"));
+          }
+        }
+        for (i = 0; i < createDebug.instances.length; i++) {
+          var instance = createDebug.instances[i];
+          instance.enabled = createDebug.enabled(instance.namespace);
+        }
+      }
+      function disable() {
+        createDebug.enable("");
+      }
+      function enabled(name) {
+        if (name[name.length - 1] === "*") {
+          return true;
+        }
+        var i;
+        var len;
+        for (i = 0, len = createDebug.skips.length; i < len; i++) {
+          if (createDebug.skips[i].test(name)) {
+            return false;
+          }
+        }
+        for (i = 0, len = createDebug.names.length; i < len; i++) {
+          if (createDebug.names[i].test(name)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce2(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module.exports = setup;
+  }
+});
+
+// ../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/browser.js
+var require_browser2 = __commonJS({
+  "../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/browser.js"(exports, module) {
+    "use strict";
+    function _typeof(obj) {
+      if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") {
+        _typeof = function _typeof2(obj2) {
+          return typeof obj2;
+        };
+      } else {
+        _typeof = function _typeof2(obj2) {
+          return obj2 && typeof Symbol === "function" && obj2.constructor === Symbol && obj2 !== Symbol.prototype ? "symbol" : typeof obj2;
+        };
+      }
+      return _typeof(obj);
+    }
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = localstorage();
+    exports.colors = ["#0000CC", "#0000FF", "#0033CC", "#0033FF", "#0066CC", "#0066FF", "#0099CC", "#0099FF", "#00CC00", "#00CC33", "#00CC66", "#00CC99", "#00CCCC", "#00CCFF", "#3300CC", "#3300FF", "#3333CC", "#3333FF", "#3366CC", "#3366FF", "#3399CC", "#3399FF", "#33CC00", "#33CC33", "#33CC66", "#33CC99", "#33CCCC", "#33CCFF", "#6600CC", "#6600FF", "#6633CC", "#6633FF", "#66CC00", "#66CC33", "#9900CC", "#9900FF", "#9933CC", "#9933FF", "#99CC00", "#99CC33", "#CC0000", "#CC0033", "#CC0066", "#CC0099", "#CC00CC", "#CC00FF", "#CC3300", "#CC3333", "#CC3366", "#CC3399", "#CC33CC", "#CC33FF", "#CC6600", "#CC6633", "#CC9900", "#CC9933", "#CCCC00", "#CCCC33", "#FF0000", "#FF0033", "#FF0066", "#FF0099", "#FF00CC", "#FF00FF", "#FF3300", "#FF3333", "#FF3366", "#FF3399", "#FF33CC", "#FF33FF", "#FF6600", "#FF6633", "#FF9900", "#FF9933", "#FFCC00", "#FFCC33"];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      var c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      var index = 0;
+      var lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, function(match) {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    function log() {
+      var _console;
+      return (typeof console === "undefined" ? "undefined" : _typeof(console)) === "object" && console.log && (_console = console).log.apply(_console, arguments);
+    }
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports.storage.setItem("debug", namespaces);
+        } else {
+          exports.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      var r;
+      try {
+        r = exports.storage.getItem("debug");
+      } catch (error) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module.exports = require_common2()(exports);
+    var formatters = module.exports.formatters;
+    formatters.j = function(v) {
+      try {
+        return JSON.stringify(v);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// ../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/node.js
+var require_node2 = __commonJS({
+  "../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/node.js"(exports, module) {
+    "use strict";
+    var tty = __require("tty");
+    var util4 = __require("util");
+    exports.init = init;
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      supportsColor = __require("supports-color");
+      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+        exports.colors = [20, 21, 26, 27, 32, 33, 38, 39, 40, 41, 42, 43, 44, 45, 56, 57, 62, 63, 68, 69, 74, 75, 76, 77, 78, 79, 80, 81, 92, 93, 98, 99, 112, 113, 128, 129, 134, 135, 148, 149, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 178, 179, 184, 185, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 214, 215, 220, 221];
+      }
+    } catch (error) {
+    }
+    var supportsColor;
+    exports.inspectOpts = Object.keys(process.env).filter(function(key) {
+      return /^debug_/i.test(key);
+    }).reduce(function(obj, key) {
+      var prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, function(_, k) {
+        return k.toUpperCase();
+      });
+      var val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      var name = this.namespace, useColors2 = this.useColors;
+      if (useColors2) {
+        var c = this.color;
+        var colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+        var prefix = "  ".concat(colorCode, ";1m").concat(name, " \x1B[0m");
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log() {
+      return process.stderr.write(util4.format.apply(util4, arguments) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      var keys = Object.keys(exports.inspectOpts);
+      for (var i = 0; i < keys.length; i++) {
+        debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+      }
+    }
+    module.exports = require_common2()(exports);
+    var formatters = module.exports.formatters;
+    formatters.o = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util4.inspect(v, this.inspectOpts).split("\n").map(function(str) {
+        return str.trim();
+      }).join(" ");
+    };
+    formatters.O = function(v) {
+      this.inspectOpts.colors = this.useColors;
+      return util4.inspect(v, this.inspectOpts);
+    };
+  }
+});
+
+// ../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/index.js
+var require_src2 = __commonJS({
+  "../../node_modules/.pnpm/debug@3.2.7/node_modules/debug/src/index.js"(exports, module) {
+    "use strict";
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module.exports = require_browser2();
+    } else {
+      module.exports = require_node2();
+    }
+  }
+});
+
+// ../../node_modules/.pnpm/tsscmp@1.0.6/node_modules/tsscmp/lib/index.js
+var require_lib4 = __commonJS({
+  "../../node_modules/.pnpm/tsscmp@1.0.6/node_modules/tsscmp/lib/index.js"(exports, module) {
+    "use strict";
+    var crypto4 = __require("crypto");
+    function bufferEqual(a, b) {
+      if (a.length !== b.length) {
+        return false;
+      }
+      if (crypto4.timingSafeEqual) {
+        return crypto4.timingSafeEqual(a, b);
+      }
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+          return false;
+        }
+      }
+      return true;
+    }
+    function timeSafeCompare(a, b) {
+      var sa = String(a);
+      var sb = String(b);
+      var key = crypto4.pseudoRandomBytes(32);
+      var ah = crypto4.createHmac("sha256", key).update(sa).digest();
+      var bh = crypto4.createHmac("sha256", key).update(sb).digest();
+      return bufferEqual(ah, bh) && a === b;
+    }
+    module.exports = timeSafeCompare;
+  }
+});
+
+// ../../node_modules/.pnpm/keygrip@1.1.0/node_modules/keygrip/index.js
+var require_keygrip = __commonJS({
+  "../../node_modules/.pnpm/keygrip@1.1.0/node_modules/keygrip/index.js"(exports, module) {
+    "use strict";
+    var compare = require_lib4();
+    var crypto4 = __require("crypto");
+    function Keygrip(keys, algorithm, encoding) {
+      if (!algorithm) algorithm = "sha1";
+      if (!encoding) encoding = "base64";
+      if (!(this instanceof Keygrip)) return new Keygrip(keys, algorithm, encoding);
+      if (!keys || !(0 in keys)) {
+        throw new Error("Keys must be provided.");
+      }
+      function sign(data, key) {
+        return crypto4.createHmac(algorithm, key).update(data).digest(encoding).replace(/\/|\+|=/g, function(x) {
+          return { "/": "_", "+": "-", "=": "" }[x];
+        });
+      }
+      this.sign = function(data) {
+        return sign(data, keys[0]);
+      };
+      this.verify = function(data, digest) {
+        return this.index(data, digest) > -1;
+      };
+      this.index = function(data, digest) {
+        for (var i = 0, l = keys.length; i < l; i++) {
+          if (compare(digest, sign(data, keys[i]))) {
+            return i;
+          }
+        }
+        return -1;
+      };
+    }
+    Keygrip.sign = Keygrip.verify = Keygrip.index = function() {
+      throw new Error("Usage: require('keygrip')(<array-of-keys>)");
+    };
+    module.exports = Keygrip;
+  }
+});
+
+// ../../node_modules/.pnpm/cookies@0.9.1/node_modules/cookies/index.js
+var require_cookies = __commonJS({
+  "../../node_modules/.pnpm/cookies@0.9.1/node_modules/cookies/index.js"(exports, module) {
+    "use strict";
+    var deprecate = require_depd()("cookies");
+    var Keygrip = require_keygrip();
+    var http3 = __require("http");
+    var fieldContentRegExp = /^[\u0009\u0020-\u007e\u0080-\u00ff]+$/;
+    var PRIORITY_REGEXP = /^(?:low|medium|high)$/i;
+    var REGEXP_CACHE = /* @__PURE__ */ Object.create(null);
+    var REGEXP_ESCAPE_CHARS_REGEXP = /[\^$\\.*+?()[\]{}|]/g;
+    var RESTRICTED_NAME_CHARS_REGEXP = /[;=]/;
+    var RESTRICTED_VALUE_CHARS_REGEXP = /[;]/;
+    var SAME_SITE_REGEXP = /^(?:lax|none|strict)$/i;
+    function Cookies(request, response, options) {
+      if (!(this instanceof Cookies)) return new Cookies(request, response, options);
+      this.secure = void 0;
+      this.request = request;
+      this.response = response;
+      if (options) {
+        if (Array.isArray(options)) {
+          deprecate('"keys" argument; provide using options {"keys": [...]}');
+          this.keys = new Keygrip(options);
+        } else if (options.constructor && options.constructor.name === "Keygrip") {
+          deprecate('"keys" argument; provide using options {"keys": keygrip}');
+          this.keys = options;
+        } else {
+          this.keys = Array.isArray(options.keys) ? new Keygrip(options.keys) : options.keys;
+          this.secure = options.secure;
+        }
+      }
+    }
+    Cookies.prototype.get = function(name, opts) {
+      var sigName = name + ".sig", header, match, value, remote, data, index, signed = opts && opts.signed !== void 0 ? opts.signed : !!this.keys;
+      header = this.request.headers["cookie"];
+      if (!header) return;
+      match = header.match(getPattern(name));
+      if (!match) return;
+      value = match[1];
+      if (value[0] === '"') value = value.slice(1, -1);
+      if (!opts || !signed) return value;
+      remote = this.get(sigName);
+      if (!remote) return;
+      data = name + "=" + value;
+      if (!this.keys) throw new Error(".keys required for signed cookies");
+      index = this.keys.index(data, remote);
+      if (index < 0) {
+        this.set(sigName, null, { path: "/", signed: false });
+      } else {
+        index && this.set(sigName, this.keys.sign(data), { signed: false });
+        return value;
+      }
+    };
+    Cookies.prototype.set = function(name, value, opts) {
+      var res = this.response, req = this.request, headers = res.getHeader("Set-Cookie") || [], cookie = new Cookie(name, value, opts), signed = opts && opts.signed !== void 0 ? opts.signed : !!this.keys;
+      var secure = this.secure === void 0 ? req.protocol === "https" || isRequestEncrypted(req) : Boolean(this.secure);
+      if (typeof headers == "string") headers = [headers];
+      if (!secure && opts && opts.secure) {
+        throw new Error("Cannot send secure cookie over unencrypted connection");
+      }
+      cookie.secure = opts && opts.secure !== void 0 ? opts.secure : secure;
+      if (opts && "secureProxy" in opts) {
+        deprecate('"secureProxy" option; use "secure" option, provide "secure" to constructor if needed');
+        cookie.secure = opts.secureProxy;
+      }
+      pushCookie(headers, cookie);
+      if (opts && signed) {
+        if (!this.keys) throw new Error(".keys required for signed cookies");
+        cookie.value = this.keys.sign(cookie.toString());
+        cookie.name += ".sig";
+        pushCookie(headers, cookie);
+      }
+      var setHeader = res.set ? http3.OutgoingMessage.prototype.setHeader : res.setHeader;
+      setHeader.call(res, "Set-Cookie", headers);
+      return this;
+    };
+    function Cookie(name, value, attrs) {
+      if (!fieldContentRegExp.test(name) || RESTRICTED_NAME_CHARS_REGEXP.test(name)) {
+        throw new TypeError("argument name is invalid");
+      }
+      if (value && (!fieldContentRegExp.test(value) || RESTRICTED_VALUE_CHARS_REGEXP.test(value))) {
+        throw new TypeError("argument value is invalid");
+      }
+      this.name = name;
+      this.value = value || "";
+      for (var name in attrs) {
+        this[name] = attrs[name];
+      }
+      if (!this.value) {
+        this.expires = /* @__PURE__ */ new Date(0);
+        this.maxAge = null;
+      }
+      if (this.path && !fieldContentRegExp.test(this.path)) {
+        throw new TypeError("option path is invalid");
+      }
+      if (this.domain && !fieldContentRegExp.test(this.domain)) {
+        throw new TypeError("option domain is invalid");
+      }
+      if (typeof this.maxAge === "number" ? isNaN(this.maxAge) || !isFinite(this.maxAge) : this.maxAge) {
+        throw new TypeError("option maxAge is invalid");
+      }
+      if (this.priority && !PRIORITY_REGEXP.test(this.priority)) {
+        throw new TypeError("option priority is invalid");
+      }
+      if (this.sameSite && this.sameSite !== true && !SAME_SITE_REGEXP.test(this.sameSite)) {
+        throw new TypeError("option sameSite is invalid");
+      }
+    }
+    Cookie.prototype.path = "/";
+    Cookie.prototype.expires = void 0;
+    Cookie.prototype.domain = void 0;
+    Cookie.prototype.httpOnly = true;
+    Cookie.prototype.partitioned = false;
+    Cookie.prototype.priority = void 0;
+    Cookie.prototype.sameSite = false;
+    Cookie.prototype.secure = false;
+    Cookie.prototype.overwrite = false;
+    Cookie.prototype.toString = function() {
+      return this.name + "=" + this.value;
+    };
+    Cookie.prototype.toHeader = function() {
+      var header = this.toString();
+      if (this.maxAge) this.expires = new Date(Date.now() + this.maxAge);
+      if (this.path) header += "; path=" + this.path;
+      if (this.expires) header += "; expires=" + this.expires.toUTCString();
+      if (this.domain) header += "; domain=" + this.domain;
+      if (this.priority) header += "; priority=" + this.priority.toLowerCase();
+      if (this.sameSite) header += "; samesite=" + (this.sameSite === true ? "strict" : this.sameSite.toLowerCase());
+      if (this.secure) header += "; secure";
+      if (this.httpOnly) header += "; httponly";
+      if (this.partitioned) header += "; partitioned";
+      return header;
+    };
+    Object.defineProperty(Cookie.prototype, "maxage", {
+      configurable: true,
+      enumerable: true,
+      get: function() {
+        return this.maxAge;
+      },
+      set: function(val) {
+        return this.maxAge = val;
+      }
+    });
+    deprecate.property(Cookie.prototype, "maxage", '"maxage"; use "maxAge" instead');
+    function getPattern(name) {
+      if (!REGEXP_CACHE[name]) {
+        REGEXP_CACHE[name] = new RegExp(
+          "(?:^|;) *" + name.replace(REGEXP_ESCAPE_CHARS_REGEXP, "\\$&") + "=([^;]*)"
+        );
+      }
+      return REGEXP_CACHE[name];
+    }
+    function isRequestEncrypted(req) {
+      return req.socket ? req.socket.encrypted : req.connection.encrypted;
+    }
+    function pushCookie(headers, cookie) {
+      if (cookie.overwrite) {
+        for (var i = headers.length - 1; i >= 0; i--) {
+          if (headers[i].indexOf(cookie.name + "=") === 0) {
+            headers.splice(i, 1);
+          }
+        }
+      }
+      headers.push(cookie.toHeader());
+    }
+    Cookies.connect = Cookies.express = function(keys) {
+      return function(req, res, next) {
+        req.cookies = res.cookies = new Cookies(req, res, {
+          keys
+        });
+        next();
+      };
+    };
+    Cookies.Cookie = Cookie;
+    module.exports = Cookies;
+  }
+});
+
+// ../../node_modules/.pnpm/on-headers@1.1.0/node_modules/on-headers/index.js
+var require_on_headers = __commonJS({
+  "../../node_modules/.pnpm/on-headers@1.1.0/node_modules/on-headers/index.js"(exports, module) {
+    "use strict";
+    module.exports = onHeaders;
+    var http3 = __require("http");
+    var isAppendHeaderSupported = typeof http3.ServerResponse.prototype.appendHeader === "function";
+    var set1dArray = isAppendHeaderSupported ? set1dArrayWithAppend : set1dArrayWithSet;
+    function createWriteHead(prevWriteHead, listener) {
+      var fired = false;
+      return function writeHead(statusCode) {
+        var args = setWriteHeadHeaders.apply(this, arguments);
+        if (!fired) {
+          fired = true;
+          listener.call(this);
+          if (typeof args[0] === "number" && this.statusCode !== args[0]) {
+            args[0] = this.statusCode;
+            args.length = 1;
+          }
+        }
+        return prevWriteHead.apply(this, args);
+      };
+    }
+    function onHeaders(res, listener) {
+      if (!res) {
+        throw new TypeError("argument res is required");
+      }
+      if (typeof listener !== "function") {
+        throw new TypeError("argument listener must be a function");
+      }
+      res.writeHead = createWriteHead(res.writeHead, listener);
+    }
+    function setHeadersFromArray(res, headers) {
+      if (headers.length && Array.isArray(headers[0])) {
+        set2dArray(res, headers);
+      } else {
+        if (headers.length % 2 !== 0) {
+          throw new TypeError("headers array is malformed");
+        }
+        set1dArray(res, headers);
+      }
+    }
+    function setHeadersFromObject(res, headers) {
+      var keys = Object.keys(headers);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (k) res.setHeader(k, headers[k]);
+      }
+    }
+    function setWriteHeadHeaders(statusCode) {
+      var length = arguments.length;
+      var headerIndex = length > 1 && typeof arguments[1] === "string" ? 2 : 1;
+      var headers = length >= headerIndex + 1 ? arguments[headerIndex] : void 0;
+      this.statusCode = statusCode;
+      if (Array.isArray(headers)) {
+        setHeadersFromArray(this, headers);
+      } else if (headers) {
+        setHeadersFromObject(this, headers);
+      }
+      var args = new Array(Math.min(length, headerIndex));
+      for (var i = 0; i < args.length; i++) {
+        args[i] = arguments[i];
+      }
+      return args;
+    }
+    function set2dArray(res, headers) {
+      var key;
+      for (var i = 0; i < headers.length; i++) {
+        key = headers[i][0];
+        if (key) {
+          res.setHeader(key, headers[i][1]);
+        }
+      }
+    }
+    function set1dArrayWithAppend(res, headers) {
+      for (var i = 0; i < headers.length; i += 2) {
+        res.removeHeader(headers[i]);
+      }
+      var key;
+      for (var j = 0; j < headers.length; j += 2) {
+        key = headers[j];
+        if (key) {
+          res.appendHeader(key, headers[j + 1]);
+        }
+      }
+    }
+    function set1dArrayWithSet(res, headers) {
+      var key;
+      for (var i = 0; i < headers.length; i += 2) {
+        key = headers[i];
+        if (key) {
+          res.setHeader(key, headers[i + 1]);
+        }
+      }
+    }
+  }
+});
+
+// ../../node_modules/.pnpm/cookie-session@2.1.1/node_modules/cookie-session/index.js
+var require_cookie_session = __commonJS({
+  "../../node_modules/.pnpm/cookie-session@2.1.1/node_modules/cookie-session/index.js"(exports, module) {
+    "use strict";
+    var Buffer2 = require_safe_buffer().Buffer;
+    var debug = require_src2()("cookie-session");
+    var Cookies = require_cookies();
+    var onHeaders = require_on_headers();
+    module.exports = cookieSession2;
+    function cookieSession2(options) {
+      var opts = options || {};
+      var name = opts.name || "session";
+      var keys = opts.keys;
+      if (!keys && opts.secret) keys = [opts.secret];
+      if (opts.overwrite == null) opts.overwrite = true;
+      if (opts.httpOnly == null) opts.httpOnly = true;
+      if (opts.signed == null) opts.signed = true;
+      if (!keys && opts.signed) throw new Error(".keys required.");
+      debug("session options %j", opts);
+      return function _cookieSession(req, res, next) {
+        var cookies = new Cookies(req, res, {
+          keys
+        });
+        var sess;
+        req.sessionOptions = Object.create(opts);
+        Object.defineProperty(req, "session", {
+          configurable: true,
+          enumerable: true,
+          get: getSession,
+          set: setSession
+        });
+        function getSession() {
+          if (sess) {
+            return sess;
+          }
+          if (sess === false) {
+            return null;
+          }
+          if (sess = tryGetSession(cookies, name, req.sessionOptions)) {
+            return sess;
+          }
+          debug("new session");
+          return sess = Session.create();
+        }
+        function setSession(val) {
+          if (val == null) {
+            sess = false;
+            return val;
+          }
+          if (typeof val === "object") {
+            sess = Session.create(val);
+            return sess;
+          }
+          throw new Error("req.session can only be set as null or an object.");
+        }
+        onHeaders(res, function setHeaders() {
+          if (sess === void 0) {
+            return;
+          }
+          try {
+            if (sess === false) {
+              debug("remove %s", name);
+              cookies.set(name, "", req.sessionOptions);
+            } else if ((!sess.isNew || sess.isPopulated) && sess.isChanged) {
+              debug("save %s", name);
+              cookies.set(name, Session.serialize(sess), req.sessionOptions);
+            }
+          } catch (e) {
+            debug("error saving session %s", e.message);
+          }
+        });
+        next();
+      };
+    }
+    function Session(ctx, obj) {
+      Object.defineProperty(this, "_ctx", {
+        value: ctx
+      });
+      if (obj) {
+        for (var key in obj) {
+          if (!(key in this)) {
+            this[key] = obj[key];
+          }
+        }
+      }
+    }
+    Session.create = function create(obj) {
+      var ctx = new SessionContext();
+      return new Session(ctx, obj);
+    };
+    Session.deserialize = function deserialize(str) {
+      var ctx = new SessionContext();
+      var obj = decode(str);
+      ctx._new = false;
+      ctx._val = str;
+      return new Session(ctx, obj);
+    };
+    Session.serialize = function serialize(sess) {
+      return encode3(sess);
+    };
+    Object.defineProperty(Session.prototype, "isChanged", {
+      get: function getIsChanged() {
+        return this._ctx._new || this._ctx._val !== Session.serialize(this);
+      }
+    });
+    Object.defineProperty(Session.prototype, "isNew", {
+      get: function getIsNew() {
+        return this._ctx._new;
+      }
+    });
+    Object.defineProperty(Session.prototype, "isPopulated", {
+      get: function getIsPopulated() {
+        return Object.keys(this).length > 0;
+      }
+    });
+    function SessionContext() {
+      this._new = true;
+      this._val = void 0;
+    }
+    function decode(string) {
+      var body = Buffer2.from(string, "base64").toString("utf8");
+      return JSON.parse(body);
+    }
+    function encode3(body) {
+      var str = JSON.stringify(body);
+      return Buffer2.from(str).toString("base64");
+    }
+    function tryGetSession(cookies, name, opts) {
+      var str = cookies.get(name, opts);
+      if (!str) {
+        return void 0;
+      }
+      debug("parse %s", str);
+      try {
+        return Session.deserialize(str);
+      } catch (err) {
+        return void 0;
+      }
+    }
   }
 });
 
@@ -27929,7 +28889,7 @@ var require_pino = __commonJS({
     function pinoBundlerAbsolutePath(p) {
       try {
         const path4 = __require("path");
-        const outputDir = "/home/runner/workspace/artifacts/api-server/dist";
+        const outputDir = "C:\\Users\\pewexer\\Premium-Web-Studio\\artifacts\\api-server\\dist";
         return path4.resolve(outputDir, p.replace(/^\.\//, ""));
       } catch (e) {
         const f = new Function("p", "return new URL(p, import.meta.url).pathname");
@@ -37547,10 +38507,10 @@ var require_form_data = __commonJS({
     var path4 = __require("path");
     var http3 = __require("http");
     var https2 = __require("https");
-    var parseUrl = __require("url").parse;
+    var parseUrl2 = __require("url").parse;
     var fs4 = __require("fs");
     var Stream = __require("stream").Stream;
-    var crypto2 = __require("crypto");
+    var crypto4 = __require("crypto");
     var mime = require_mime_types2();
     var asynckit = require_asynckit();
     var setToStringTag = require_es_set_tostringtag();
@@ -37756,7 +38716,7 @@ var require_form_data = __commonJS({
       return Buffer.concat([dataBuffer, Buffer.from(this._lastBoundary())]);
     };
     FormData3.prototype._generateBoundary = function() {
-      this._boundary = "--------------------------" + crypto2.randomBytes(12).toString("hex");
+      this._boundary = "--------------------------" + crypto4.randomBytes(12).toString("hex");
     };
     FormData3.prototype.getLengthSync = function() {
       var knownLength = this._overheadLength + this._valueLength;
@@ -37800,7 +38760,7 @@ var require_form_data = __commonJS({
       var options;
       var defaults2 = { method: "post" };
       if (typeof params === "string") {
-        params = parseUrl(params);
+        params = parseUrl2(params);
         options = populate({
           port: params.port,
           path: params.pathname,
@@ -37857,84 +38817,14 @@ var require_form_data = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/proxy-from-env@1.1.0/node_modules/proxy-from-env/index.js
-var require_proxy_from_env = __commonJS({
-  "../../node_modules/.pnpm/proxy-from-env@1.1.0/node_modules/proxy-from-env/index.js"(exports) {
-    "use strict";
-    var parseUrl = __require("url").parse;
-    var DEFAULT_PORTS = {
-      ftp: 21,
-      gopher: 70,
-      http: 80,
-      https: 443,
-      ws: 80,
-      wss: 443
-    };
-    var stringEndsWith = String.prototype.endsWith || function(s) {
-      return s.length <= this.length && this.indexOf(s, this.length - s.length) !== -1;
-    };
-    function getProxyForUrl(url2) {
-      var parsedUrl = typeof url2 === "string" ? parseUrl(url2) : url2 || {};
-      var proto = parsedUrl.protocol;
-      var hostname = parsedUrl.host;
-      var port2 = parsedUrl.port;
-      if (typeof hostname !== "string" || !hostname || typeof proto !== "string") {
-        return "";
-      }
-      proto = proto.split(":", 1)[0];
-      hostname = hostname.replace(/:\d*$/, "");
-      port2 = parseInt(port2) || DEFAULT_PORTS[proto] || 0;
-      if (!shouldProxy(hostname, port2)) {
-        return "";
-      }
-      var proxy = getEnv("npm_config_" + proto + "_proxy") || getEnv(proto + "_proxy") || getEnv("npm_config_proxy") || getEnv("all_proxy");
-      if (proxy && proxy.indexOf("://") === -1) {
-        proxy = proto + "://" + proxy;
-      }
-      return proxy;
-    }
-    function shouldProxy(hostname, port2) {
-      var NO_PROXY = (getEnv("npm_config_no_proxy") || getEnv("no_proxy")).toLowerCase();
-      if (!NO_PROXY) {
-        return true;
-      }
-      if (NO_PROXY === "*") {
-        return false;
-      }
-      return NO_PROXY.split(/[,\s]/).every(function(proxy) {
-        if (!proxy) {
-          return true;
-        }
-        var parsedProxy = proxy.match(/^(.+):(\d+)$/);
-        var parsedProxyHostname = parsedProxy ? parsedProxy[1] : proxy;
-        var parsedProxyPort = parsedProxy ? parseInt(parsedProxy[2]) : 0;
-        if (parsedProxyPort && parsedProxyPort !== port2) {
-          return true;
-        }
-        if (!/^[.*]/.test(parsedProxyHostname)) {
-          return hostname !== parsedProxyHostname;
-        }
-        if (parsedProxyHostname.charAt(0) === "*") {
-          parsedProxyHostname = parsedProxyHostname.slice(1);
-        }
-        return !stringEndsWith.call(hostname, parsedProxyHostname);
-      });
-    }
-    function getEnv(key) {
-      return process.env[key.toLowerCase()] || process.env[key.toUpperCase()] || "";
-    }
-    exports.getProxyForUrl = getProxyForUrl;
-  }
-});
-
-// ../../node_modules/.pnpm/follow-redirects@1.15.11/node_modules/follow-redirects/debug.js
+// ../../node_modules/.pnpm/follow-redirects@1.16.0/node_modules/follow-redirects/debug.js
 var require_debug = __commonJS({
-  "../../node_modules/.pnpm/follow-redirects@1.15.11/node_modules/follow-redirects/debug.js"(exports, module) {
+  "../../node_modules/.pnpm/follow-redirects@1.16.0/node_modules/follow-redirects/debug.js"(exports, module) {
     var debug;
     module.exports = function() {
       if (!debug) {
         try {
-          debug = require_src()("follow-redirects");
+          debug = require_src2()("follow-redirects");
         } catch (error) {
         }
         if (typeof debug !== "function") {
@@ -37947,9 +38837,9 @@ var require_debug = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/follow-redirects@1.15.11/node_modules/follow-redirects/index.js
+// ../../node_modules/.pnpm/follow-redirects@1.16.0/node_modules/follow-redirects/index.js
 var require_follow_redirects = __commonJS({
-  "../../node_modules/.pnpm/follow-redirects@1.15.11/node_modules/follow-redirects/index.js"(exports, module) {
+  "../../node_modules/.pnpm/follow-redirects@1.16.0/node_modules/follow-redirects/index.js"(exports, module) {
     var url2 = __require("url");
     var URL2 = url2.URL;
     var http3 = __require("http");
@@ -37971,6 +38861,11 @@ var require_follow_redirects = __commonJS({
     } catch (error) {
       useNativeURL = error.code === "ERR_INVALID_URL";
     }
+    var sensitiveHeaders = [
+      "Authorization",
+      "Proxy-Authorization",
+      "Cookie"
+    ];
     var preservedUrlFields = [
       "auth",
       "host",
@@ -38035,6 +38930,7 @@ var require_follow_redirects = __commonJS({
           self2.emit("error", cause instanceof RedirectionError ? cause : new RedirectionError({ cause }));
         }
       };
+      this._headerFilter = new RegExp("^(?:" + sensitiveHeaders.concat(options.sensitiveHeaders).map(escapeRegex).join("|") + ")$", "i");
       this._performRequest();
     }
     RedirectableRequest.prototype = Object.create(Writable.prototype);
@@ -38172,6 +39068,9 @@ var require_follow_redirects = __commonJS({
       if (!options.headers) {
         options.headers = {};
       }
+      if (!isArray2(options.sensitiveHeaders)) {
+        options.sensitiveHeaders = [];
+      }
       if (options.host) {
         if (!options.hostname) {
           options.hostname = options.host;
@@ -38269,7 +39168,7 @@ var require_follow_redirects = __commonJS({
         removeMatchingHeaders(/^content-/i, this._options.headers);
       }
       var currentHostHeader = removeMatchingHeaders(/^host$/i, this._options.headers);
-      var currentUrlParts = parseUrl(this._currentUrl);
+      var currentUrlParts = parseUrl2(this._currentUrl);
       var currentHost = currentHostHeader || currentUrlParts.host;
       var currentUrl = /^\w+:/.test(location) ? this._currentUrl : url2.format(Object.assign(currentUrlParts, { host: currentHost }));
       var redirectUrl = resolveUrl(location, currentUrl);
@@ -38277,7 +39176,7 @@ var require_follow_redirects = __commonJS({
       this._isRedirect = true;
       spreadUrlObject(redirectUrl, this._options);
       if (redirectUrl.protocol !== currentUrlParts.protocol && redirectUrl.protocol !== "https:" || redirectUrl.host !== currentHost && !isSubdomain(redirectUrl.host, currentHost)) {
-        removeMatchingHeaders(/^(?:(?:proxy-)?authorization|cookie)$/i, this._options.headers);
+        removeMatchingHeaders(this._headerFilter, this._options.headers);
       }
       if (isFunction3(beforeRedirect)) {
         var responseDetails = {
@@ -38308,7 +39207,7 @@ var require_follow_redirects = __commonJS({
           if (isURL(input)) {
             input = spreadUrlObject(input);
           } else if (isString2(input)) {
-            input = spreadUrlObject(parseUrl(input));
+            input = spreadUrlObject(parseUrl2(input));
           } else {
             callback = options;
             options = validateUrl(input);
@@ -38344,7 +39243,7 @@ var require_follow_redirects = __commonJS({
     }
     function noop2() {
     }
-    function parseUrl(input) {
+    function parseUrl2(input) {
       var parsed;
       if (useNativeURL) {
         parsed = new URL2(input);
@@ -38357,7 +39256,7 @@ var require_follow_redirects = __commonJS({
       return parsed;
     }
     function resolveUrl(relative, base) {
-      return useNativeURL ? new URL2(relative, base) : parseUrl(url2.resolve(base, relative));
+      return useNativeURL ? new URL2(relative, base) : parseUrl2(url2.resolve(base, relative));
     }
     function validateUrl(input) {
       if (/^\[/.test(input.hostname) && !/^\[[:0-9a-f]+\]$/i.test(input.hostname)) {
@@ -38426,6 +39325,9 @@ var require_follow_redirects = __commonJS({
       var dot = subdomain.length - domain.length - 1;
       return dot > 0 && subdomain[dot] === "." && subdomain.endsWith(domain);
     }
+    function isArray2(value) {
+      return value instanceof Array;
+    }
     function isString2(value) {
       return typeof value === "string" || value instanceof String;
     }
@@ -38438,15 +39340,20 @@ var require_follow_redirects = __commonJS({
     function isURL(value) {
       return URL2 && value instanceof URL2;
     }
+    function escapeRegex(regex) {
+      return regex.replace(/[\]\\/()*+?.$]/g, "\\$&");
+    }
     module.exports = wrap({ http: http3, https: https2 });
     module.exports.wrap = wrap;
   }
 });
 
 // src/app.ts
-var import_express8 = __toESM(require_express2(), 1);
+var import_express9 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
+var import_cookie_session = __toESM(require_cookie_session(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
+import crypto3 from "crypto";
 import path3 from "path";
 import fs3 from "fs";
 
@@ -42428,14 +43335,14 @@ var health_default = router;
 // src/routes/allegro.ts
 var import_express2 = __toESM(require_express2(), 1);
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/bind.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/bind.js
 function bind(fn, thisArg) {
   return function wrap() {
     return fn.apply(thisArg, arguments);
   };
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/utils.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/utils.js
 var { toString } = Object.prototype;
 var { getPrototypeOf } = Object;
 var { iterator, toStringTag } = Symbol;
@@ -42504,9 +43411,14 @@ function getGlobal() {
 var G = getGlobal();
 var FormDataCtor = typeof G.FormData !== "undefined" ? G.FormData : void 0;
 var isFormData = (thing) => {
-  let kind;
-  return thing && (FormDataCtor && thing instanceof FormDataCtor || isFunction(thing.append) && ((kind = kindOf(thing)) === "formdata" || // detect form-data instance
-  kind === "object" && isFunction(thing.toString) && thing.toString() === "[object FormData]"));
+  if (!thing) return false;
+  if (FormDataCtor && thing instanceof FormDataCtor) return true;
+  const proto = getPrototypeOf(thing);
+  if (!proto || proto === Object.prototype) return false;
+  if (!isFunction(thing.append)) return false;
+  const kind = kindOf(thing);
+  return kind === "formdata" || // detect form-data instance
+  kind === "object" && isFunction(thing.toString) && thing.toString() === "[object FormData]";
 };
 var isURLSearchParams = kindOfTest("URLSearchParams");
 var [isReadableStream, isRequest, isResponse, isHeaders] = [
@@ -42862,7 +43774,7 @@ var utils_default = {
   isIterable
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/AxiosError.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/AxiosError.js
 var AxiosError = class _AxiosError extends Error {
   static from(error, code, config, request, response, customProps) {
     const axiosError = new _AxiosError(error.message, code || error.code, config, request, response);
@@ -42935,13 +43847,14 @@ AxiosError.ERR_BAD_REQUEST = "ERR_BAD_REQUEST";
 AxiosError.ERR_CANCELED = "ERR_CANCELED";
 AxiosError.ERR_NOT_SUPPORT = "ERR_NOT_SUPPORT";
 AxiosError.ERR_INVALID_URL = "ERR_INVALID_URL";
+AxiosError.ERR_FORM_DATA_DEPTH_EXCEEDED = "ERR_FORM_DATA_DEPTH_EXCEEDED";
 var AxiosError_default = AxiosError;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/platform/node/classes/FormData.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/node/classes/FormData.js
 var import_form_data = __toESM(require_form_data(), 1);
 var FormData_default = import_form_data.default;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/toFormData.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/toFormData.js
 function isVisitable(thing) {
   return utils_default.isPlainObject(thing) || utils_default.isArray(thing);
 }
@@ -42983,6 +43896,7 @@ function toFormData(obj, formData, options) {
   const dots = options.dots;
   const indexes = options.indexes;
   const _Blob = options.Blob || typeof Blob !== "undefined" && Blob;
+  const maxDepth = options.maxDepth === void 0 ? 100 : options.maxDepth;
   const useBlob = _Blob && utils_default.isSpecCompliantForm(formData);
   if (!utils_default.isFunction(visitor)) {
     throw new TypeError("visitor must be a function");
@@ -43037,8 +43951,14 @@ function toFormData(obj, formData, options) {
     convertValue,
     isVisitable
   });
-  function build(value, path4) {
+  function build(value, path4, depth = 0) {
     if (utils_default.isUndefined(value)) return;
+    if (depth > maxDepth) {
+      throw new AxiosError_default(
+        "Object is too deeply nested (" + depth + " levels). Max depth: " + maxDepth,
+        AxiosError_default.ERR_FORM_DATA_DEPTH_EXCEEDED
+      );
+    }
     if (stack.indexOf(value) !== -1) {
       throw Error("Circular reference detected in " + path4.join("."));
     }
@@ -43046,7 +43966,7 @@ function toFormData(obj, formData, options) {
     utils_default.forEach(value, function each(el, key) {
       const result = !(utils_default.isUndefined(el) || el === null) && visitor.call(formData, el, utils_default.isString(key) ? key.trim() : key, path4, exposedHelpers);
       if (result === true) {
-        build(el, path4 ? path4.concat(key) : [key]);
+        build(el, path4 ? path4.concat(key) : [key], depth + 1);
       }
     });
     stack.pop();
@@ -43059,7 +43979,7 @@ function toFormData(obj, formData, options) {
 }
 var toFormData_default = toFormData;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/AxiosURLSearchParams.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/AxiosURLSearchParams.js
 function encode(str) {
   const charMap = {
     "!": "%21",
@@ -43067,10 +43987,9 @@ function encode(str) {
     "(": "%28",
     ")": "%29",
     "~": "%7E",
-    "%20": "+",
-    "%00": "\0"
+    "%20": "+"
   };
-  return encodeURIComponent(str).replace(/[!'()~]|%20|%00/g, function replacer(match) {
+  return encodeURIComponent(str).replace(/[!'()~]|%20/g, function replacer(match) {
     return charMap[match];
   });
 }
@@ -43092,7 +44011,7 @@ prototype.toString = function toString2(encoder) {
 };
 var AxiosURLSearchParams_default = AxiosURLSearchParams;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/buildURL.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/buildURL.js
 function encode2(val) {
   return encodeURIComponent(val).replace(/%3A/gi, ":").replace(/%24/g, "$").replace(/%2C/gi, ",").replace(/%20/g, "+");
 }
@@ -43121,7 +44040,7 @@ function buildURL(url2, params, options) {
   return url2;
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/InterceptorManager.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/InterceptorManager.js
 var InterceptorManager = class {
   constructor() {
     this.handlers = [];
@@ -43186,7 +44105,7 @@ var InterceptorManager = class {
 };
 var InterceptorManager_default = InterceptorManager;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/defaults/transitional.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/defaults/transitional.js
 var transitional_default = {
   silentJSONParsing: true,
   forcedJSONParsing: true,
@@ -43194,14 +44113,14 @@ var transitional_default = {
   legacyInterceptorReqResOrdering: true
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/platform/node/index.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/node/index.js
 import crypto from "crypto";
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/platform/node/classes/URLSearchParams.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/node/classes/URLSearchParams.js
 import url from "url";
 var URLSearchParams_default = url.URLSearchParams;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/platform/node/index.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/node/index.js
 var ALPHA = "abcdefghijklmnopqrstuvwxyz";
 var DIGIT = "0123456789";
 var ALPHABET = {
@@ -43231,7 +44150,7 @@ var node_default = {
   protocols: ["http", "https", "file", "data"]
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/platform/common/utils.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/common/utils.js
 var utils_exports = {};
 __export(utils_exports, {
   hasBrowserEnv: () => hasBrowserEnv,
@@ -43249,13 +44168,13 @@ var hasStandardBrowserWebWorkerEnv = (() => {
 })();
 var origin = hasBrowserEnv && window.location.href || "http://localhost";
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/platform/index.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/platform/index.js
 var platform_default = {
   ...utils_exports,
   ...node_default
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/toURLEncodedForm.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/toURLEncodedForm.js
 function toURLEncodedForm(data, options) {
   return toFormData_default(data, new platform_default.classes.URLSearchParams(), {
     visitor: function(value, key, path4, helpers) {
@@ -43269,7 +44188,7 @@ function toURLEncodedForm(data, options) {
   });
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/formDataToJSON.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/formDataToJSON.js
 function parsePropPath(name) {
   return utils_default.matchAll(/\w+|\[(\w*)]/g, name).map((match) => {
     return match[0] === "[]" ? "" : match[1] || match[0];
@@ -43296,7 +44215,7 @@ function formDataToJSON(formData) {
     name = !name && utils_default.isArray(target) ? target.length : name;
     if (isLast) {
       if (utils_default.hasOwnProp(target, name)) {
-        target[name] = [target[name], value];
+        target[name] = utils_default.isArray(target[name]) ? target[name].concat(value) : [target[name], value];
       } else {
         target[name] = value;
       }
@@ -43322,7 +44241,8 @@ function formDataToJSON(formData) {
 }
 var formDataToJSON_default = formDataToJSON;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/defaults/index.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/defaults/index.js
+var own = (obj, key) => obj != null && utils_default.hasOwnProp(obj, key) ? obj[key] : void 0;
 function stringifySafely(rawValue, parser, encoder) {
   if (utils_default.isString(rawValue)) {
     try {
@@ -43363,15 +44283,17 @@ var defaults = {
       }
       let isFileList2;
       if (isObjectPayload) {
+        const formSerializer = own(this, "formSerializer");
         if (contentType.indexOf("application/x-www-form-urlencoded") > -1) {
-          return toURLEncodedForm(data, this.formSerializer).toString();
+          return toURLEncodedForm(data, formSerializer).toString();
         }
         if ((isFileList2 = utils_default.isFileList(data)) || contentType.indexOf("multipart/form-data") > -1) {
-          const _FormData = this.env && this.env.FormData;
+          const env = own(this, "env");
+          const _FormData = env && env.FormData;
           return toFormData_default(
             isFileList2 ? { "files[]": data } : data,
             _FormData && new _FormData(),
-            this.formSerializer
+            formSerializer
           );
         }
       }
@@ -43384,21 +44306,22 @@ var defaults = {
   ],
   transformResponse: [
     function transformResponse(data) {
-      const transitional2 = this.transitional || defaults.transitional;
+      const transitional2 = own(this, "transitional") || defaults.transitional;
       const forcedJSONParsing = transitional2 && transitional2.forcedJSONParsing;
-      const JSONRequested = this.responseType === "json";
+      const responseType = own(this, "responseType");
+      const JSONRequested = responseType === "json";
       if (utils_default.isResponse(data) || utils_default.isReadableStream(data)) {
         return data;
       }
-      if (data && utils_default.isString(data) && (forcedJSONParsing && !this.responseType || JSONRequested)) {
+      if (data && utils_default.isString(data) && (forcedJSONParsing && !responseType || JSONRequested)) {
         const silentJSONParsing = transitional2 && transitional2.silentJSONParsing;
         const strictJSONParsing = !silentJSONParsing && JSONRequested;
         try {
-          return JSON.parse(data, this.parseReviver);
+          return JSON.parse(data, own(this, "parseReviver"));
         } catch (e) {
           if (strictJSONParsing) {
             if (e.name === "SyntaxError") {
-              throw AxiosError_default.from(e, AxiosError_default.ERR_BAD_RESPONSE, this, null, this.response);
+              throw AxiosError_default.from(e, AxiosError_default.ERR_BAD_RESPONSE, this, null, own(this, "response"));
             }
             throw e;
           }
@@ -43435,7 +44358,7 @@ utils_default.forEach(["delete", "get", "head", "post", "put", "patch"], (method
 });
 var defaults_default = defaults;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/parseHeaders.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/parseHeaders.js
 var ignoreDuplicateOf = utils_default.toObjectSet([
   "age",
   "authorization",
@@ -43480,16 +44403,39 @@ var parseHeaders_default = (rawHeaders) => {
   return parsed;
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/AxiosHeaders.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/AxiosHeaders.js
 var $internals = /* @__PURE__ */ Symbol("internals");
+var INVALID_HEADER_VALUE_CHARS_RE = /[^\x09\x20-\x7E\x80-\xFF]/g;
+function trimSPorHTAB(str) {
+  let start = 0;
+  let end = str.length;
+  while (start < end) {
+    const code = str.charCodeAt(start);
+    if (code !== 9 && code !== 32) {
+      break;
+    }
+    start += 1;
+  }
+  while (end > start) {
+    const code = str.charCodeAt(end - 1);
+    if (code !== 9 && code !== 32) {
+      break;
+    }
+    end -= 1;
+  }
+  return start === 0 && end === str.length ? str : str.slice(start, end);
+}
 function normalizeHeader(header) {
   return header && String(header).trim().toLowerCase();
+}
+function sanitizeHeaderValue(str) {
+  return trimSPorHTAB(str.replace(INVALID_HEADER_VALUE_CHARS_RE, ""));
 }
 function normalizeValue(value) {
   if (value === false || value == null) {
     return value;
   }
-  return utils_default.isArray(value) ? value.map(normalizeValue) : String(value);
+  return utils_default.isArray(value) ? value.map(normalizeValue) : sanitizeHeaderValue(String(value));
 }
 function parseTokens(str) {
   const tokens = /* @__PURE__ */ Object.create(null);
@@ -43716,7 +44662,7 @@ utils_default.reduceDescriptors(AxiosHeaders.prototype, ({ value }, key) => {
 utils_default.freezeMethods(AxiosHeaders);
 var AxiosHeaders_default = AxiosHeaders;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/transformData.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/transformData.js
 function transformData(fns, response) {
   const config = this || defaults_default;
   const context = response || config;
@@ -43729,12 +44675,12 @@ function transformData(fns, response) {
   return data;
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/cancel/isCancel.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/cancel/isCancel.js
 function isCancel(value) {
   return !!(value && value.__CANCEL__);
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/cancel/CanceledError.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/cancel/CanceledError.js
 var CanceledError = class extends AxiosError_default {
   /**
    * A `CanceledError` is an object that is thrown when an operation is canceled.
@@ -43753,7 +44699,7 @@ var CanceledError = class extends AxiosError_default {
 };
 var CanceledError_default = CanceledError;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/settle.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/settle.js
 function settle(resolve2, reject, response) {
   const validateStatus2 = response.config.validateStatus;
   if (!response.status || !validateStatus2 || validateStatus2(response.status)) {
@@ -43771,7 +44717,7 @@ function settle(resolve2, reject, response) {
   }
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/isAbsoluteURL.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/isAbsoluteURL.js
 function isAbsoluteURL(url2) {
   if (typeof url2 !== "string") {
     return false;
@@ -43779,39 +44725,106 @@ function isAbsoluteURL(url2) {
   return /^([a-z][a-z\d+\-.]*:)?\/\//i.test(url2);
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/combineURLs.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/combineURLs.js
 function combineURLs(baseURL, relativeURL) {
   return relativeURL ? baseURL.replace(/\/?\/$/, "") + "/" + relativeURL.replace(/^\/+/, "") : baseURL;
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/buildFullPath.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/buildFullPath.js
 function buildFullPath(baseURL, requestedURL, allowAbsoluteUrls) {
   let isRelativeUrl = !isAbsoluteURL(requestedURL);
-  if (baseURL && (isRelativeUrl || allowAbsoluteUrls == false)) {
+  if (baseURL && (isRelativeUrl || allowAbsoluteUrls === false)) {
     return combineURLs(baseURL, requestedURL);
   }
   return requestedURL;
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/adapters/http.js
-var import_proxy_from_env = __toESM(require_proxy_from_env(), 1);
+// ../../node_modules/.pnpm/proxy-from-env@2.1.0/node_modules/proxy-from-env/index.js
+var DEFAULT_PORTS = {
+  ftp: 21,
+  gopher: 70,
+  http: 80,
+  https: 443,
+  ws: 80,
+  wss: 443
+};
+function parseUrl(urlString) {
+  try {
+    return new URL(urlString);
+  } catch {
+    return null;
+  }
+}
+function getProxyForUrl(url2) {
+  var parsedUrl = (typeof url2 === "string" ? parseUrl(url2) : url2) || {};
+  var proto = parsedUrl.protocol;
+  var hostname = parsedUrl.host;
+  var port2 = parsedUrl.port;
+  if (typeof hostname !== "string" || !hostname || typeof proto !== "string") {
+    return "";
+  }
+  proto = proto.split(":", 1)[0];
+  hostname = hostname.replace(/:\d*$/, "");
+  port2 = parseInt(port2) || DEFAULT_PORTS[proto] || 0;
+  if (!shouldProxy(hostname, port2)) {
+    return "";
+  }
+  var proxy = getEnv(proto + "_proxy") || getEnv("all_proxy");
+  if (proxy && proxy.indexOf("://") === -1) {
+    proxy = proto + "://" + proxy;
+  }
+  return proxy;
+}
+function shouldProxy(hostname, port2) {
+  var NO_PROXY = getEnv("no_proxy").toLowerCase();
+  if (!NO_PROXY) {
+    return true;
+  }
+  if (NO_PROXY === "*") {
+    return false;
+  }
+  return NO_PROXY.split(/[,\s]/).every(function(proxy) {
+    if (!proxy) {
+      return true;
+    }
+    var parsedProxy = proxy.match(/^(.+):(\d+)$/);
+    var parsedProxyHostname = parsedProxy ? parsedProxy[1] : proxy;
+    var parsedProxyPort = parsedProxy ? parseInt(parsedProxy[2]) : 0;
+    if (parsedProxyPort && parsedProxyPort !== port2) {
+      return true;
+    }
+    if (!/^[.*]/.test(parsedProxyHostname)) {
+      return hostname !== parsedProxyHostname;
+    }
+    if (parsedProxyHostname.charAt(0) === "*") {
+      parsedProxyHostname = parsedProxyHostname.slice(1);
+    }
+    return !hostname.endsWith(parsedProxyHostname);
+  });
+}
+function getEnv(key) {
+  return process.env[key.toLowerCase()] || process.env[key.toUpperCase()] || "";
+}
+
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/adapters/http.js
 var import_follow_redirects = __toESM(require_follow_redirects(), 1);
 import http from "http";
 import https from "https";
 import http2 from "http2";
 import util3 from "util";
+import { resolve as resolvePath } from "path";
 import zlib from "zlib";
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/env/data.js
-var VERSION = "1.13.6";
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/env/data.js
+var VERSION = "1.15.2";
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/parseProtocol.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/parseProtocol.js
 function parseProtocol(url2) {
   const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url2);
   return match && match[1] || "";
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/fromDataURI.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/fromDataURI.js
 var DATA_URL_PATTERN = /^(?:([^;]+);)?(?:[^;]+;)?(base64|),([\s\S]*)$/;
 function fromDataURI(uri, asBlob, options) {
   const _Blob = options && options.Blob || platform_default.classes.Blob;
@@ -43840,10 +44853,10 @@ function fromDataURI(uri, asBlob, options) {
   throw new AxiosError_default("Unsupported protocol " + protocol, AxiosError_default.ERR_NOT_SUPPORT);
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/adapters/http.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/adapters/http.js
 import stream3 from "stream";
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/AxiosTransformStream.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/AxiosTransformStream.js
 import stream from "stream";
 var kInternals = /* @__PURE__ */ Symbol("internals");
 var AxiosTransformStream = class extends stream.Transform {
@@ -43966,14 +44979,14 @@ var AxiosTransformStream = class extends stream.Transform {
 };
 var AxiosTransformStream_default = AxiosTransformStream;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/adapters/http.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/adapters/http.js
 import { EventEmitter } from "events";
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/formDataToStream.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/formDataToStream.js
 import util2 from "util";
 import { Readable } from "stream";
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/readBlob.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/readBlob.js
 var { asyncIterator } = Symbol;
 var readBlob = async function* (blob) {
   if (blob.stream) {
@@ -43988,7 +45001,7 @@ var readBlob = async function* (blob) {
 };
 var readBlob_default = readBlob;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/formDataToStream.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/formDataToStream.js
 var BOUNDARY_ALPHABET = platform_default.ALPHABET.ALPHA_DIGIT + "-_";
 var textEncoder = typeof TextEncoder === "function" ? new TextEncoder() : new util2.TextEncoder();
 var CRLF = "\r\n";
@@ -44002,7 +45015,8 @@ var FormDataPart = class {
     if (isStringValue) {
       value = textEncoder.encode(String(value).replace(/\r?\n|\r\n?/g, CRLF));
     } else {
-      headers += `Content-Type: ${value.type || "application/octet-stream"}${CRLF}`;
+      const safeType = String(value.type || "application/octet-stream").replace(/[\r\n]/g, "");
+      headers += `Content-Type: ${safeType}${CRLF}`;
     }
     this.headers = textEncoder.encode(headers + CRLF);
     this.contentLength = isStringValue ? value.byteLength : value.size;
@@ -44072,7 +45086,7 @@ var formDataToStream = (form, headersHandler, options) => {
 };
 var formDataToStream_default = formDataToStream;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/ZlibHeaderTransformStream.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/ZlibHeaderTransformStream.js
 import stream2 from "stream";
 var ZlibHeaderTransformStream = class extends stream2.Transform {
   __transform(chunk, encoding, callback) {
@@ -44094,7 +45108,7 @@ var ZlibHeaderTransformStream = class extends stream2.Transform {
 };
 var ZlibHeaderTransformStream_default = ZlibHeaderTransformStream;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/callbackify.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/callbackify.js
 var callbackify = (fn, reducer) => {
   return utils_default.isAsyncFn(fn) ? function(...args) {
     const cb = args.pop();
@@ -44109,7 +45123,115 @@ var callbackify = (fn, reducer) => {
 };
 var callbackify_default = callbackify;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/speedometer.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/shouldBypassProxy.js
+var LOOPBACK_HOSTNAMES = /* @__PURE__ */ new Set(["localhost"]);
+var isIPv4Loopback = (host) => {
+  const parts = host.split(".");
+  if (parts.length !== 4) return false;
+  if (parts[0] !== "127") return false;
+  return parts.every((p) => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+};
+var isIPv6Loopback = (host) => {
+  if (host === "::1") return true;
+  const v4MappedDotted = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (v4MappedDotted) return isIPv4Loopback(v4MappedDotted[1]);
+  const v4MappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (v4MappedHex) {
+    const high = parseInt(v4MappedHex[1], 16);
+    return high >= 32512 && high <= 32767;
+  }
+  const groups = host.split(":");
+  if (groups.length === 8) {
+    for (let i = 0; i < 7; i++) {
+      if (!/^0+$/.test(groups[i])) return false;
+    }
+    return /^0*1$/.test(groups[7]);
+  }
+  return false;
+};
+var isLoopback = (host) => {
+  if (!host) return false;
+  if (LOOPBACK_HOSTNAMES.has(host)) return true;
+  if (isIPv4Loopback(host)) return true;
+  return isIPv6Loopback(host);
+};
+var DEFAULT_PORTS2 = {
+  http: 80,
+  https: 443,
+  ws: 80,
+  wss: 443,
+  ftp: 21
+};
+var parseNoProxyEntry = (entry) => {
+  let entryHost = entry;
+  let entryPort = 0;
+  if (entryHost.charAt(0) === "[") {
+    const bracketIndex = entryHost.indexOf("]");
+    if (bracketIndex !== -1) {
+      const host = entryHost.slice(1, bracketIndex);
+      const rest = entryHost.slice(bracketIndex + 1);
+      if (rest.charAt(0) === ":" && /^\d+$/.test(rest.slice(1))) {
+        entryPort = Number.parseInt(rest.slice(1), 10);
+      }
+      return [host, entryPort];
+    }
+  }
+  const firstColon = entryHost.indexOf(":");
+  const lastColon = entryHost.lastIndexOf(":");
+  if (firstColon !== -1 && firstColon === lastColon && /^\d+$/.test(entryHost.slice(lastColon + 1))) {
+    entryPort = Number.parseInt(entryHost.slice(lastColon + 1), 10);
+    entryHost = entryHost.slice(0, lastColon);
+  }
+  return [entryHost, entryPort];
+};
+var normalizeNoProxyHost = (hostname) => {
+  if (!hostname) {
+    return hostname;
+  }
+  if (hostname.charAt(0) === "[" && hostname.charAt(hostname.length - 1) === "]") {
+    hostname = hostname.slice(1, -1);
+  }
+  return hostname.replace(/\.+$/, "");
+};
+function shouldBypassProxy(location) {
+  let parsed;
+  try {
+    parsed = new URL(location);
+  } catch (_err) {
+    return false;
+  }
+  const noProxy = (process.env.no_proxy || process.env.NO_PROXY || "").toLowerCase();
+  if (!noProxy) {
+    return false;
+  }
+  if (noProxy === "*") {
+    return true;
+  }
+  const port2 = Number.parseInt(parsed.port, 10) || DEFAULT_PORTS2[parsed.protocol.split(":", 1)[0]] || 0;
+  const hostname = normalizeNoProxyHost(parsed.hostname.toLowerCase());
+  return noProxy.split(/[\s,]+/).some((entry) => {
+    if (!entry) {
+      return false;
+    }
+    let [entryHost, entryPort] = parseNoProxyEntry(entry);
+    entryHost = normalizeNoProxyHost(entryHost);
+    if (!entryHost) {
+      return false;
+    }
+    if (entryPort && entryPort !== port2) {
+      return false;
+    }
+    if (entryHost.charAt(0) === "*") {
+      entryHost = entryHost.slice(1);
+    }
+    if (entryHost.charAt(0) === ".") {
+      return hostname.endsWith(entryHost);
+    }
+    return hostname === entryHost || isLoopback(hostname) && isLoopback(entryHost);
+  });
+}
+
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/speedometer.js
 function speedometer(samplesCount, min) {
   samplesCount = samplesCount || 10;
   const bytes = new Array(samplesCount);
@@ -44145,7 +45267,7 @@ function speedometer(samplesCount, min) {
 }
 var speedometer_default = speedometer;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/throttle.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/throttle.js
 function throttle(fn, freq) {
   let timestamp = 0;
   let threshold = 1e3 / freq;
@@ -44180,24 +45302,24 @@ function throttle(fn, freq) {
 }
 var throttle_default = throttle;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/progressEventReducer.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/progressEventReducer.js
 var progressEventReducer = (listener, isDownloadStream, freq = 3) => {
   let bytesNotified = 0;
   const _speedometer = speedometer_default(50, 250);
   return throttle_default((e) => {
-    const loaded = e.loaded;
+    const rawLoaded = e.loaded;
     const total = e.lengthComputable ? e.total : void 0;
-    const progressBytes = loaded - bytesNotified;
+    const loaded = total != null ? Math.min(rawLoaded, total) : rawLoaded;
+    const progressBytes = Math.max(0, loaded - bytesNotified);
     const rate = _speedometer(progressBytes);
-    const inRange = loaded <= total;
-    bytesNotified = loaded;
+    bytesNotified = Math.max(bytesNotified, loaded);
     const data = {
       loaded,
       total,
       progress: total ? loaded / total : void 0,
       bytes: progressBytes,
       rate: rate ? rate : void 0,
-      estimated: rate && total && inRange ? (total - loaded) / rate : void 0,
+      estimated: rate && total ? (total - loaded) / rate : void 0,
       event: e,
       lengthComputable: total != null,
       [isDownloadStream ? "download" : "upload"]: true
@@ -44218,7 +45340,7 @@ var progressEventDecorator = (total, throttled) => {
 };
 var asyncDecorator = (fn) => (...args) => utils_default.asap(() => fn(...args));
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/estimateDataURLDecodedBytes.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/estimateDataURLDecodedBytes.js
 function estimateDataURLDecodedBytes(url2) {
   if (!url2 || typeof url2 !== "string") return 0;
   if (!url2.startsWith("data:")) return 0;
@@ -44269,7 +45391,7 @@ function estimateDataURLDecodedBytes(url2) {
   return Buffer.byteLength(body, "utf8");
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/adapters/http.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/adapters/http.js
 var zlibOptions = {
   flush: zlib.constants.Z_SYNC_FLUSH,
   finishFlush: zlib.constants.Z_SYNC_FLUSH
@@ -44281,6 +45403,8 @@ var brotliOptions = {
 var isBrotliSupported = utils_default.isFunction(zlib.createBrotliDecompress);
 var { http: httpFollow, https: httpsFollow } = import_follow_redirects.default;
 var isHttps = /https:?/;
+var kAxiosSocketListener = /* @__PURE__ */ Symbol("axios.http.socketListener");
+var kAxiosCurrentReq = /* @__PURE__ */ Symbol("axios.http.currentReq");
 var supportedProtocols = platform_default.protocols.map((protocol) => {
   return protocol + ":";
 });
@@ -44323,6 +45447,9 @@ var Http2Sessions = class {
             delete this.sessions[authority];
           } else {
             entries.splice(i, 1);
+          }
+          if (!session.closed) {
+            session.close();
           }
           return;
         }
@@ -44369,9 +45496,11 @@ function dispatchBeforeRedirect(options, responseDetails) {
 function setProxy(options, configProxy, location) {
   let proxy = configProxy;
   if (!proxy && proxy !== false) {
-    const proxyUrl = import_proxy_from_env.default.getProxyForUrl(location);
+    const proxyUrl = getProxyForUrl(location);
     if (proxyUrl) {
-      proxy = new URL(proxyUrl);
+      if (!shouldBypassProxy(location)) {
+        proxy = new URL(proxyUrl);
+      }
     }
   }
   if (proxy) {
@@ -44462,8 +45591,15 @@ var http2Transport = {
 };
 var http_default = isHttpAdapterSupported && function httpAdapter(config) {
   return wrapAsync(async function dispatchHttpRequest(resolve2, reject, onDone) {
-    let { data, lookup, family, httpVersion = 1, http2Options } = config;
-    const { responseType, responseEncoding } = config;
+    const own2 = (key) => utils_default.hasOwnProp(config, key) ? config[key] : void 0;
+    let data = own2("data");
+    let lookup = own2("lookup");
+    let family = own2("family");
+    let httpVersion = own2("httpVersion");
+    if (httpVersion === void 0) httpVersion = 1;
+    let http2Options = own2("http2Options");
+    const responseType = own2("responseType");
+    const responseEncoding = own2("responseEncoding");
     const method = config.method.toUpperCase();
     let isDone;
     let rejected = false;
@@ -44604,7 +45740,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
           boundary: userBoundary && userBoundary[1] || void 0
         }
       );
-    } else if (utils_default.isFormData(data) && utils_default.isFunction(data.getHeaders)) {
+    } else if (utils_default.isFormData(data) && utils_default.isFunction(data.getHeaders) && data.getHeaders !== Object.prototype.getHeaders) {
       headers.set(data.getHeaders());
       if (!headers.hasContentLength()) {
         try {
@@ -44675,9 +45811,10 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
       );
     }
     let auth = void 0;
-    if (config.auth) {
-      const username = config.auth.username || "";
-      const password = config.auth.password || "";
+    const configAuth = own2("auth");
+    if (configAuth) {
+      const username = configAuth.username || "";
+      const password = configAuth.password || "";
       auth = username + ":" + password;
     }
     if (!auth && parsed.username) {
@@ -44705,7 +45842,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
       "gzip, compress, deflate" + (isBrotliSupported ? ", br" : ""),
       false
     );
-    const options = {
+    const options = Object.assign(/* @__PURE__ */ Object.create(null), {
       path: path4,
       method,
       headers: headers.toJSON(),
@@ -44714,11 +45851,32 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
       protocol,
       family,
       beforeRedirect: dispatchBeforeRedirect,
-      beforeRedirects: {},
+      beforeRedirects: /* @__PURE__ */ Object.create(null),
       http2Options
-    };
+    });
     !utils_default.isUndefined(lookup) && (options.lookup = lookup);
     if (config.socketPath) {
+      if (typeof config.socketPath !== "string") {
+        return reject(new AxiosError_default(
+          "socketPath must be a string",
+          AxiosError_default.ERR_BAD_OPTION_VALUE,
+          config
+        ));
+      }
+      if (config.allowedSocketPaths != null) {
+        const allowed = Array.isArray(config.allowedSocketPaths) ? config.allowedSocketPaths : [config.allowedSocketPaths];
+        const resolvedSocket = resolvePath(config.socketPath);
+        const isAllowed = allowed.some(
+          (entry) => typeof entry === "string" && resolvePath(entry) === resolvedSocket
+        );
+        if (!isAllowed) {
+          return reject(new AxiosError_default(
+            `socketPath "${config.socketPath}" is not permitted by allowedSocketPaths`,
+            AxiosError_default.ERR_BAD_OPTION_VALUE,
+            config
+          ));
+        }
+      }
       options.socketPath = config.socketPath;
     } else {
       options.hostname = parsed.hostname.startsWith("[") ? parsed.hostname.slice(1, -1) : parsed.hostname;
@@ -44735,16 +45893,18 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
     if (isHttp2) {
       transport = http2Transport;
     } else {
-      if (config.transport) {
-        transport = config.transport;
+      const configTransport = own2("transport");
+      if (configTransport) {
+        transport = configTransport;
       } else if (config.maxRedirects === 0) {
         transport = isHttpsRequest ? https : http;
       } else {
         if (config.maxRedirects) {
           options.maxRedirects = config.maxRedirects;
         }
-        if (config.beforeRedirect) {
-          options.beforeRedirects.config = config.beforeRedirect;
+        const configBeforeRedirect = own2("beforeRedirect");
+        if (configBeforeRedirect) {
+          options.beforeRedirects.config = configBeforeRedirect;
         }
         transport = isHttpsRequest ? httpsFollow : httpFollow;
       }
@@ -44754,9 +45914,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
     } else {
       options.maxBodyLength = Infinity;
     }
-    if (config.insecureHTTPParser) {
-      options.insecureHTTPParser = config.insecureHTTPParser;
-    }
+    options.insecureHTTPParser = Boolean(own2("insecureHTTPParser"));
     req = transport.request(options, function handleResponse(res) {
       if (req.destroyed) return;
       const streams = [res];
@@ -44813,6 +45971,28 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
         request: lastRequest
       };
       if (responseType === "stream") {
+        if (config.maxContentLength > -1) {
+          const limit = config.maxContentLength;
+          const source = responseStream;
+          async function* enforceMaxContentLength() {
+            let totalResponseBytes = 0;
+            for await (const chunk of source) {
+              totalResponseBytes += chunk.length;
+              if (totalResponseBytes > limit) {
+                throw new AxiosError_default(
+                  "maxContentLength size of " + limit + " exceeded",
+                  AxiosError_default.ERR_BAD_RESPONSE,
+                  config,
+                  lastRequest
+                );
+              }
+              yield chunk;
+            }
+          }
+          responseStream = stream3.Readable.from(enforceMaxContentLength(), {
+            objectMode: false
+          });
+        }
         response.data = responseStream;
         settle(resolve2, reject, response);
       } else {
@@ -44886,6 +46066,21 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
     });
     req.on("socket", function handleRequestSocket(socket) {
       socket.setKeepAlive(true, 1e3 * 60);
+      if (!socket[kAxiosSocketListener]) {
+        socket.on("error", function handleSocketError(err) {
+          const current = socket[kAxiosCurrentReq];
+          if (current && !current.destroyed) {
+            current.destroy(err);
+          }
+        });
+        socket[kAxiosSocketListener] = true;
+      }
+      socket[kAxiosCurrentReq] = req;
+      req.once("close", function clearCurrentReq() {
+        if (socket[kAxiosCurrentReq] === req) {
+          socket[kAxiosCurrentReq] = null;
+        }
+      });
     });
     if (config.timeout) {
       const timeout = parseInt(config.timeout, 10);
@@ -44934,7 +46129,37 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
           abort(new CanceledError_default("Request stream has been aborted", config, req));
         }
       });
-      data.pipe(req);
+      let uploadStream = data;
+      if (config.maxBodyLength > -1 && config.maxRedirects === 0) {
+        const limit = config.maxBodyLength;
+        let bytesSent = 0;
+        uploadStream = stream3.pipeline(
+          [
+            data,
+            new stream3.Transform({
+              transform(chunk, _enc, cb) {
+                bytesSent += chunk.length;
+                if (bytesSent > limit) {
+                  return cb(
+                    new AxiosError_default(
+                      "Request body larger than maxBodyLength limit",
+                      AxiosError_default.ERR_BAD_REQUEST,
+                      config,
+                      req
+                    )
+                  );
+                }
+                cb(null, chunk);
+              }
+            })
+          ],
+          utils_default.noop
+        );
+        uploadStream.on("error", (err) => {
+          if (!req.destroyed) req.destroy(err);
+        });
+      }
+      uploadStream.pipe(req);
     } else {
       data && req.write(data);
       req.end();
@@ -44942,7 +46167,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config) {
   });
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/isURLSameOrigin.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/isURLSameOrigin.js
 var isURLSameOrigin_default = platform_default.hasStandardBrowserEnv ? /* @__PURE__ */ ((origin2, isMSIE) => (url2) => {
   url2 = new URL(url2, platform_default.origin);
   return origin2.protocol === url2.protocol && origin2.host === url2.host && (isMSIE || origin2.port === url2.port);
@@ -44951,7 +46176,7 @@ var isURLSameOrigin_default = platform_default.hasStandardBrowserEnv ? /* @__PUR
   platform_default.navigator && /(msie|trident)/i.test(platform_default.navigator.userAgent)
 ) : () => true;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/cookies.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/cookies.js
 var cookies_default = platform_default.hasStandardBrowserEnv ? (
   // Standard browser envs support document.cookie
   {
@@ -44997,11 +46222,17 @@ var cookies_default = platform_default.hasStandardBrowserEnv ? (
   }
 );
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/mergeConfig.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/mergeConfig.js
 var headersToObject = (thing) => thing instanceof AxiosHeaders_default ? { ...thing } : thing;
 function mergeConfig(config1, config2) {
   config2 = config2 || {};
-  const config = {};
+  const config = /* @__PURE__ */ Object.create(null);
+  Object.defineProperty(config, "hasOwnProperty", {
+    value: Object.prototype.hasOwnProperty,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  });
   function getMergedValue(target, source, prop, caseless) {
     if (utils_default.isPlainObject(target) && utils_default.isPlainObject(source)) {
       return utils_default.merge.call({ caseless }, target, source);
@@ -45032,9 +46263,9 @@ function mergeConfig(config1, config2) {
     }
   }
   function mergeDirectKeys(a, b, prop) {
-    if (prop in config2) {
+    if (utils_default.hasOwnProp(config2, prop)) {
       return getMergedValue(a, b);
-    } else if (prop in config1) {
+    } else if (utils_default.hasOwnProp(config1, prop)) {
       return getMergedValue(void 0, a);
     }
   }
@@ -45065,6 +46296,7 @@ function mergeConfig(config1, config2) {
     httpsAgent: defaultToConfig2,
     cancelToken: defaultToConfig2,
     socketPath: defaultToConfig2,
+    allowedSocketPaths: defaultToConfig2,
     responseEncoding: defaultToConfig2,
     validateStatus: mergeDirectKeys,
     headers: (a, b, prop) => mergeDeepProperties(headersToObject(a), headersToObject(b), prop, true)
@@ -45072,19 +46304,30 @@ function mergeConfig(config1, config2) {
   utils_default.forEach(Object.keys({ ...config1, ...config2 }), function computeConfigValue(prop) {
     if (prop === "__proto__" || prop === "constructor" || prop === "prototype") return;
     const merge2 = utils_default.hasOwnProp(mergeMap, prop) ? mergeMap[prop] : mergeDeepProperties;
-    const configValue = merge2(config1[prop], config2[prop], prop);
+    const a = utils_default.hasOwnProp(config1, prop) ? config1[prop] : void 0;
+    const b = utils_default.hasOwnProp(config2, prop) ? config2[prop] : void 0;
+    const configValue = merge2(a, b, prop);
     utils_default.isUndefined(configValue) && merge2 !== mergeDirectKeys || (config[prop] = configValue);
   });
   return config;
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/resolveConfig.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/resolveConfig.js
 var resolveConfig_default = (config) => {
   const newConfig = mergeConfig({}, config);
-  let { data, withXSRFToken, xsrfHeaderName, xsrfCookieName, headers, auth } = newConfig;
+  const own2 = (key) => utils_default.hasOwnProp(newConfig, key) ? newConfig[key] : void 0;
+  const data = own2("data");
+  let withXSRFToken = own2("withXSRFToken");
+  const xsrfHeaderName = own2("xsrfHeaderName");
+  const xsrfCookieName = own2("xsrfCookieName");
+  let headers = own2("headers");
+  const auth = own2("auth");
+  const baseURL = own2("baseURL");
+  const allowAbsoluteUrls = own2("allowAbsoluteUrls");
+  const url2 = own2("url");
   newConfig.headers = headers = AxiosHeaders_default.from(headers);
   newConfig.url = buildURL(
-    buildFullPath(newConfig.baseURL, newConfig.url, newConfig.allowAbsoluteUrls),
+    buildFullPath(baseURL, url2, allowAbsoluteUrls),
     config.params,
     config.paramsSerializer
   );
@@ -45110,8 +46353,11 @@ var resolveConfig_default = (config) => {
     }
   }
   if (platform_default.hasStandardBrowserEnv) {
-    withXSRFToken && utils_default.isFunction(withXSRFToken) && (withXSRFToken = withXSRFToken(newConfig));
-    if (withXSRFToken || withXSRFToken !== false && isURLSameOrigin_default(newConfig.url)) {
+    if (utils_default.isFunction(withXSRFToken)) {
+      withXSRFToken = withXSRFToken(newConfig);
+    }
+    const shouldSendXSRF = withXSRFToken === true || withXSRFToken == null && isURLSameOrigin_default(newConfig.url);
+    if (shouldSendXSRF) {
       const xsrfValue = xsrfHeaderName && xsrfCookieName && cookies_default.read(xsrfCookieName);
       if (xsrfValue) {
         headers.set(xsrfHeaderName, xsrfValue);
@@ -45121,7 +46367,7 @@ var resolveConfig_default = (config) => {
   return newConfig;
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/adapters/xhr.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/adapters/xhr.js
 var isXHRAdapterSupported = typeof XMLHttpRequest !== "undefined";
 var xhr_default = isXHRAdapterSupported && function(config) {
   return new Promise(function dispatchXhrRequest(resolve2, reject) {
@@ -45263,7 +46509,7 @@ var xhr_default = isXHRAdapterSupported && function(config) {
   });
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/composeSignals.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/composeSignals.js
 var composeSignals = (signals, timeout) => {
   const { length } = signals = signals ? signals.filter(Boolean) : [];
   if (timeout || length) {
@@ -45301,7 +46547,7 @@ var composeSignals = (signals, timeout) => {
 };
 var composeSignals_default = composeSignals;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/trackStream.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/trackStream.js
 var streamChunk = function* (chunk, chunkSize) {
   let len = chunk.byteLength;
   if (!chunkSize || len < chunkSize) {
@@ -45381,7 +46627,7 @@ var trackStream = (stream4, chunkSize, onProgress, onFinish) => {
   );
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/adapters/fetch.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/adapters/fetch.js
 var DEFAULT_CHUNK_SIZE = 64 * 1024;
 var { isFunction: isFunction2 } = utils_default;
 var globalFetchAPI = (({ Request, Response }) => ({
@@ -45415,14 +46661,18 @@ var factory = (env) => {
   const encodeText = isFetchSupported && (typeof TextEncoder2 === "function" ? /* @__PURE__ */ ((encoder) => (str) => encoder.encode(str))(new TextEncoder2()) : async (str) => new Uint8Array(await new Request(str).arrayBuffer()));
   const supportsRequestStream = isRequestSupported && isReadableStreamSupported && test(() => {
     let duplexAccessed = false;
-    const hasContentType = new Request(platform_default.origin, {
+    const request = new Request(platform_default.origin, {
       body: new ReadableStream2(),
       method: "POST",
       get duplex() {
         duplexAccessed = true;
         return "half";
       }
-    }).headers.has("Content-Type");
+    });
+    const hasContentType = request.headers.has("Content-Type");
+    if (request.body != null) {
+      request.body.cancel();
+    }
     return duplexAccessed && !hasContentType;
   });
   const supportsResponseStream = isResponseSupported && isReadableStreamSupported && test(() => utils_default.isReadableStream(new Response("").body));
@@ -45521,6 +46771,12 @@ var factory = (env) => {
         withCredentials = withCredentials ? "include" : "omit";
       }
       const isCredentialsSupported = isRequestSupported && "credentials" in Request.prototype;
+      if (utils_default.isFormData(data)) {
+        const contentType = headers.getContentType();
+        if (contentType && /^multipart\/form-data/i.test(contentType) && !/boundary=/i.test(contentType)) {
+          headers.delete("content-type");
+        }
+      }
       const resolvedOptions = {
         ...fetchOptions,
         signal: composedSignal,
@@ -45603,7 +46859,7 @@ var getFetch = (config) => {
 };
 var adapter = getFetch();
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/adapters/adapters.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/adapters/adapters.js
 var knownAdapters = {
   http: http_default,
   xhr: xhr_default,
@@ -45668,7 +46924,7 @@ var adapters_default = {
   adapters: knownAdapters
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/dispatchRequest.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/dispatchRequest.js
 function throwIfCancellationRequested(config) {
   if (config.cancelToken) {
     config.cancelToken.throwIfRequested();
@@ -45709,7 +46965,7 @@ function dispatchRequest(config) {
   );
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/validator.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/validator.js
 var validators = {};
 ["object", "boolean", "number", "function", "string", "symbol"].forEach((type, i) => {
   validators[type] = function validator(thing) {
@@ -45754,7 +47010,7 @@ function assertOptions(options, schema, allowUnknown) {
   let i = keys.length;
   while (i-- > 0) {
     const opt = keys[i];
-    const validator = schema[opt];
+    const validator = Object.prototype.hasOwnProperty.call(schema, opt) ? schema[opt] : void 0;
     if (validator) {
       const value = options[opt];
       const result = value === void 0 || validator(value, opt, options);
@@ -45776,7 +47032,7 @@ var validator_default = {
   validators
 };
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/core/Axios.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/core/Axios.js
 var validators2 = validator_default.validators;
 var Axios = class {
   constructor(instanceConfig) {
@@ -45801,12 +47057,23 @@ var Axios = class {
       if (err instanceof Error) {
         let dummy = {};
         Error.captureStackTrace ? Error.captureStackTrace(dummy) : dummy = new Error();
-        const stack = dummy.stack ? dummy.stack.replace(/^.+\n/, "") : "";
+        const stack = (() => {
+          if (!dummy.stack) {
+            return "";
+          }
+          const firstNewlineIndex = dummy.stack.indexOf("\n");
+          return firstNewlineIndex === -1 ? "" : dummy.stack.slice(firstNewlineIndex + 1);
+        })();
         try {
           if (!err.stack) {
             err.stack = stack;
-          } else if (stack && !String(err.stack).endsWith(stack.replace(/^.+\n.+\n/, ""))) {
-            err.stack += "\n" + stack;
+          } else if (stack) {
+            const firstNewlineIndex = stack.indexOf("\n");
+            const secondNewlineIndex = firstNewlineIndex === -1 ? -1 : stack.indexOf("\n", firstNewlineIndex + 1);
+            const stackWithoutTwoTopLines = secondNewlineIndex === -1 ? "" : stack.slice(secondNewlineIndex + 1);
+            if (!String(err.stack).endsWith(stackWithoutTwoTopLines)) {
+              err.stack += "\n" + stack;
+            }
           }
         } catch (e) {
         }
@@ -45965,7 +47232,7 @@ utils_default.forEach(["post", "put", "patch"], function forEachMethodWithData(m
 });
 var Axios_default = Axios;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/cancel/CancelToken.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/cancel/CancelToken.js
 var CancelToken = class _CancelToken {
   constructor(executor) {
     if (typeof executor !== "function") {
@@ -46063,19 +47330,19 @@ var CancelToken = class _CancelToken {
 };
 var CancelToken_default = CancelToken;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/spread.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/spread.js
 function spread(callback) {
   return function wrap(arr) {
     return callback.apply(null, arr);
   };
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/isAxiosError.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/isAxiosError.js
 function isAxiosError(payload) {
   return utils_default.isObject(payload) && payload.isAxiosError === true;
 }
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/helpers/HttpStatusCode.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/helpers/HttpStatusCode.js
 var HttpStatusCode = {
   Continue: 100,
   SwitchingProtocols: 101,
@@ -46152,7 +47419,7 @@ Object.entries(HttpStatusCode).forEach(([key, value]) => {
 });
 var HttpStatusCode_default = HttpStatusCode;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/lib/axios.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/lib/axios.js
 function createInstance(defaultConfig) {
   const context = new Axios_default(defaultConfig);
   const instance = bind(Axios_default.prototype.request, context);
@@ -46185,7 +47452,7 @@ axios.HttpStatusCode = HttpStatusCode_default;
 axios.default = axios;
 var axios_default = axios;
 
-// ../../node_modules/.pnpm/axios@1.13.6/node_modules/axios/index.js
+// ../../node_modules/.pnpm/axios@1.15.2/node_modules/axios/index.js
 var {
   Axios: Axios2,
   AxiosError: AxiosError2,
@@ -48180,148 +49447,12 @@ router4.get("/test/:ean", async (req, res) => {
 });
 var test_default = router4;
 
-// src/routes/debug.ts
-var import_express5 = __toESM(require_express2(), 1);
-var router5 = (0, import_express5.Router)();
-router5.get("/debug/allegro-token", async (req, res) => {
-  const result = { steps: [] };
-  const steps = result.steps;
-  const clientId = process.env.ALLEGRO_CLIENT_ID;
-  const clientSecret = process.env.ALLEGRO_CLIENT_SECRET;
-  result.hasClientId = !!clientId;
-  result.hasClientSecret = !!clientSecret;
-  result.clientIdPrefix = clientId ? clientId.slice(0, 8) + "..." : null;
-  if (!clientId || !clientSecret) {
-    steps.push("ERROR: Missing ALLEGRO_CLIENT_ID or ALLEGRO_CLIENT_SECRET");
-    res.status(500).json(result);
-    return;
-  }
-  steps.push("Credentials present \u2014 requesting token...");
-  try {
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-    const tokenResp = await axios_default.post(
-      "https://allegro.pl/auth/oauth/token?grant_type=client_credentials",
-      {},
-      {
-        headers: {
-          Authorization: `Basic ${credentials}`,
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        timeout: 1e4
-      }
-    );
-    const data = tokenResp.data;
-    steps.push(`Token acquired \u2014 type: ${data.token_type}, expires_in: ${data.expires_in}s`);
-    let jwtPayload = null;
-    if (data.access_token) {
-      try {
-        const payloadB64 = data.access_token.split(".")[1];
-        jwtPayload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
-      } catch {
-        steps.push("Could not decode JWT payload");
-      }
-    }
-    result.tokenType = data.token_type;
-    result.expiresIn = data.expires_in;
-    result.tokenPrefix = data.access_token ? data.access_token.slice(0, 20) + "..." : null;
-    result.scope = data.scope || jwtPayload?.scope || null;
-    result.jwtScopes = jwtPayload?.scope || null;
-    result.jwtClientId = jwtPayload?.client_id || null;
-    result.jwtIssuer = jwtPayload?.iss || null;
-    steps.push(`Scopes granted: ${JSON.stringify(jwtPayload?.scope || data.scope || "unknown")}`);
-    steps.push("Token OK");
-    result.ok = true;
-    res.json(result);
-  } catch (err) {
-    const e = err;
-    steps.push(`Token request FAILED: ${e.message}`);
-    result.error = e.message;
-    result.httpStatus = e.response?.status;
-    result.responseBody = e.response?.data;
-    result.ok = false;
-    res.status(500).json(result);
-  }
-});
-router5.get("/debug/allegro-search/:ean", async (req, res) => {
-  const { ean } = req.params;
-  const results = {
-    ean,
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    attempts: []
-  };
-  const attempts = results.attempts;
-  const userStatus = getUserTokenStatus();
-  results.userTokenAvailable = userStatus.hasToken;
-  results.userTokenScopes = userStatus.scopes ?? null;
-  let token;
-  let tokenSource;
-  if (userStatus.hasToken) {
-    try {
-      token = await getUserToken();
-      tokenSource = "device_flow_user_token";
-    } catch {
-      token = await getClientCredentialsToken();
-      tokenSource = "client_credentials_fallback";
-    }
-  } else {
-    token = await getClientCredentialsToken();
-    tokenSource = "client_credentials_only";
-  }
-  results.tokenSource = tokenSource;
-  results.tokenPrefix = token.slice(0, 20) + "...";
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.allegro.public.v1+json"
-  };
-  const searches = [
-    { label: "phrase search", params: { phrase: ean, language: "pl-PL" } },
-    { label: "filters.EAN", params: { "filters.EAN": ean, language: "pl-PL" } },
-    { label: "filters.GTIN", params: { "filters.GTIN": ean, language: "pl-PL" } },
-    { label: "ean param (original)", params: { ean, language: "pl-PL" } }
-  ];
-  for (const search of searches) {
-    const attempt = {
-      label: search.label,
-      params: search.params
-    };
-    const queryString = new URLSearchParams(search.params).toString();
-    const url2 = `https://api.allegro.pl/sale/products?${queryString}`;
-    attempt.url = url2;
-    try {
-      const resp = await axios_default.get(url2, { headers, timeout: 1e4 });
-      attempt.httpStatus = resp.status;
-      attempt.responseData = resp.data;
-      const data = resp.data;
-      attempt.productsFound = data.products?.length ?? 0;
-      attempt.totalCount = data.totalCount ?? 0;
-      attempt.success = true;
-    } catch (err) {
-      const e = err;
-      attempt.httpStatus = e.response?.status;
-      attempt.responseData = e.response?.data;
-      attempt.error = e.message;
-      attempt.success = false;
-    }
-    attempts.push(attempt);
-    const last = attempts[attempts.length - 1];
-    if (last.success && (last.productsFound ?? 0) > 0) {
-      results.foundWithMethod = search.label;
-      break;
-    }
-  }
-  if (!userStatus.hasToken) {
-    results.note = "Using CLIENT CREDENTIALS token \u2014 catalog search requires a USER token. Call POST /api/auth/device/start to begin Device Flow authorization.";
-  }
-  res.json(results);
-});
-var debug_default = router5;
-
 // src/routes/auth.ts
-var import_express6 = __toESM(require_express2(), 1);
+var import_express5 = __toESM(require_express2(), 1);
 var ALLEGRO_CLIENT_ID3 = process.env.ALLEGRO_CLIENT_ID;
 var ALLEGRO_CLIENT_SECRET3 = process.env.ALLEGRO_CLIENT_SECRET;
-var router6 = (0, import_express6.Router)();
-router6.get("/auth/status", (_req, res) => {
+var router5 = (0, import_express5.Router)();
+router5.get("/auth/status", (_req, res) => {
   const status = getUserTokenStatus();
   const pending = getPendingDeviceFlow();
   res.json({
@@ -48335,7 +49466,7 @@ router6.get("/auth/status", (_req, res) => {
     pendingExpiresAt: pending ? pending.expiresAt : null
   });
 });
-router6.post("/auth/device/start", async (_req, res) => {
+router5.post("/auth/device/start", async (_req, res) => {
   try {
     const flow = await startDeviceFlow();
     res.json({
@@ -48356,7 +49487,7 @@ router6.post("/auth/device/start", async (_req, res) => {
     });
   }
 });
-router6.post("/auth/device/poll", async (_req, res) => {
+router5.post("/auth/device/poll", async (_req, res) => {
   try {
     const result = await pollDeviceFlow();
     res.json(result);
@@ -48365,7 +49496,7 @@ router6.post("/auth/device/poll", async (_req, res) => {
     res.status(500).json({ error: "poll_failed", message: e.message });
   }
 });
-router6.get("/auth/allegro/authorize", (req, res) => {
+router5.get("/auth/allegro/authorize", (req, res) => {
   const redirectUri = buildRedirectUri(req);
   const url2 = new URL("https://allegro.pl/auth/oauth/authorize");
   url2.searchParams.set("response_type", "code");
@@ -48383,7 +49514,7 @@ router6.get("/auth/allegro/authorize", (req, res) => {
     ]
   });
 });
-router6.get("/auth/allegro/callback", async (req, res) => {
+router5.get("/auth/allegro/callback", async (req, res) => {
   const code = req.query.code;
   const error = req.query.error;
   if (error) {
@@ -48448,11 +49579,11 @@ router6.get("/auth/allegro/callback", async (req, res) => {
     `);
   }
 });
-router6.delete("/auth/user-token", (_req, res) => {
+router5.delete("/auth/user-token", (_req, res) => {
   clearUserToken();
   res.json({ message: "Token usuni\u0119ty" });
 });
-router6.post("/auth/allegro/exchange", async (req, res) => {
+router5.post("/auth/allegro/exchange", async (req, res) => {
   const { code } = req.body;
   if (!code) {
     res.status(400).json({ ok: false, error: "Brak kodu autoryzacyjnego" });
@@ -48501,7 +49632,40 @@ function buildRedirectUri(req) {
   const protocol = host.includes("replit") || host.includes(".app") ? "https" : req.protocol;
   return `${protocol}://${host}/auth/allegro/callback`;
 }
-var auth_default = router6;
+var auth_default = router5;
+
+// src/routes/auth-login.ts
+var import_express6 = __toESM(require_express2(), 1);
+var router6 = (0, import_express6.Router)();
+router6.post("/auth/login", (req, res) => {
+  const expected = process.env.APP_PASSWORD;
+  if (!expected) {
+    logger.error("APP_PASSWORD env var is not set \u2014 login is impossible");
+    res.status(500).json({ error: "server_misconfigured" });
+    return;
+  }
+  const { password } = req.body ?? {};
+  if (typeof password !== "string" || password !== expected) {
+    res.status(401).json({ error: "Nieprawid\u0142owe has\u0142o" });
+    return;
+  }
+  if (req.session) {
+    req.session.authed = true;
+  }
+  res.json({ ok: true });
+});
+router6.post("/auth/logout", (req, res) => {
+  req.session = null;
+  res.json({ ok: true });
+});
+router6.get("/auth/me", (req, res) => {
+  if (req.session?.authed === true) {
+    res.json({ authed: true });
+    return;
+  }
+  res.status(401).json({ authed: false });
+});
+var auth_login_default = router6;
 
 // src/routes/index.ts
 var router7 = (0, import_express7.Router)();
@@ -48509,12 +49673,121 @@ router7.use(health_default);
 router7.use("/allegro", allegro_default);
 router7.use(lookup_default);
 router7.use(test_default);
-router7.use(debug_default);
 router7.use(auth_default);
+router7.use(auth_login_default);
 var routes_default = router7;
 
+// src/routes/oauth-public.ts
+var import_express8 = __toESM(require_express2(), 1);
+import crypto2 from "crypto";
+var ALLEGRO_CLIENT_ID4 = process.env.ALLEGRO_CLIENT_ID;
+var ALLEGRO_CLIENT_SECRET4 = process.env.ALLEGRO_CLIENT_SECRET;
+var AUTHORIZE_URL = "https://allegro.pl/auth/oauth/authorize";
+var TOKEN_URL2 = "https://allegro.pl/auth/oauth/token";
+var REQUESTED_SCOPES = [
+  "allegro:api:sale:offers:read",
+  "allegro:api:sale:offers:write",
+  "allegro:api:sale:settings:read",
+  "allegro:api:sale:settings:write"
+];
+function buildRedirectUri2(req) {
+  if (process.env.ALLEGRO_REDIRECT_URI) return process.env.ALLEGRO_REDIRECT_URI;
+  const host = req.get("host") || "localhost";
+  const protocol = host.includes("replit") || host.includes(".app") ? "https" : req.protocol;
+  return `${protocol}://${host}/auth/allegro/callback`;
+}
+var router8 = (0, import_express8.Router)();
+router8.get("/auth/allegro/login", (req, res) => {
+  if (!ALLEGRO_CLIENT_ID4 || !ALLEGRO_CLIENT_SECRET4) {
+    res.status(500).send("Allegro client credentials are not configured.");
+    return;
+  }
+  const state = crypto2.randomBytes(16).toString("hex");
+  if (req.session) {
+    req.session.allegroOAuthState = state;
+  }
+  const redirectUri = buildRedirectUri2(req);
+  const authUrl = new URL(AUTHORIZE_URL);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", ALLEGRO_CLIENT_ID4);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("scope", REQUESTED_SCOPES.join(" "));
+  authUrl.searchParams.set("prompt", "confirm");
+  logger.info({ redirectUri }, "Starting Allegro OAuth authorize flow");
+  res.redirect(authUrl.toString());
+});
+router8.get("/auth/allegro/callback", async (req, res) => {
+  const code = typeof req.query.code === "string" ? req.query.code : void 0;
+  const state = typeof req.query.state === "string" ? req.query.state : void 0;
+  const oauthError = typeof req.query.error === "string" ? req.query.error : void 0;
+  const expectedState = req.session?.allegroOAuthState;
+  if (req.session) {
+    req.session.allegroOAuthState = void 0;
+  }
+  if (oauthError) {
+    logger.warn({ oauthError }, "Allegro returned OAuth error on callback");
+    res.redirect(`/?allegro_auth=error&reason=${encodeURIComponent(oauthError)}`);
+    return;
+  }
+  if (!code) {
+    res.redirect("/?allegro_auth=error&reason=missing_code");
+    return;
+  }
+  if (!state || !expectedState || state !== expectedState) {
+    logger.warn(
+      { hasState: !!state, hasExpected: !!expectedState, match: state === expectedState },
+      "Allegro OAuth state mismatch"
+    );
+    res.redirect("/?allegro_auth=error&reason=invalid_state");
+    return;
+  }
+  const redirectUri = buildRedirectUri2(req);
+  try {
+    const credentials = Buffer.from(
+      `${ALLEGRO_CLIENT_ID4}:${ALLEGRO_CLIENT_SECRET4}`
+    ).toString("base64");
+    const tokenResp = await axios_default.post(
+      TOKEN_URL2,
+      new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri
+      }),
+      {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        timeout: 1e4
+      }
+    );
+    const data = tokenResp.data;
+    setUserToken(
+      data.access_token,
+      data.refresh_token,
+      data.expires_in,
+      data.scope
+    );
+    logger.info(
+      { expiresIn: data.expires_in, scope: data.scope },
+      "Allegro OAuth code exchanged successfully"
+    );
+    res.redirect("/?allegro_auth=success");
+  } catch (err) {
+    const e = err;
+    logger.error(
+      { msg: e.message, status: e.response?.status, data: e.response?.data },
+      "Allegro OAuth code exchange failed"
+    );
+    res.redirect("/?allegro_auth=error&reason=exchange_failed");
+  }
+});
+var oauth_public_default = router8;
+
 // src/app.ts
-var app = (0, import_express8.default)();
+var app = (0, import_express9.default)();
+app.set("trust proxy", 1);
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -48535,15 +49808,49 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express8.default.json());
-app.use(import_express8.default.urlencoded({ extended: true }));
-app.use("/api", routes_default);
+app.use(import_express9.default.json());
+app.use(import_express9.default.urlencoded({ extended: true }));
+var COOKIE_SECRET = process.env.SESSION_SECRET ?? process.env.COOKIE_SECRET ?? crypto3.randomBytes(32).toString("hex");
+if (!process.env.SESSION_SECRET && !process.env.COOKIE_SECRET) {
+  logger.warn(
+    "Neither SESSION_SECRET nor COOKIE_SECRET env var is set \u2014 using random per-process key. Sessions will not survive a restart."
+  );
+}
+app.use(
+  (0, import_cookie_session.default)({
+    name: "ipremium_session",
+    keys: [COOKIE_SECRET],
+    maxAge: 30 * 24 * 60 * 60 * 1e3,
+    // 30 days
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production"
+  })
+);
+app.use(oauth_public_default);
+var PUBLIC_API_PATHS = /* @__PURE__ */ new Set([
+  "/healthz",
+  "/auth/login",
+  "/auth/logout"
+]);
+function requireAppAuth(req, res, next) {
+  if (PUBLIC_API_PATHS.has(req.path)) {
+    next();
+    return;
+  }
+  if (req.session?.authed === true) {
+    next();
+    return;
+  }
+  res.status(401).json({ error: "unauthorized" });
+}
+app.use("/api", requireAppAuth, routes_default);
 var FRONTEND_DIST = path3.resolve(process.cwd(), "..", "ipremium-scan", "dist", "public");
 var FRONTEND_INDEX = path3.join(FRONTEND_DIST, "index.html");
 if (fs3.existsSync(FRONTEND_DIST)) {
   logger.info({ path: FRONTEND_DIST }, "Serving iPremium Scan frontend as static files");
   app.use(
-    import_express8.default.static(FRONTEND_DIST, {
+    import_express9.default.static(FRONTEND_DIST, {
       maxAge: "1y",
       immutable: true,
       index: false
@@ -48875,5 +50182,38 @@ object-assign/index.js:
   (c) Sindre Sorhus
   @license MIT
   *)
+
+safe-buffer/index.js:
+  (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
+
+keygrip/index.js:
+  (*!
+   * keygrip
+   * Copyright(c) 2011-2014 Jed Schmidt
+   * MIT Licensed
+   *)
+
+cookies/index.js:
+  (*!
+   * cookies
+   * Copyright(c) 2014 Jed Schmidt, http://jed.is/
+   * Copyright(c) 2015-2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+on-headers/index.js:
+  (*!
+   * on-headers
+   * Copyright(c) 2014 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+cookie-session/index.js:
+  (*!
+   * cookie-session
+   * Copyright(c) 2013 Jonathan Ong
+   * Copyright(c) 2014-2017 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
 */
 //# sourceMappingURL=index.mjs.map

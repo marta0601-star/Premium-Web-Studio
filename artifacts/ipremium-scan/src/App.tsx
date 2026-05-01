@@ -5,7 +5,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import AppLogin from "@/components/AppLogin";
 import Home from "@/pages/Home";
 import Debug from "@/pages/Debug";
-import AuthCallback from "@/pages/AuthCallback";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -22,7 +21,6 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/debug" component={Debug} />
-      <Route path="/auth/allegro/callback" component={AuthCallback} />
       <Route component={NotFound} />
     </Switch>
   );

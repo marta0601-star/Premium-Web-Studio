@@ -1690,9 +1690,9 @@ var require_delete_log_property = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/fast-copy@4.0.2/node_modules/fast-copy/dist/cjs/index.cjs
+// ../../node_modules/.pnpm/fast-copy@4.0.3/node_modules/fast-copy/dist/cjs/index.cjs
 var require_cjs = __commonJS({
-  "../../node_modules/.pnpm/fast-copy@4.0.2/node_modules/fast-copy/dist/cjs/index.cjs"(exports) {
+  "../../node_modules/.pnpm/fast-copy@4.0.3/node_modules/fast-copy/dist/cjs/index.cjs"(exports) {
     "use strict";
     var toStringFunction = Function.prototype.toString;
     var toStringObject = Object.prototype.toString;
@@ -1863,6 +1863,8 @@ var require_cjs = __commonJS({
         Array: methods.array,
         ArrayBuffer: methods.arrayBuffer,
         AsyncGenerator: methods.asyncGenerator,
+        BigInt64Array: methods.arrayBuffer,
+        BigUint64Array: methods.arrayBuffer,
         Blob: methods.blob,
         Boolean: copyPrimitiveWrapper,
         DataView: methods.dataView,
@@ -1886,8 +1888,7 @@ var require_cjs = __commonJS({
         Uint8Array: methods.arrayBuffer,
         Uint8ClampedArray: methods.arrayBuffer,
         Uint16Array: methods.arrayBuffer,
-        Uint32Array: methods.arrayBuffer,
-        Uint64Array: methods.arrayBuffer
+        Uint32Array: methods.arrayBuffer
       };
     }
     function createCopier(options = {}) {
