@@ -48542,6 +48542,59 @@ var OPEN_FOOD_FACTS_REGIONS = [
 ];
 var STORE_NAMES_TO_REMOVE = /\b(amazon|ebay|allegro|kaufland|walmart|target|costco|tesco|carrefour|auchan|lidl|aldi|biedronka|rossmann|dm|drogerie|media markt|saturn)\b/gi;
 var WEIGHT_REGEX = /\b(\d+(?:[.,]\d+)?)\s*(kg|g|ml|l|cl|oz|lb|pieces?|szt|sztuk)\b/gi;
+var CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+var PER_SOURCE_TIMEOUT_MS = 3e3;
+var PER_SOURCE_TIMEOUT_LONG_MS = 5e3;
+var RETRY_BACKOFF_MS = [200, 600];
+var POLISH_SOURCES = /* @__PURE__ */ new Set([
+  "allegro_listing",
+  "ceneo_listing",
+  "skapiec_listing",
+  "google_allegro",
+  "google_ceneo",
+  "google_lidl_pl",
+  "google_rossmann",
+  "google_biedronka",
+  "google_carrefour_pl",
+  "google_auchan_pl",
+  "google_amazon_pl",
+  "google_empik"
+]);
+function eanVariants(ean) {
+  const s = ean.replace(/\D/g, "");
+  const set = /* @__PURE__ */ new Set([s]);
+  if (s.length === 12) set.add("0" + s);
+  if (s.length === 13 && s.startsWith("0")) set.add(s.slice(1));
+  if (s.length === 13 && !s.startsWith("0")) set.add("0" + s.slice(0, 12));
+  return [...set];
+}
+async function httpGet(url2, opts = {}) {
+  const retries = opts.retries ?? 1;
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await axios_default.get(url2, {
+        timeout: opts.timeoutMs ?? PER_SOURCE_TIMEOUT_MS,
+        signal: opts.signal,
+        headers: opts.headers,
+        // Don't follow excessively many redirects — most legit search pages
+        // return ≤2.
+        maxRedirects: 3
+      });
+    } catch (err) {
+      lastErr = err;
+      const e = err;
+      if (e.name === "AbortError" || e.name === "CanceledError" || e.code === "ERR_CANCELED") {
+        throw err;
+      }
+      const status = e.response?.status;
+      const transient = e.code === "ECONNABORTED" || e.code === "ECONNRESET" || e.code === "ETIMEDOUT" || status === 502 || status === 503 || status === 504;
+      if (!transient || attempt === retries) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS[attempt] ?? 600));
+    }
+  }
+  throw lastErr;
+}
 function extractImageUrl(html, label, logs) {
   const ouMatch = html.match(/"ou":"(https?:\/\/[^"\\]+)"/);
   if (ouMatch?.[1]) {
@@ -48566,7 +48619,7 @@ function extractImageUrl(html, label, logs) {
   let extMatch;
   while ((extMatch = extRegex.exec(html)) !== null) {
     const url2 = extMatch[0];
-    if (url2.length < 400 && !url2.includes("google.com")) {
+    if (url2.length < 400 && !url2.includes("google.com") && !/\b(sprite|logo|icon|favicon|placeholder|blank)\b/i.test(url2)) {
       logs.push(`[${label}] via ext: ${url2.slice(0, 80)}`);
       return url2;
     }
@@ -48579,49 +48632,31 @@ function extractImageUrl(html, label, logs) {
   logs.push(`[${label}] No image URL found (html len=${html.length})`);
   return null;
 }
-var CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-async function fetchGoogle(url2, label, logs, timeoutMs = 1e4) {
-  logs.push(`[${label}] GET ${url2}`);
+async function trackSource(name, sources, fn, timeoutMs = PER_SOURCE_TIMEOUT_MS) {
+  const start = Date.now();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const resp = await axios_default.get(url2, {
-      timeout: timeoutMs,
-      headers: {
-        "User-Agent": CHROME_UA,
-        Accept: "text/html",
-        "Accept-Language": "en-US,en;q=0.9"
-      }
-    });
-    return resp.data;
-  } catch (err) {
-    const e = err;
-    if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
-      logs.push(`[${label}] Timeout`);
+    const r = await fn(ctrl.signal);
+    const ms = Date.now() - start;
+    if (r && ("name" in r && r.name || "image" in r && r.image)) {
+      sources.push({ name, ms, result: "hit" });
     } else {
-      logs.push(`[${label}] Error: ${e.message}`);
+      sources.push({ name, ms, result: "miss" });
+    }
+    return r;
+  } catch (err) {
+    const ms = Date.now() - start;
+    const e = err;
+    if (e.name === "AbortError" || e.name === "CanceledError" || e.code === "ERR_CANCELED" || e.code === "ECONNABORTED") {
+      sources.push({ name, ms, result: "timeout" });
+    } else {
+      sources.push({ name, ms, result: "error", error: e.message?.slice(0, 200) });
     }
     return null;
+  } finally {
+    clearTimeout(timer);
   }
-}
-async function searchGoogleImagesUrl(query, label, logs, timeoutMs = 9e3) {
-  const url2 = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch&hl=pl`;
-  const html = await fetchGoogle(url2, label, logs, timeoutMs);
-  if (!html) return null;
-  return extractImageUrl(html, label, logs);
-}
-function extractNameFromGoogleHtml(html, label, logs) {
-  const h3Matches = html.match(/<h3[^>]*>([^<]+)<\/h3>/g) || [];
-  const titles = h3Matches.map((m) => m.replace(/<[^>]+>/g, "").trim()).filter((t) => t.length > 3 && !t.toLowerCase().includes("google")).map((t) => t.replace(STORE_NAMES_TO_REMOVE, "").trim()).filter((t) => t.length > 3);
-  const name = titles[0] || null;
-  WEIGHT_REGEX.lastIndex = 0;
-  const weightMatch = WEIGHT_REGEX.exec(html);
-  const weight = weightMatch ? weightMatch[0] : null;
-  const imgUrl = extractImageUrl(html, label + "/text", logs);
-  if (name) {
-    logs.push(`[${label}] Name found: ${name}`);
-    return { found: true, name, brand: null, weight, category: null, image: imgUrl, description: null, source: label.toLowerCase().replace(/[^a-z_/]/g, "_"), logs };
-  }
-  logs.push(`[${label}] No product name found`);
-  return null;
 }
 function extractOffImage(p, ean) {
   const direct = p.image_front_url || p.image_front_small_url || p.image_url || p.image_small_url;
@@ -48662,236 +48697,469 @@ function buildOffEanPath(ean) {
   if (s.length === 8) return `${s.slice(0, 4)}/${s.slice(4)}`;
   return s.length >= 1 ? s : null;
 }
-async function searchOpenFoodFacts(ean, logs) {
-  let bestWithImage = null;
-  let bestWithoutImage = null;
-  for (const region of OPEN_FOOD_FACTS_REGIONS) {
-    const url2 = `https://${region}.openfoodfacts.org/api/v2/product/${ean}.json`;
-    logs.push(`[OpenFoodFacts/${region}] ${url2}`);
+async function fetchOffOnce(domain, ean, source, logs, signal) {
+  const url2 = `https://${domain}/api/v2/product/${ean}.json`;
+  logs.push(`[${source}] ${url2}`);
+  const resp = await httpGet(url2, {
+    timeoutMs: PER_SOURCE_TIMEOUT_MS,
+    signal,
+    headers: { "User-Agent": "iPremiumScan/1.0" }
+  });
+  const data = resp.data;
+  if (data?.status !== 1 || !data.product) {
+    logs.push(`[${source}] status=${data?.status}`);
+    return null;
+  }
+  const p = data.product;
+  const name = p.product_name || p.product_name_pl || p.product_name_de || p.product_name_en || p.product_name_fr || p.product_name_sk || null;
+  if (!name) {
+    logs.push(`[${source}] Found but no name \u2014 skipping`);
+    return null;
+  }
+  const image = extractOffImage(p, ean);
+  logs.push(`[${source}] Found: ${name}${image ? ` (image)` : " (no image)"}`);
+  return {
+    found: true,
+    name,
+    brand: p.brands || null,
+    weight: p.quantity || (p.product_quantity ? `${p.product_quantity} ${p.product_quantity_unit || ""}`.trim() : null) || p.serving_size || null,
+    category: p.categories ? p.categories.split(",")[0].trim() : null,
+    image,
+    description: null,
+    source,
+    logs
+  };
+}
+async function searchOpenFoodFacts(ean, logs, signal) {
+  const variants = eanVariants(ean);
+  for (const variant of variants) {
+    const settled = await Promise.allSettled(
+      OPEN_FOOD_FACTS_REGIONS.map(
+        (region) => fetchOffOnce(`${region}.openfoodfacts.org`, variant, `OpenFoodFacts/${region}`, logs, signal)
+      )
+    );
+    let withImage = null;
+    let withoutImage = null;
+    for (const r of settled) {
+      if (r.status !== "fulfilled" || !r.value) continue;
+      if (r.value.image && !withImage) withImage = r.value;
+      if (!withoutImage) withoutImage = r.value;
+    }
+    const winner = withImage || withoutImage;
+    if (winner) {
+      if (variant !== ean) logs.push(`[OFF] hit on variant ${variant}`);
+      return winner;
+    }
+  }
+  return null;
+}
+async function searchOpenFactsApi(domain, label, ean, logs, signal) {
+  const variants = eanVariants(ean);
+  for (const variant of variants) {
     try {
-      const resp = await axios_default.get(url2, {
-        timeout: 6e3,
-        headers: { "User-Agent": "iPremiumScan/1.0" }
-      });
-      const data = resp.data;
-      if (data.status === 1 && data.product) {
-        const p = data.product;
-        const name = p.product_name || p.product_name_pl || p.product_name_de || p.product_name_en || p.product_name_fr || p.product_name_sk || null;
-        if (!name) {
-          logs.push(`[OpenFoodFacts/${region}] Found but no name \u2014 skipping`);
-          continue;
-        }
-        const image = extractOffImage(p, ean);
-        logs.push(`[OpenFoodFacts/${region}] Found: ${name}${image ? ` (image: ${image.slice(0, 60)})` : " (no image)"}`);
-        const entry = {
-          found: true,
-          name,
-          brand: p.brands || null,
-          weight: p.quantity || (p.product_quantity ? `${p.product_quantity} ${p.product_quantity_unit || ""}`.trim() : null) || p.serving_size || null,
-          category: p.categories ? p.categories.split(",")[0].trim() : null,
-          image,
-          description: null,
-          source: `openfoodfacts/${region}`,
-          logs
-        };
-        if (image && !bestWithImage) bestWithImage = entry;
-        if (!bestWithoutImage) bestWithoutImage = entry;
-        if (image) return entry;
-      } else {
-        logs.push(`[OpenFoodFacts/${region}] status=${data.status}`);
+      const r = await fetchOffOnce(domain, variant, label, logs, signal);
+      if (r) {
+        if (variant !== ean) logs.push(`[${label}] hit on variant ${variant}`);
+        return r;
       }
     } catch (err) {
       const e = err;
-      if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
-        logs.push(`[OpenFoodFacts/${region}] Timeout`);
-      } else if (e.response?.status === 404) {
-        logs.push(`[OpenFoodFacts/${region}] 404`);
-      } else {
-        logs.push(`[OpenFoodFacts/${region}] Error: ${e.message}`);
-      }
+      if (e.response?.status === 404) continue;
+      throw err;
     }
   }
-  return bestWithImage || bestWithoutImage || null;
+  return null;
 }
-async function searchUpcItemdb(ean, logs) {
+async function searchUpcItemdbOnce(ean, logs, signal) {
   const url2 = `https://api.upcitemdb.com/prod/trial/lookup?upc=${ean}`;
   logs.push(`[UPCitemdb] ${url2}`);
-  try {
-    const resp = await axios_default.get(url2, {
-      timeout: 6e3,
-      headers: { "User-Agent": "iPremiumScan/1.0" }
-    });
-    const data = resp.data;
-    if (data.code === "OK" && data.items?.length > 0) {
-      const item = data.items[0];
-      if (!item.title) {
-        logs.push("[UPCitemdb] No title \u2014 skipping");
+  const resp = await httpGet(url2, {
+    timeoutMs: PER_SOURCE_TIMEOUT_MS,
+    signal,
+    headers: { "User-Agent": "iPremiumScan/1.0" }
+  });
+  const data = resp.data;
+  if (data?.code !== "OK" || !data.items?.length) {
+    logs.push(`[UPCitemdb] code=${data?.code}`);
+    return null;
+  }
+  const item = data.items[0];
+  if (!item.title) {
+    logs.push("[UPCitemdb] No title \u2014 skipping");
+    return null;
+  }
+  const image = item.images?.[0] || null;
+  logs.push(`[UPCitemdb] Found: ${item.title}${image ? " (with image)" : " (no image)"}`);
+  return {
+    found: true,
+    name: item.title,
+    brand: item.brand || null,
+    weight: item.weight || null,
+    category: item.category || null,
+    image,
+    description: item.description || null,
+    source: "upcitemdb",
+    logs
+  };
+}
+async function searchUpcItemdb(ean, logs, signal) {
+  for (const variant of eanVariants(ean)) {
+    try {
+      const r = await searchUpcItemdbOnce(variant, logs, signal);
+      if (r) {
+        if (variant !== ean) logs.push(`[UPCitemdb] hit on variant ${variant}`);
+        return r;
+      }
+    } catch (err) {
+      const e = err;
+      if (e.response?.status === 429) {
+        logs.push("[UPCitemdb] 429 \u2014 bailing on remaining variants");
         return null;
       }
-      const image = item.images?.[0] || null;
-      logs.push(`[UPCitemdb] Found: ${item.title}${image ? " (with image)" : " (no image)"}`);
-      return {
-        found: true,
-        name: item.title,
-        brand: item.brand || null,
-        weight: item.weight || null,
-        category: item.category || null,
-        image,
-        description: item.description || null,
-        source: "upcitemdb",
-        logs
-      };
-    } else {
-      logs.push(`[UPCitemdb] code=${data.code}`);
-    }
-  } catch (err) {
-    const e = err;
-    if (e.code === "ECONNABORTED" || e.message?.includes("timeout")) {
-      logs.push("[UPCitemdb] Timeout");
-    } else if (e.response?.status === 429) {
-      logs.push("[UPCitemdb] Rate limited");
-    } else {
-      logs.push(`[UPCitemdb] Error: ${e.message}`);
     }
   }
   return null;
 }
-async function googleTextSearch(query, label, logs) {
+var BAD_SCRAPED_NAMES = [
+  "wyniki wyszukiwania",
+  "search results",
+  "strona g\u0142\xF3wna",
+  "nie znaleziono",
+  "no results",
+  "404",
+  "page not found",
+  "captcha",
+  "cloudflare",
+  "allegro - najwiek",
+  "ceneo",
+  "skapiec"
+];
+function isLikelyProductName(name, ean) {
+  if (!name) return false;
+  const trimmed = name.trim();
+  if (trimmed.length < 10) return false;
+  const lower = trimmed.toLowerCase();
+  if (BAD_SCRAPED_NAMES.some((bad) => lower.includes(bad))) return false;
+  if (trimmed === ean) return false;
+  return true;
+}
+async function fetchHtml(url2, label, logs, signal, timeoutMs = PER_SOURCE_TIMEOUT_MS) {
+  logs.push(`[${label}] GET ${url2}`);
+  try {
+    const resp = await httpGet(url2, {
+      timeoutMs,
+      signal,
+      headers: {
+        "User-Agent": CHROME_UA,
+        Accept: "text/html",
+        "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.5"
+      }
+    });
+    return typeof resp.data === "string" ? resp.data : "";
+  } catch (err) {
+    const e = err;
+    logs.push(`[${label}] Error: ${e.response?.status ?? e.code ?? e.message}`);
+    return null;
+  }
+}
+async function searchAllegroListing(ean, logs, signal) {
+  const url2 = `https://allegro.pl/listing?string=${encodeURIComponent(ean)}`;
+  const html = await fetchHtml(url2, "AllegroListing", logs, signal);
+  if (!html) return null;
+  const titleMatch = html.match(/<a[^>]+itemprop=["']url["'][^>]*>\s*<h2[^>]*>([^<]+)<\/h2>/) || html.match(/<h2[^>]+data-role=["']offer-title["'][^>]*>([^<]+)<\/h2>/);
+  const imgMatch = html.match(/<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/) || html.match(/<img[^>]+data-src=["'](https:\/\/[^"']*allegroimg[^"']+)["']/) || html.match(/(https:\/\/a\.allegroimg\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
+  const rawName = titleMatch?.[1]?.trim().replace(/\s+/g, " ") || null;
+  const name = isLikelyProductName(rawName, ean) ? rawName : null;
+  const image = imgMatch?.[1] || null;
+  if (!name && !image) {
+    logs.push("[AllegroListing] No products in HTML");
+    return null;
+  }
+  logs.push(`[AllegroListing] Found: ${name ?? "<no name>"}${image ? " (image)" : ""}`);
+  return {
+    found: true,
+    name,
+    brand: null,
+    weight: null,
+    category: null,
+    image,
+    description: null,
+    source: "allegro_listing",
+    logs
+  };
+}
+async function searchCeneoListing(ean, logs, signal) {
+  const url2 = `https://www.ceneo.pl/;szukaj-${encodeURIComponent(ean)}`;
+  const html = await fetchHtml(url2, "CeneoListing", logs, signal);
+  if (!html) return null;
+  const titleMatch = html.match(/<strong[^>]+class=["'][^"']*cat-prod-row__name[^"']*["'][^>]*>\s*<a[^>]*>([^<]+)/i) || html.match(/<a[^>]+class=["'][^"']*go-to-product[^"']*["'][^>]*>([^<]{15,200})<\/a>/i);
+  const imgMatch = html.match(/<img[^>]+src=["'](https:\/\/image\.ceneostatic\.pl\/[^"']+)["']/) || html.match(/(https:\/\/[^"'\s]*ceneostatic\.pl\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
+  const rawName = titleMatch?.[1]?.trim().replace(/\s+/g, " ") || null;
+  const name = isLikelyProductName(rawName, ean) ? rawName : null;
+  const image = imgMatch?.[1] || null;
+  if (!name && !image) {
+    logs.push("[CeneoListing] No products in HTML");
+    return null;
+  }
+  logs.push(`[CeneoListing] Found: ${name ?? "<no name>"}${image ? " (image)" : ""}`);
+  return {
+    found: true,
+    name,
+    brand: null,
+    weight: null,
+    category: null,
+    image,
+    description: null,
+    source: "ceneo_listing",
+    logs
+  };
+}
+async function searchSkapiecListing(ean, logs, signal) {
+  const url2 = `https://www.skapiec.pl/szukaj/${encodeURIComponent(ean)}`;
+  const html = await fetchHtml(url2, "SkapiecListing", logs, signal);
+  if (!html) return null;
+  const titleMatch = html.match(/<h2[^>]+class=["'][^"']*product-name[^"']*["'][^>]*>\s*<a[^>]*>([^<]+)/i) || html.match(/<a[^>]+class=["'][^"']*item-card-link[^"']*["'][^>]*>([^<]{10,200})/i);
+  const imgMatch = html.match(/<img[^>]+src=["'](https:\/\/image\.skapiec\.pl\/[^"']+)["']/) || html.match(/(https:\/\/[^"'\s]*skapiec\.pl\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
+  const rawName = titleMatch?.[1]?.trim().replace(/\s+/g, " ") || null;
+  const name = isLikelyProductName(rawName, ean) ? rawName : null;
+  const image = imgMatch?.[1] || null;
+  if (!name && !image) {
+    logs.push("[SkapiecListing] No products in HTML");
+    return null;
+  }
+  logs.push(`[SkapiecListing] Found: ${name ?? "<no name>"}${image ? " (image)" : ""}`);
+  return {
+    found: true,
+    name,
+    brand: null,
+    weight: null,
+    category: null,
+    image,
+    description: null,
+    source: "skapiec_listing",
+    logs
+  };
+}
+function extractNameFromGoogleHtml(html, label, logs, source) {
+  const h3Matches = html.match(/<h3[^>]*>([^<]+)<\/h3>/g) || [];
+  const titles = h3Matches.map((m) => m.replace(/<[^>]+>/g, "").trim()).filter((t) => t.length > 3 && !t.toLowerCase().includes("google")).map((t) => t.replace(STORE_NAMES_TO_REMOVE, "").trim()).filter((t) => t.length > 3);
+  const name = titles[0] || null;
+  WEIGHT_REGEX.lastIndex = 0;
+  const weightMatch = WEIGHT_REGEX.exec(html);
+  const weight = weightMatch ? weightMatch[0] : null;
+  const imgUrl = extractImageUrl(html, label + "/text", logs);
+  if (!name) {
+    logs.push(`[${label}] No product name found`);
+    return null;
+  }
+  logs.push(`[${label}] Name found: ${name}`);
+  return {
+    found: true,
+    name,
+    brand: null,
+    weight,
+    category: null,
+    image: imgUrl,
+    description: null,
+    source,
+    logs
+  };
+}
+async function googleTextSearch(query, label, source, logs, signal) {
   const url2 = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-  const html = await fetchGoogle(url2, label, logs);
+  const html = await fetchHtml(url2, label, logs, signal);
   if (!html) return null;
-  return extractNameFromGoogleHtml(html, label, logs);
+  return extractNameFromGoogleHtml(html, label, logs, source);
 }
-async function searchOpenFactsApi(url2, label, ean, logs) {
-  logs.push(`[${label}] ${url2}`);
-  try {
-    const resp = await axios_default.get(url2, {
-      timeout: 8e3,
-      headers: { "User-Agent": "iPremiumScan/1.0" }
-    });
-    const data = resp.data;
-    if (data.status === 1 && data.product) {
-      const p = data.product;
-      const name = p.product_name || p.product_name_en || p.product_name_de || p.product_name_pl || p.product_name_fr || null;
-      if (!name) {
-        logs.push(`[${label}] Found but no name`);
-        return null;
-      }
-      const image = extractOffImage(p, ean);
-      logs.push(`[${label}] Found: ${name}`);
-      return {
-        found: true,
-        name,
-        brand: p.brands || null,
-        weight: p.quantity || null,
-        category: p.categories ? p.categories.split(",")[0].trim() : null,
-        image,
-        description: null,
-        source: label.toLowerCase().replace(/[^a-z_/]/g, "_"),
-        logs
-      };
-    }
-    logs.push(`[${label}] status=${data.status}`);
-  } catch (err) {
-    const e = err;
-    logs.push(`[${label}] ${e.response?.status === 404 ? "404" : e.message}`);
-  }
-  return null;
+async function searchGoogleImagesUrl(query, label, logs, signal) {
+  const url2 = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=isch&hl=pl`;
+  const html = await fetchHtml(url2, label, logs, signal);
+  if (!html) return null;
+  const image = extractImageUrl(html, label, logs);
+  return image ? { image } : null;
 }
-async function searchGoogleShopping(ean, logs) {
+async function searchGoogleShopping(ean, logs, signal) {
   const url2 = `https://www.google.com/search?q=${encodeURIComponent(ean)}&tbm=shop`;
-  const html = await fetchGoogle(url2, "GoogleShopping", logs, 8e3);
+  const html = await fetchHtml(url2, "GoogleShopping", logs, signal);
   if (!html) return null;
-  return extractNameFromGoogleHtml(html, "GoogleShopping", logs);
+  return extractNameFromGoogleHtml(html, "GoogleShopping", logs, "google_shopping");
+}
+async function searchBingImages(query, logs, signal) {
+  const url2 = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1`;
+  const html = await fetchHtml(url2, "BingImg", logs, signal);
+  if (!html) return null;
+  const murlMatch = html.match(/&quot;murl&quot;:&quot;([^&]+)&quot;/);
+  if (murlMatch?.[1]) {
+    const url22 = murlMatch[1];
+    if (/^https?:\/\//.test(url22) && !/(sprite|logo|icon|favicon)/i.test(url22)) {
+      logs.push(`[BingImg] via murl: ${url22.slice(0, 80)}`);
+      return { image: url22 };
+    }
+  }
+  const fallback = extractImageUrl(html, "BingImg", logs);
+  return fallback ? { image: fallback } : null;
+}
+async function searchAllegroImagesByName(name, logs, signal) {
+  const url2 = `https://allegro.pl/listing?string=${encodeURIComponent(name)}`;
+  const html = await fetchHtml(url2, "AllegroImg", logs, signal);
+  if (!html) return null;
+  const m = html.match(/<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/) || html.match(/(https:\/\/a\.allegroimg\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/);
+  if (!m?.[1]) {
+    logs.push("[AllegroImg] No image in listing");
+    return null;
+  }
+  logs.push(`[AllegroImg] via listing: ${m[1].slice(0, 80)}`);
+  return { image: m[1] };
+}
+function scoreResult(r, sourceName) {
+  let score = 0;
+  const reasons = [];
+  if (r.name && r.image) {
+    score += 10;
+    reasons.push("+10 name+image");
+  } else if (r.name) {
+    score += 4;
+    reasons.push("+4 name only");
+  } else if (r.image) {
+    score += 2;
+    reasons.push("+2 image only");
+  }
+  if (POLISH_SOURCES.has(sourceName)) {
+    score += 5;
+    reasons.push("+5 PL source");
+  }
+  if (r.brand) {
+    score += 3;
+    reasons.push("+3 brand");
+  }
+  if (r.category) {
+    score += 2;
+    reasons.push("+2 category");
+  }
+  if (r.image && /\/(s\d{3,}|[wh]\d{3,}|\d{3,}x\d{3,})/.test(r.image)) {
+    score += 1;
+    reasons.push("+1 large img URL");
+  }
+  return { score, reason: reasons.join(", ") || "0" };
 }
 async function lookupEan(ean) {
+  const startedAt = Date.now();
+  const sources = [];
   const logs = [`Szukam EAN: ${ean}`];
-  const [
-    offResult,
-    upcResult,
-    beautyResult,
-    petResult,
-    imgEan,
-    imgEanProduct,
-    imgCeneo,
-    imgAllegro
-  ] = await Promise.all([
-    searchOpenFoodFacts(ean, logs).catch(() => null),
-    searchUpcItemdb(ean, logs).catch(() => null),
-    searchOpenFactsApi(`https://world.openbeautyfacts.org/api/v2/product/${ean}.json`, "OpenBeautyFacts", ean, logs).catch(() => null),
-    searchOpenFactsApi(`https://world.openpetfoodfacts.org/api/v2/product/${ean}.json`, "OpenPetFoodFacts", ean, logs).catch(() => null),
-    searchGoogleImagesUrl(ean, "GoogleImg/EAN", logs),
-    searchGoogleImagesUrl(`${ean} produkt`, "GoogleImg/EAN+produkt", logs),
-    searchGoogleImagesUrl(`site:ceneo.pl ${ean}`, "GoogleImg/Ceneo", logs),
-    searchGoogleImagesUrl(`site:allegro.pl ${ean}`, "GoogleImg/Allegro", logs)
+  const phaseA = await Promise.all([
+    trackSource("openfoodfacts", sources, (s) => searchOpenFoodFacts(ean, logs, s), PER_SOURCE_TIMEOUT_LONG_MS),
+    trackSource(
+      "openbeautyfacts",
+      sources,
+      (s) => searchOpenFactsApi("world.openbeautyfacts.org", "OpenBeautyFacts", ean, logs, s)
+    ),
+    trackSource(
+      "openpetfoodfacts",
+      sources,
+      (s) => searchOpenFactsApi("world.openpetfoodfacts.org", "OpenPetFoodFacts", ean, logs, s)
+    ),
+    trackSource("upcitemdb", sources, (s) => searchUpcItemdb(ean, logs, s)),
+    trackSource("allegro_listing", sources, (s) => searchAllegroListing(ean, logs, s)),
+    trackSource("ceneo_listing", sources, (s) => searchCeneoListing(ean, logs, s)),
+    trackSource("skapiec_listing", sources, (s) => searchSkapiecListing(ean, logs, s))
   ]);
-  const structuredResult = offResult || beautyResult || petResult || upcResult;
-  const googleImage = imgEan || imgEanProduct || imgCeneo || imgAllegro || null;
-  const structuredImage = offResult?.image || beautyResult?.image || petResult?.image || upcResult?.image || null;
-  let image = structuredImage || googleImage;
-  if (structuredResult?.name && !image) {
-    logs.push(`[ImageHunt] Searching by name: ${structuredResult.name}`);
-    image = await searchGoogleImagesUrl(structuredResult.name, "GoogleImg/Name", logs);
+  const phaseB = await Promise.all([
+    trackSource("google_allegro", sources, (s) => googleTextSearch(`site:allegro.pl ${ean}`, "Google/Allegro", "google_allegro", logs, s)),
+    trackSource("google_ceneo", sources, (s) => googleTextSearch(`site:ceneo.pl ${ean}`, "Google/Ceneo", "google_ceneo", logs, s)),
+    trackSource("google_barcodelookup", sources, (s) => googleTextSearch(`site:barcodelookup.com ${ean}`, "Google/BarcodeDB", "google_barcodelookup", logs, s)),
+    trackSource("google_ean_search", sources, (s) => googleTextSearch(`site:ean-search.org ${ean}`, "Google/EANsearch", "google_ean_search", logs, s)),
+    trackSource("google_kaufland", sources, (s) => googleTextSearch(`site:kaufland.de ${ean}`, "Google/Kaufland", "google_kaufland", logs, s)),
+    trackSource("google_lidl_pl", sources, (s) => googleTextSearch(`site:lidl.pl ${ean}`, "Google/Lidl", "google_lidl_pl", logs, s)),
+    trackSource("google_rossmann", sources, (s) => googleTextSearch(`site:rossmann.pl ${ean}`, "Google/Rossmann", "google_rossmann", logs, s)),
+    trackSource("google_empik", sources, (s) => googleTextSearch(`site:empik.com ${ean}`, "Google/Empik", "google_empik", logs, s)),
+    trackSource("google_amazon_de", sources, (s) => googleTextSearch(`site:amazon.de ${ean}`, "Google/Amazon.de", "google_amazon_de", logs, s)),
+    trackSource("google_amazon_pl", sources, (s) => googleTextSearch(`site:amazon.pl ${ean}`, "Google/Amazon.pl", "google_amazon_pl", logs, s)),
+    trackSource("google_ebay", sources, (s) => googleTextSearch(`site:ebay.com ${ean}`, "Google/eBay", "google_ebay", logs, s)),
+    trackSource("google_codecheck", sources, (s) => googleTextSearch(`site:codecheck.info ${ean}`, "Google/Codecheck", "google_codecheck", logs, s)),
+    trackSource("google_cosmetify", sources, (s) => googleTextSearch(`site:cosmetify.com ${ean}`, "Google/Cosmetify", "google_cosmetify", logs, s)),
+    trackSource("google_shopping", sources, (s) => searchGoogleShopping(ean, logs, s)),
+    trackSource("google_image_ean", sources, (s) => searchGoogleImagesUrl(ean, "GoogleImg/EAN", logs, s)),
+    trackSource("google_image_ceneo", sources, (s) => searchGoogleImagesUrl(`site:ceneo.pl ${ean}`, "GoogleImg/Ceneo", logs, s)),
+    trackSource("google_image_allegro", sources, (s) => searchGoogleImagesUrl(`site:allegro.pl ${ean}`, "GoogleImg/Allegro", logs, s))
+  ]);
+  const allHits = [];
+  for (const r of phaseA) {
+    if (r && "name" in r && r.name) allHits.push(r);
   }
-  if (structuredResult) {
-    if (image) logs.push(`[Result] Image: ${image.slice(0, 80)}`);
-    return { ...structuredResult, image: image || null, logs };
+  for (const r of phaseB) {
+    if (r && "name" in r && r.name) allHits.push(r);
   }
-  logs.push("[Phase3] Structured sources empty \u2014 trying Google text searches");
-  const textSources = [
-    { query: `${ean} produkt`, label: "Google/EAN+produkt" },
-    { query: `site:allegro.pl ${ean}`, label: "Google/Allegro" },
-    { query: `site:ceneo.pl ${ean}`, label: "Google/Ceneo" },
-    { query: `site:barcodelookup.com ${ean}`, label: "Google/BarcodeDB" },
-    { query: `site:ean-search.org ${ean}`, label: "Google/EANsearch" }
-  ];
-  for (const { query, label } of textSources) {
-    const result = await googleTextSearch(query, label, logs);
-    if (result?.name) {
-      image = image || result.image || null;
-      if (!image) {
-        logs.push(`[ImageHunt] Searching by name: ${result.name}`);
-        image = await searchGoogleImagesUrl(result.name, "GoogleImg/Name2", logs);
-      }
-      if (image) logs.push(`[Result] Image: ${image.slice(0, 80)}`);
-      return { ...result, image: image || null, logs };
+  const phaseBImages = [];
+  for (const r of phaseB) {
+    if (r && "image" in r && r.image) phaseBImages.push(r.image);
+  }
+  if (allHits.length === 0) {
+    logs.push("Nie znaleziono produktu w \u017Cadnym \u017Ar\xF3dle");
+    return {
+      found: false,
+      logs,
+      debug: { sources, totalMs: Date.now() - startedAt }
+    };
+  }
+  const scored = allHits.map((r) => ({ r, ...scoreResult(r, r.source ?? "unknown") })).sort((a, b) => b.score - a.score);
+  const winnerEntry = scored[0];
+  const winner = winnerEntry.r;
+  const winnerScore = winnerEntry.score;
+  const winnerSource = winner.source ?? "unknown";
+  function findHitTraceFor(sourceName) {
+    const sn = sourceName.toLowerCase();
+    return sources.find(
+      (t) => t.result === "hit" && (t.name.toLowerCase() === sn || sn.startsWith(t.name.toLowerCase() + "/"))
+    );
+  }
+  const winnerTrace = findHitTraceFor(winnerSource);
+  if (winnerTrace) winnerTrace.scoreReason = winnerEntry.reason;
+  for (const other of scored.slice(1)) {
+    const sourceName = other.r.source ?? "unknown";
+    const trace = findHitTraceFor(sourceName);
+    if (trace && trace !== winnerTrace) {
+      trace.result = "hit_lower_score";
+      trace.scoreReason = other.reason;
     }
   }
-  logs.push("[Phase4] All sources empty \u2014 running extended parallel sweep");
-  const phase4Results = await Promise.all([
-    // E-shops
-    googleTextSearch(`site:amazon.de ${ean}`, "Google/Amazon.de", logs).catch(() => null),
-    googleTextSearch(`site:amazon.pl ${ean}`, "Google/Amazon.pl", logs).catch(() => null),
-    googleTextSearch(`site:kaufland.de ${ean}`, "Google/Kaufland", logs).catch(() => null),
-    googleTextSearch(`site:lidl.pl ${ean}`, "Google/Lidl", logs).catch(() => null),
-    googleTextSearch(`site:auchan.pl ${ean}`, "Google/Auchan", logs).catch(() => null),
-    googleTextSearch(`site:carrefour.pl ${ean}`, "Google/Carrefour", logs).catch(() => null),
-    googleTextSearch(`site:biedronka.pl ${ean}`, "Google/Biedronka", logs).catch(() => null),
-    googleTextSearch(`site:rossmann.pl ${ean}`, "Google/Rossmann", logs).catch(() => null),
-    googleTextSearch(`site:empik.com ${ean}`, "Google/Empik", logs).catch(() => null),
-    // EAN / barcode keyword searches
-    googleTextSearch(`EAN ${ean}`, "Google/EAN+keyword", logs).catch(() => null),
-    googleTextSearch(`barcode ${ean}`, "Google/barcode+keyword", logs).catch(() => null),
-    // Barcode databases
-    googleTextSearch(`site:go-upc.com ${ean}`, "Google/GoUPC", logs).catch(() => null),
-    googleTextSearch(`site:buycott.com ${ean}`, "Google/Buycott", logs).catch(() => null),
-    googleTextSearch(`site:codecheck.info ${ean}`, "Google/Codecheck", logs).catch(() => null),
-    googleTextSearch(`site:cosmetify.com ${ean}`, "Google/Cosmetify", logs).catch(() => null),
-    // Google Shopping (OpenBeautyFacts + OpenPetFoodFacts already ran in Phase 1)
-    searchGoogleShopping(ean, logs).catch(() => null)
-  ]);
-  const phase4Hit = phase4Results.find((r) => r?.name);
-  if (phase4Hit) {
-    image = image || phase4Hit.image || null;
+  let image = winner.image ?? phaseBImages[0] ?? null;
+  if (!image && winner.name) {
+    logs.push(`[ImageHunt] Searching by name: ${winner.name}`);
+    const fromBing = await trackSource(
+      "bing_images_name",
+      sources,
+      (s) => searchBingImages(winner.name, logs, s)
+    );
+    if (fromBing?.image) image = fromBing.image;
     if (!image) {
-      logs.push(`[ImageHunt] Searching by name: ${phase4Hit.name}`);
-      image = await searchGoogleImagesUrl(phase4Hit.name, "GoogleImg/Phase4", logs);
+      const fromAllegro = await trackSource(
+        "allegro_images_name",
+        sources,
+        (s) => searchAllegroImagesByName(winner.name, logs, s)
+      );
+      if (fromAllegro?.image) image = fromAllegro.image;
     }
-    if (image) logs.push(`[Result] Image: ${image.slice(0, 80)}`);
-    return { ...phase4Hit, image: image || null, logs };
+    if (!image) {
+      const fromGoogle = await trackSource(
+        "google_images_name",
+        sources,
+        (s) => searchGoogleImagesUrl(winner.name, "GoogleImg/Name", logs, s)
+      );
+      if (fromGoogle?.image) image = fromGoogle.image;
+    }
   }
-  logs.push("Nie znaleziono produktu w \u017Cadnym \u017Ar\xF3dle");
-  return { found: false, logs };
+  if (image) logs.push(`[Result] Image: ${image.slice(0, 80)}`);
+  return {
+    ...winner,
+    image: image ?? null,
+    logs,
+    debug: {
+      sources,
+      totalMs: Date.now() - startedAt,
+      winnerScore,
+      alternativeCount: Math.max(0, scored.length - 1)
+    }
+  };
 }
 
 // src/lib/settings.ts
@@ -49040,6 +49308,7 @@ router2.get("/scan", async (req, res) => {
         error: "not_found",
         message: "Nie znaleziono produktu dla podanego kodu EAN",
         logs: result.logs,
+        debug: result.debug,
         ean
       });
       return;
@@ -49138,6 +49407,7 @@ router2.get("/scan", async (req, res) => {
       weight: normalizedWeight,
       category: result.category,
       logs: result.logs,
+      debug: result.debug,
       ean
     });
   } catch (err) {

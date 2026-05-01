@@ -168,6 +168,7 @@ router.get("/scan", async (req, res) => {
         error: "not_found",
         message: "Nie znaleziono produktu dla podanego kodu EAN",
         logs: result.logs,
+        debug: result.debug,
         ean,
       });
       return;
@@ -282,6 +283,7 @@ router.get("/scan", async (req, res) => {
       weight: normalizedWeight,
       category: result.category,
       logs: result.logs,
+      debug: result.debug,
       ean,
     });
   } catch (err: unknown) {
