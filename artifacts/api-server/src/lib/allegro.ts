@@ -59,14 +59,14 @@ export async function searchCatalogByEan(ean: string) {
     Accept: "application/vnd.allegro.public.v1+json",
   };
 
-  const attempts = [
+  const attempts: Array<Record<string, string>> = [
     { phrase: ean, language: "pl-PL" },
     { "filters.EAN": ean, language: "pl-PL" },
     { "filters.GTIN": ean, language: "pl-PL" },
   ];
 
   for (const params of attempts) {
-    const queryString = new URLSearchParams(params as Record<string, string>).toString();
+    const queryString = new URLSearchParams(params).toString();
     const url = `${ALLEGRO_BASE_URL}/sale/products?${queryString}`;
     logger.info({ url }, "Searching Allegro catalog");
 

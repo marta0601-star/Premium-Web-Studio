@@ -5,7 +5,8 @@
  * iPremium Scan API
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-    status: string;
+export interface ErrorResponse {
+    error: string;
+    message: string;
 }
-//# sourceMappingURL=healthStatus.d.ts.map
+//# sourceMappingURL=errorResponse.d.ts.map

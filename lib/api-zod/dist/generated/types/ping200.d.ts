@@ -5,7 +5,7 @@
  * iPremium Scan API
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
+export type Ping200 = {
     status: string;
-}
-//# sourceMappingURL=healthStatus.d.ts.map
+};
+//# sourceMappingURL=ping200.d.ts.map
