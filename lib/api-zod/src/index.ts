@@ -6,8 +6,10 @@ export * from "./generated/api";
 // a type via z.infer<typeof CreateOfferResponse>). When orval generates
 // new types, add them here.
 //
-// Real root cause is the orval config emitting both a zod schema AND a
-// separate interface for the same name; see follow-up TODO.
+// TODO(api-zod): Fix orval config to not emit duplicate CreateOfferResponse
+// (either skip type emit for names with zod schemas, or suffix interface
+// version e.g. CreateOfferResponseType). When fixed, this list can revert
+// to `export type * from "./generated/types"`.
 export type {
   CategoryParameter,
   CategoryParameterRestrictions,
