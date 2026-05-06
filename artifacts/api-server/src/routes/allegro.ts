@@ -11,6 +11,8 @@ import {
   createAllegroOffer,
   uploadImageToAllegro,
   uploadImageBinaryToAllegro,
+  resolveLeafCategory,
+  fetchCategoryChildrenList,
 } from "../lib/allegro";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
@@ -22,6 +24,11 @@ import {
   formatVolumeForContext,
   cleanProductName,
 } from "../lib/auto-detect";
+import {
+  fillCategoryParameters,
+  filledToPrefillValues,
+  type AllegroFillerParam,
+} from "../lib/parameter-filler";
 
 const ALLEGRO_BASE_URL = "https://api.allegro.pl";
 
@@ -177,21 +184,50 @@ router.get("/scan", async (req, res) => {
     // ── Step 3a: Auto-detect from lookup result ──────────────────────────────
     const rawName = result.name || "";
     const detectedBrand = detectBrand(rawName, result.brand || null);
-    const detectedVolume = detectVolume(rawName, result.weight || null);
     const categoryKeyword = detectCategoryKeyword(rawName);
+    // Volume detection runs BEFORE name cleanup so a sanity-rejected weight
+    // (e.g. "3 g" inside a candy name) is reported via weightSanity AND
+    // cleanProductName can strip the trailing token. We use the keyword as
+    // category context — fall back to OFF category string if keyword missed.
+    const weightSanityProbe: { reason?: string } = {};
+    const weightCategoryHint = categoryKeyword ?? result.category ?? null;
+    const detectedVolume = detectVolume(
+      rawName,
+      result.weight || null,
+      weightCategoryHint,
+      weightSanityProbe,
+    );
     const cleanedName = cleanProductName(rawName, detectedBrand, detectedVolume);
-    const normalizedWeight = detectedVolume ? formatVolumeForContext(detectedVolume) : (result.weight || null);
+    const normalizedWeight = detectedVolume ? formatVolumeForContext(detectedVolume) : null;
 
     req.log.info(
-      { rawName, cleanedName, detectedBrand, detectedVolume, categoryKeyword },
+      {
+        rawName,
+        cleanedName,
+        detectedBrand,
+        detectedVolume,
+        categoryKeyword,
+        weightSanity: weightSanityProbe.reason,
+      },
       "Auto-detection results"
     );
 
-    // ── Step 3b: Resolve Allegro category via matching-categories API ─────────
-    let detectedCategoryId = "258832"; // fallback: Supermarket (correct Allegro root)
-    let detectedCategoryName = "Supermarket";
-    const searchPhrase = cleanedName || categoryKeyword;
+    // ── Step 3b: Resolve Allegro category via matching-categories + drill-down
+    // Allegro often returns a non-leaf root like "Supermarket" (#258832)
+    // which the offer endpoint refuses ("category is not a leaf"). We ask
+    // matching-categories for the best phrase, then drill into children
+    // using a similarity score until we land on a leaf — or bail out and
+    // hand the user a manual picker.
+    let detectedCategoryId: string | null = null;
+    let detectedCategoryName: string | null = null;
+    let categoryPath: string[] = [];
+    let categoryLeaf = false;
+    let categoryConfidence: "high" | "medium" | "low" | "none" = "none";
+    let categoryResolutionTrace: unknown = undefined;
+    const searchPhrase = cleanedName || categoryKeyword || "";
 
+    let initialMatchId: string | null = null;
+    let initialMatchName: string | null = null;
     try {
       const token = await getUserToken();
       const catResp = await axios.get(
@@ -204,9 +240,9 @@ router.get("/scan", async (req, res) => {
           timeout: 5000,
         }
       );
-      // Allegro returns "matchingCategories" (array), not "matchingCategory"
-      const cats = (catResp.data as { matchingCategories?: Array<{ id: string; name: string }> }).matchingCategories || [];
-      // Find the best match: prefer exact or closest name match against our keyword
+      const cats =
+        (catResp.data as { matchingCategories?: Array<{ id: string; name: string }> })
+          .matchingCategories || [];
       const kwLower = searchPhrase.toLowerCase();
       let bestCat = cats[0];
       for (const cat of cats) {
@@ -217,56 +253,124 @@ router.get("/scan", async (req, res) => {
         }
       }
       if (bestCat?.id) {
-        detectedCategoryId = bestCat.id;
-        detectedCategoryName = bestCat.name;
+        initialMatchId = bestCat.id;
+        initialMatchName = bestCat.name;
         req.log.info(
-          { phrase: searchPhrase, categoryId: detectedCategoryId, categoryName: detectedCategoryName, candidateCount: cats.length },
-          "Category detected via Allegro API"
+          {
+            phrase: searchPhrase,
+            initialId: initialMatchId,
+            initialName: initialMatchName,
+            candidateCount: cats.length,
+          },
+          "matching-categories returned candidate"
         );
       }
     } catch (catErr: unknown) {
       const e = catErr as { message?: string };
-      req.log.warn({ phrase: searchPhrase, msg: e.message }, "matching-categories failed — using fallback");
+      req.log.warn({ phrase: searchPhrase, msg: e.message }, "matching-categories failed");
+    }
+
+    if (initialMatchId) {
+      const resolved = await resolveLeafCategory(
+        initialMatchId,
+        cleanedName,
+        detectedBrand,
+        categoryKeyword,
+      );
+      categoryResolutionTrace = {
+        initial: { id: initialMatchId, name: initialMatchName },
+        path: resolved.categoryPath,
+        confidence: resolved.confidence,
+        leaf: resolved.leaf,
+        steps: resolved.trace,
+      };
+      if (resolved.leaf && resolved.categoryId) {
+        detectedCategoryId = resolved.categoryId;
+        detectedCategoryName = resolved.categoryName;
+        categoryPath = resolved.categoryPath;
+        categoryLeaf = true;
+        categoryConfidence = resolved.confidence;
+        req.log.info(
+          {
+            categoryId: detectedCategoryId,
+            categoryName: detectedCategoryName,
+            path: categoryPath,
+            confidence: categoryConfidence,
+          },
+          "Leaf category resolved"
+        );
+      } else {
+        req.log.warn(
+          { initialId: initialMatchId, trace: resolved.trace },
+          "Leaf resolution failed — frontend will prompt manual selection"
+        );
+      }
     }
 
     // ── Step 3c: Fetch category parameters + product-parameter IDs ────────────
     let parameters: ReturnType<typeof mapParam>[] = [];
     let productParamIds: string[] = [];
+    let rawCategoryParams: RawAllegroParam[] = [];
 
-    try {
-      const token = await getUserToken();
-      const hdr = {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.allegro.public.v1+json",
-      };
-      const [paramsRes, ppRes] = await Promise.allSettled([
-        getCategoryParameters(detectedCategoryId),
-        axios.get(
-          `${ALLEGRO_BASE_URL}/sale/categories/${detectedCategoryId}/product-parameters?language=pl-PL`,
-          { headers: hdr, timeout: 8000 }
-        ),
-      ]);
+    if (detectedCategoryId) {
+      try {
+        const token = await getUserToken();
+        const hdr = {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.allegro.public.v1+json",
+        };
+        const [paramsRes, ppRes] = await Promise.allSettled([
+          getCategoryParameters(detectedCategoryId),
+          axios.get(
+            `${ALLEGRO_BASE_URL}/sale/categories/${detectedCategoryId}/product-parameters?language=pl-PL`,
+            { headers: hdr, timeout: 8000 }
+          ),
+        ]);
 
-      if (paramsRes.status === "fulfilled") {
-        const all: RawAllegroParam[] =
-          (paramsRes.value as { parameters?: RawAllegroParam[] }).parameters || [];
-        parameters = all.map((p) => mapParam(p));
-      } else {
-        req.log.warn({ categoryId: detectedCategoryId }, "Could not fetch parameters for detected category");
+        if (paramsRes.status === "fulfilled") {
+          rawCategoryParams =
+            (paramsRes.value as { parameters?: RawAllegroParam[] }).parameters || [];
+          parameters = rawCategoryParams.map((p) => mapParam(p));
+        } else {
+          req.log.warn({ categoryId: detectedCategoryId }, "Could not fetch parameters");
+        }
+
+        if (ppRes.status === "fulfilled") {
+          const pp = (ppRes.value.data as { parameters?: RawAllegroParam[] }).parameters || [];
+          productParamIds = pp.map((p) => p.id);
+        }
+      } catch (paramErr: unknown) {
+        const e = paramErr as { message?: string };
+        req.log.warn({ msg: e.message }, "Error fetching category parameters");
       }
-
-      if (ppRes.status === "fulfilled") {
-        const pp = (ppRes.value.data as { parameters?: RawAllegroParam[] }).parameters || [];
-        productParamIds = pp.map((p) => p.id);
-      }
-    } catch (paramErr: unknown) {
-      const e = paramErr as { message?: string };
-      req.log.warn({ msg: e.message }, "Error fetching category parameters");
     }
 
+    // ── Step 3d: Auto-fill category parameters from lookup data ──────────────
+    const fillerInput: AllegroFillerParam[] = parameters.map((p) => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      required: p.required,
+      options: p.options,
+    }));
+    const fillerOutput = fillCategoryParameters(fillerInput, {
+      productName: cleanedName,
+      brand: detectedBrand,
+      categoryKeyword,
+      ean,
+      weight: normalizedWeight,
+      offMeta: result.meta,
+    });
+    const prefillValues = filledToPrefillValues(fillerOutput.filled);
+
     req.log.info(
-      { categoryId: detectedCategoryId, paramCount: parameters.length, productParamCount: productParamIds.length },
-      "Category parameters loaded"
+      {
+        categoryId: detectedCategoryId,
+        paramCount: parameters.length,
+        productParamCount: productParamIds.length,
+        fillerStats: fillerOutput.stats,
+      },
+      "Category parameters loaded + auto-filled"
     );
 
     res.json({
@@ -274,16 +378,27 @@ router.get("/scan", async (req, res) => {
       productName: cleanedName,
       categoryId: detectedCategoryId,
       categoryName: detectedCategoryName,
+      categoryPath,
+      categoryLeaf,
+      categoryConfidence,
       images: result.image ? [{ url: result.image }] : [],
       parameters,
-      prefillValues: {},
+      prefillValues,
       productParamIds,
+      filledParameters: fillerOutput.filled,
+      skippedParameters: fillerOutput.skipped,
       source: result.source,
       brand: detectedBrand,
       weight: normalizedWeight,
       category: result.category,
+      meta: result.meta,
       logs: result.logs,
-      debug: result.debug,
+      debug: {
+        ...(result.debug ?? {}),
+        weightSanity: weightSanityProbe.reason,
+        categoryResolution: categoryResolutionTrace,
+        filling: fillerOutput.stats,
+      },
       ean,
     });
   } catch (err: unknown) {
@@ -338,22 +453,8 @@ router.get("/category-children", async (req, res) => {
   }
 
   try {
-    const token = await getUserToken();
-    // "root" is a special value that fetches top-level categories (no parent.id filter)
-    const apiUrl = id.trim() === "root"
-      ? `${ALLEGRO_BASE_URL}/sale/categories`
-      : `${ALLEGRO_BASE_URL}/sale/categories?parent.id=${encodeURIComponent(id.trim())}`;
-    const response = await axios.get(apiUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.allegro.public.v1+json",
-      },
-      timeout: 8000,
-    });
-    const raw = (response.data as { categories?: Array<{ id: string; name: string; leaf?: boolean }> }).categories || [];
-    res.json({
-      categories: raw.map((c) => ({ id: c.id, name: c.name, leaf: c.leaf ?? false })),
-    });
+    const categories = await fetchCategoryChildrenList(id.trim());
+    res.json({ categories });
   } catch (err: unknown) {
     const e = err as { response?: { status?: number; data?: unknown }; message?: string };
     req.log.warn({ id, status: e.response?.status, msg: e.message }, "category-children failed");

@@ -108,6 +108,279 @@ export async function getCategoryName(categoryId: string): Promise<string> {
   return (response.data as { name?: string }).name ?? "";
 }
 
+// ── CATEGORY CHILDREN + LEAF RESOLUTION ─────────────────────────────────────
+
+export interface AllegroCategoryNode {
+  id: string;
+  name: string;
+  leaf: boolean;
+}
+
+/**
+ * Fetch direct subcategories of a category, or top-level when id === "root".
+ * Shared between the route handler and the leaf-resolution helper so both
+ * paths talk to the same Allegro endpoint with the same auth fallback.
+ */
+export async function fetchCategoryChildrenList(
+  parentId: string,
+): Promise<AllegroCategoryNode[]> {
+  let token: string;
+  try {
+    token = await getUserToken();
+  } catch {
+    token = await getClientCredentialsToken();
+  }
+  const url =
+    parentId === "root"
+      ? `${ALLEGRO_BASE_URL}/sale/categories`
+      : `${ALLEGRO_BASE_URL}/sale/categories?parent.id=${encodeURIComponent(parentId)}`;
+  const response = await axios.get(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.allegro.public.v1+json",
+    },
+    timeout: 8000,
+  });
+  const raw =
+    (response.data as { categories?: Array<{ id: string; name: string; leaf?: boolean }> })
+      .categories || [];
+  return raw.map((c) => ({ id: c.id, name: c.name, leaf: c.leaf ?? false }));
+}
+
+/**
+ * Look up a single category's name + leaf flag. Used as the entry point for
+ * leaf resolution (we need to know whether the initial /sale/matching-
+ * categories result is itself a leaf).
+ */
+async function fetchCategoryNode(categoryId: string): Promise<AllegroCategoryNode> {
+  let token: string;
+  try {
+    token = await getUserToken();
+  } catch {
+    token = await getClientCredentialsToken();
+  }
+  const response = await axios.get(`${ALLEGRO_BASE_URL}/sale/categories/${categoryId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.allegro.public.v1+json",
+    },
+    timeout: 6000,
+  });
+  const data = response.data as { id?: string; name?: string; leaf?: boolean };
+  return {
+    id: data.id ?? categoryId,
+    name: data.name ?? "",
+    leaf: data.leaf ?? false,
+  };
+}
+
+export interface ResolveLeafTrace {
+  id: string;
+  name: string;
+  leaf: boolean;
+  score?: number;
+  selected?: boolean;
+  reason?: string;
+}
+
+export interface ResolveLeafResult {
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryPath: string[];
+  leaf: boolean;
+  confidence: "high" | "medium" | "low" | "none";
+  trace: ResolveLeafTrace[];
+}
+
+const MAX_LEAF_DRILL_DEPTH = 4;
+const MIN_DRILL_SCORE = 10;
+
+function similarityScore(
+  child: AllegroCategoryNode,
+  productName: string,
+  brand: string | null,
+  categoryKeyword: string | null,
+): { score: number; reason: string } {
+  const childLower = child.name.toLowerCase();
+  let score = 0;
+  const parts: string[] = [];
+
+  if (categoryKeyword) {
+    const kw = categoryKeyword.toLowerCase();
+    if (kw && childLower.includes(kw)) {
+      score += 25;
+      parts.push("+25 keyword");
+    }
+  }
+
+  // Each long-enough word from the product name that appears in the child name
+  // contributes once. We cap the bonus so a 10-word title can't dwarf the keyword
+  // signal.
+  if (productName) {
+    const words = productName
+      .toLowerCase()
+      .split(/[^a-zA-Z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+/)
+      .filter((w) => w.length >= 4);
+    let nameHits = 0;
+    for (const w of words) {
+      if (childLower.includes(w)) nameHits++;
+    }
+    if (nameHits > 0) {
+      const add = Math.min(nameHits * 20, 40);
+      score += add;
+      parts.push(`+${add} name (${nameHits})`);
+    }
+  }
+
+  if (brand) {
+    const b = brand.toLowerCase();
+    if (b.length >= 3 && childLower.includes(b)) {
+      score += 10;
+      parts.push("+10 brand");
+    }
+  }
+
+  return { score, reason: parts.join(" ") || "0" };
+}
+
+/**
+ * Resolve a (possibly non-leaf) Allegro category to a concrete leaf the
+ * offer-creation API will accept.
+ *
+ * Why this exists: /sale/matching-categories often returns a non-leaf root
+ * like "Supermarket" (#258832). Allegro rejects offers posted into non-leaf
+ * categories ("category is not a leaf"), so we have to drill until we hit a
+ * leaf — but blind drilling (always pick first child) lands us on garbage
+ * categories. Instead we score each child by similarity to the product
+ * (keyword > name words > brand) and pick the best, bailing out if no child
+ * scores high enough so the user can pick manually instead of being given
+ * a confidently-wrong leaf.
+ *
+ * Returns categoryId === null when nothing reasonable was found — callers
+ * should treat this as "let the frontend show the manual picker".
+ */
+export async function resolveLeafCategory(
+  initialCategoryId: string,
+  productName: string,
+  brand: string | null,
+  categoryKeyword: string | null,
+): Promise<ResolveLeafResult> {
+  const trace: ResolveLeafTrace[] = [];
+  const path: string[] = [];
+
+  let current: AllegroCategoryNode;
+  try {
+    current = await fetchCategoryNode(initialCategoryId);
+  } catch (err) {
+    logger.warn({ err, initialCategoryId }, "resolveLeafCategory: initial fetch failed");
+    return {
+      categoryId: null,
+      categoryName: null,
+      categoryPath: [],
+      leaf: false,
+      confidence: "none",
+      trace: [{ id: initialCategoryId, name: "", leaf: false, reason: "initial fetch failed" }],
+    };
+  }
+
+  trace.push({ id: current.id, name: current.name, leaf: current.leaf, selected: true });
+  if (current.name) path.push(current.name);
+
+  let lastWinningScore = 0;
+
+  for (let depth = 0; depth < MAX_LEAF_DRILL_DEPTH; depth++) {
+    if (current.leaf) {
+      const confidence: ResolveLeafResult["confidence"] =
+        path.length === 1
+          ? "high" // matching-categories returned a leaf directly — trust it
+          : lastWinningScore >= 25
+          ? "medium"
+          : "low";
+      return {
+        categoryId: current.id,
+        categoryName: current.name,
+        categoryPath: path,
+        leaf: true,
+        confidence,
+        trace,
+      };
+    }
+
+    let children: AllegroCategoryNode[];
+    try {
+      children = await fetchCategoryChildrenList(current.id);
+    } catch (err) {
+      logger.warn({ err, parentId: current.id }, "resolveLeafCategory: children fetch failed");
+      return {
+        categoryId: null,
+        categoryName: null,
+        categoryPath: path,
+        leaf: false,
+        confidence: "none",
+        trace,
+      };
+    }
+
+    if (children.length === 0) {
+      // Allegro says non-leaf but has no children — defensive: stop and
+      // signal failure so the frontend prompts manual selection.
+      return {
+        categoryId: null,
+        categoryName: null,
+        categoryPath: path,
+        leaf: false,
+        confidence: "none",
+        trace,
+      };
+    }
+
+    const scored = children
+      .map((c) => {
+        const { score, reason } = similarityScore(c, productName, brand, categoryKeyword);
+        return { ...c, score, reason };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    // Record every candidate at this depth so the debug field shows the
+    // full decision space.
+    for (const s of scored) {
+      trace.push({ id: s.id, name: s.name, leaf: s.leaf, score: s.score, reason: s.reason });
+    }
+
+    const winner = scored[0];
+    if (!winner || winner.score < MIN_DRILL_SCORE) {
+      return {
+        categoryId: null,
+        categoryName: null,
+        categoryPath: path,
+        leaf: false,
+        confidence: "none",
+        trace,
+      };
+    }
+
+    // Mark winner in the trace
+    const winnerTrace = trace.find((t) => t.id === winner.id && t.score === winner.score);
+    if (winnerTrace) winnerTrace.selected = true;
+
+    current = { id: winner.id, name: winner.name, leaf: winner.leaf };
+    path.push(winner.name);
+    lastWinningScore = winner.score;
+  }
+
+  // Hit the depth cap without finding a leaf. Return what we have but flag
+  // it as low confidence; callers may still try /parameters but the user
+  // will see "Vyberte kategóriu manuálne" prompt.
+  return {
+    categoryId: current.leaf ? current.id : null,
+    categoryName: current.leaf ? current.name : null,
+    categoryPath: path,
+    leaf: current.leaf,
+    confidence: current.leaf ? "low" : "none",
+    trace,
+  };
+}
+
 // ── CATEGORY PARAMETERS ─────────────────────────────────────────────────────
 
 export async function getCategoryParameters(categoryId: string) {

@@ -48,6 +48,7 @@
  */
 import axios, { type AxiosResponse } from "axios";
 import { getUserToken } from "./allegro-auth";
+import { STORE_NAMES_TO_REMOVE } from "./auto-detect";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -63,9 +64,6 @@ const OPEN_FOOD_FACTS_REGIONS = [
   "nl",
   "hu",
 ];
-
-const STORE_NAMES_TO_REMOVE =
-  /\b(amazon|ebay|allegro|kaufland|walmart|target|costco|tesco|carrefour|auchan|lidl|aldi|biedronka|rossmann|dm|drogerie|media markt|saturn)\b/gi;
 
 const WEIGHT_REGEX = /\b(\d+(?:[.,]\d+)?)\s*(kg|g|ml|l|cl|oz|lb|pieces?|szt|sztuk)\b/gi;
 
@@ -119,6 +117,21 @@ export interface LookupDebug {
   alternativeCount?: number;
 }
 
+/**
+ * Bag of structured tags / strings that downstream parameter-fill logic can
+ * use to populate Allegro category parameters more aggressively than the
+ * basic name/brand/weight triple. Currently populated only by OFF — other
+ * sources leave it undefined and the filler falls back to name keywords.
+ */
+export interface LookupMeta {
+  categoriesTags?: string[];
+  brandsTags?: string[];
+  packagingTags?: string[];
+  labelsTags?: string[];
+  ingredients?: string;
+  quantityRaw?: string;
+}
+
 export interface LookupResult {
   found: boolean;
   name?: string | null;
@@ -130,6 +143,7 @@ export interface LookupResult {
   source?: string | null;
   logs: string[];
   debug?: LookupDebug;
+  meta?: LookupMeta;
 }
 
 // ── EAN variants for fuzzy matching ──────────────────────────────────────────
@@ -391,6 +405,21 @@ async function fetchOffOnce(
   }
   const image = extractOffImage(p, ean);
   logs.push(`[${source}] Found: ${name}${image ? ` (image)` : " (no image)"}`);
+
+  const stringArr = (key: string): string[] | undefined => {
+    const v = p[key];
+    return Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : undefined;
+  };
+
+  const meta: LookupMeta = {
+    categoriesTags: stringArr("categories_tags"),
+    brandsTags: stringArr("brands_tags"),
+    packagingTags: stringArr("packaging_tags") ?? stringArr("packagings_tags"),
+    labelsTags: stringArr("labels_tags"),
+    ingredients: typeof p.ingredients_text === "string" ? (p.ingredients_text as string) : undefined,
+    quantityRaw: typeof p.quantity === "string" ? (p.quantity as string) : undefined,
+  };
+
   return {
     found: true,
     name,
@@ -407,6 +436,7 @@ async function fetchOffOnce(
     description: null,
     source,
     logs,
+    meta,
   };
 }
 

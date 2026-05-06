@@ -1,3 +1,9 @@
+// ── Store name strip pattern (was duplicated in lookup.ts) ───────────────────
+// Used to remove e-shop branding from scraped/lookup names so that what we
+// hand to the user is the actual product name, not "Amazon — Snickers 50g".
+export const STORE_NAMES_TO_REMOVE =
+  /\b(amazon|ebay|allegro|kaufland|walmart|target|costco|tesco|carrefour|auchan|lidl|aldi|biedronka|rossmann|dm|drogerie|media markt|saturn)\b/gi;
+
 // ── Category keyword detection ────────────────────────────────────────────────
 
 const CATEGORY_KEYWORD_MAP: Array<{ patterns: string[]; keyword: string }> = [
@@ -95,47 +101,175 @@ function toTitleCase(s: string): string {
     .replace(/(?:^|\s|-)\S/g, (c) => c.toUpperCase());
 }
 
+/**
+ * Heuristic: title-case the string when it is "shouty" — i.e. more than
+ * 60 % of its letters are upper-case. Fully ALL-CAPS strings always pass
+ * (>60 % is met trivially), but mixed-shouty cases like "MILKA Mleczna
+ * Czekolada" (~70 % upper) also get normalised, which the previous
+ * "all-upper-only" check missed.
+ */
+function smartTitleCaseIfShouty(s: string): string {
+  const letters = s.match(/[a-zA-ZĄĆĘŁŃÓŚŹŻąćęłńóśźż]/g) ?? [];
+  const upper = s.match(/[A-ZĄĆĘŁŃÓŚŹŻ]/g) ?? [];
+  if (letters.length < 4) return s;
+  const ratio = upper.length / letters.length;
+  return ratio > 0.6 ? toTitleCase(s) : s;
+}
+
 // ── Volume / weight parser ────────────────────────────────────────────────────
 
-export function parseVolume(text: string): ParsedVolume | null {
+export type CategoryWeightContext =
+  | "CANDY"
+  | "BEVERAGE"
+  | "COSMETIC"
+  | "GROCERY"
+  | "GENERIC";
+
+/**
+ * Map a free-form category hint (output of detectCategoryKeyword, OFF
+ * categories tag, or Allegro categoryName) to the bucket whose minimum
+ * thresholds parseVolume should apply. The point is to keep "3 g" out of
+ * candy product names — typical candies start at ~15 g per piece, so a
+ * smaller value almost always means a vitamin label, marketing copy, or a
+ * stray number like "3 godziny".
+ */
+export function classifyCategoryWeightContext(
+  hint?: string | null,
+): CategoryWeightContext {
+  if (!hint) return "GENERIC";
+  const h = hint.toLowerCase();
+  if (
+    /cukier|słodyc|slodycz|candy|chocolat|czekolad|snack|przekąs|przekas|gum |guma|drażetk|drazetk|wafer|wafl|ciast|cookie|baton|cukierk|żelk|zelk/i.test(
+      h,
+    )
+  )
+    return "CANDY";
+  if (
+    /napój|napoj|drink|sok |juice|wod |water|piwo|beer|wino|wine|kawa|coffee|herbat|tea|mleko|milk|nektar/i.test(
+      h,
+    )
+  )
+    return "BEVERAGE";
+  if (
+    /kosmety|cosmetic|krem|cream|szampon|shampoo|mydło|mydlo|soap|perfum|dezodorant|balsam/i.test(
+      h,
+    )
+  )
+    return "COSMETIC";
+  if (/spożyw|spozyw|grocery|food|produk|jedzeni|cooking|sos |sól |sol |przyprawa|makaron|płatk|platk/i.test(h))
+    return "GROCERY";
+  return "GENERIC";
+}
+
+/**
+ * Minimum reasonable weight/volume per category context. A value below the
+ * threshold is treated as a misread (e.g. "3g" inside a chocolate bar name,
+ * which usually means "3 grams of sugar per serving" or an unrelated
+ * marketing number, not the package size).
+ */
+const MIN_REASONABLE: Record<
+  CategoryWeightContext,
+  { g?: number; ml?: number }
+> = {
+  CANDY: { g: 15 },
+  BEVERAGE: { ml: 100 },
+  COSMETIC: { g: 5, ml: 5 },
+  GROCERY: { g: 10, ml: 50 },
+  GENERIC: { g: 1, ml: 1 },
+};
+
+function passesSanity(
+  v: ParsedVolume,
+  ctx: CategoryWeightContext,
+): boolean {
+  const min = MIN_REASONABLE[ctx];
+  if (v.unit === "g" && min.g !== undefined && v.value < min.g) return false;
+  if (v.unit === "ml" && min.ml !== undefined && v.value < min.ml) return false;
+  return true;
+}
+
+/**
+ * Parse a weight/volume out of free text. With `categoryHint` supplied we
+ * additionally reject values below `MIN_REASONABLE[context]` — e.g. "3 g"
+ * for candy is dropped because that's smaller than any real candy package.
+ *
+ * Without the hint the legacy GENERIC threshold (≥1) applies, which keeps
+ * existing callers backward-compatible.
+ *
+ * The optional out-param `outRejected` lets the caller log *why* a value
+ * was thrown out, for debug surfaces.
+ */
+export function parseVolume(
+  text: string,
+  categoryHint?: string | null,
+  outRejected?: { reason?: string },
+): ParsedVolume | null {
   if (!text) return null;
   const t = text.replace(/\s+/g, " ").trim();
+  const ctx = classifyCategoryWeightContext(categoryHint);
 
   // "0,5 l" or "0.5l" or "1,5L" (fractional litres → ml)
   const fracL = t.match(/\b(0[.,]\d+)\s*[Ll]\b/i);
   if (fracL) {
     const ml = Math.round(parseFloat(fracL[1].replace(",", ".")) * 1000);
-    return { value: ml, unit: "ml" };
+    const r: ParsedVolume = { value: ml, unit: "ml" };
+    if (passesSanity(r, ctx)) return r;
+    if (outRejected) outRejected.reason = `rejected '${fracL[0]}' for ${ctx} (below min ${MIN_REASONABLE[ctx].ml}ml)`;
+    return null;
   }
 
   // "500 ml", "330ML"
   const mlMatch = t.match(/\b(\d+(?:[.,]\d+)?)\s*[Mm][Ll]\b/i);
   if (mlMatch) {
-    return { value: Math.round(parseFloat(mlMatch[1].replace(",", "."))) , unit: "ml" };
+    const r: ParsedVolume = {
+      value: Math.round(parseFloat(mlMatch[1].replace(",", "."))),
+      unit: "ml",
+    };
+    if (passesSanity(r, ctx)) return r;
+    if (outRejected) outRejected.reason = `rejected '${mlMatch[0]}' for ${ctx} (below min ${MIN_REASONABLE[ctx].ml}ml)`;
+    return null;
   }
 
   // "25 cl", "33cl"
   const clMatch = t.match(/\b(\d+)\s*[Cc][Ll]\b/i);
   if (clMatch) {
-    return { value: parseInt(clMatch[1]) * 10, unit: "ml" };
+    const r: ParsedVolume = { value: parseInt(clMatch[1]) * 10, unit: "ml" };
+    if (passesSanity(r, ctx)) return r;
+    if (outRejected) outRejected.reason = `rejected '${clMatch[0]}' for ${ctx} (below min ${MIN_REASONABLE[ctx].ml}ml)`;
+    return null;
   }
 
   // "1 L", "2L" (whole litres)
   const lMatch = t.match(/\b(\d+)\s*[Ll]\b/i);
   if (lMatch) {
-    return { value: parseInt(lMatch[1]) * 1000, unit: "ml" };
+    const r: ParsedVolume = { value: parseInt(lMatch[1]) * 1000, unit: "ml" };
+    if (passesSanity(r, ctx)) return r;
+    if (outRejected) outRejected.reason = `rejected '${lMatch[0]}' for ${ctx} (below min ${MIN_REASONABLE[ctx].ml}ml)`;
+    return null;
   }
 
   // "1,5 kg", "1.5kg"
   const kgMatch = t.match(/\b(\d+(?:[.,]\d+)?)\s*[Kk][Gg]\b/i);
   if (kgMatch) {
-    return { value: Math.round(parseFloat(kgMatch[1].replace(",", ".")) * 1000), unit: "g" };
+    const r: ParsedVolume = {
+      value: Math.round(parseFloat(kgMatch[1].replace(",", ".")) * 1000),
+      unit: "g",
+    };
+    if (passesSanity(r, ctx)) return r;
+    if (outRejected) outRejected.reason = `rejected '${kgMatch[0]}' for ${ctx} (below min ${MIN_REASONABLE[ctx].g}g)`;
+    return null;
   }
 
   // "500 g", "200g"
   const gMatch = t.match(/\b(\d+(?:[.,]\d+)?)\s*[Gg]\b/i);
   if (gMatch) {
-    return { value: Math.round(parseFloat(gMatch[1].replace(",", "."))) , unit: "g" };
+    const r: ParsedVolume = {
+      value: Math.round(parseFloat(gMatch[1].replace(",", "."))),
+      unit: "g",
+    };
+    if (passesSanity(r, ctx)) return r;
+    if (outRejected) outRejected.reason = `rejected '${gMatch[0]}' for ${ctx} (below min ${MIN_REASONABLE[ctx].g}g)`;
+    return null;
   }
 
   return null;
@@ -180,8 +314,21 @@ export function detectBrand(name: string, offBrand: string | null): string | nul
   return null;
 }
 
-export function detectVolume(name: string, offWeight: string | null): ParsedVolume | null {
-  return parseVolume(name) || (offWeight ? parseVolume(offWeight) : null);
+export function detectVolume(
+  name: string,
+  offWeight: string | null,
+  categoryHint?: string | null,
+  outRejected?: { reason?: string },
+): ParsedVolume | null {
+  // Try the product name first — it is the most authoritative source for
+  // package size. If the name had a value but it failed sanity for the
+  // category context, do NOT silently fall back to OFF: the OFF "quantity"
+  // field for the same product is usually identical, so we'd just re-reject
+  // and lose the rejection reason that the caller wants to surface.
+  const fromName = parseVolume(name, categoryHint, outRejected);
+  if (fromName) return fromName;
+  if (outRejected?.reason) return null;
+  return offWeight ? parseVolume(offWeight, categoryHint, outRejected) : null;
 }
 
 // Returns "250 ml", "1500 ml", "500 g", etc. for the ctx.weight field on the frontend
@@ -196,10 +343,16 @@ export function cleanProductName(
 ): string {
   let name = rawName.trim();
 
-  // Title-case if entirely upper-case
-  if (name === name.toUpperCase() && name.length > 3) {
-    name = toTitleCase(name);
-  }
+  // Strip e-shop branding so we don't end up with "Amazon — Snickers".
+  // Was previously only applied to Google scrapes inside lookup.ts; now
+  // every cleanup path benefits.
+  STORE_NAMES_TO_REMOVE.lastIndex = 0;
+  name = name.replace(STORE_NAMES_TO_REMOVE, " ").replace(/\s{2,}/g, " ").trim();
+
+  // Title-case shouty strings (handles both ALL-CAPS and mixed-shouty
+  // cases like "MILKA Mleczna Czekolada"). The previous all-upper-only
+  // check left those untouched.
+  name = smartTitleCaseIfShouty(name);
 
   // Remove duplicate brand mentions (keep first occurrence)
   if (brand) {
@@ -216,8 +369,8 @@ export function cleanProductName(
     }
   }
 
-  // Append volume if not already in name
   if (vol) {
+    // Real volume detected — append it if not already present
     const hasVolInName = /\d+\s*(?:ml|l|g|kg|cl)/i.test(name);
     if (!hasVolInName) {
       const suffix =
@@ -230,6 +383,14 @@ export function cleanProductName(
           : `${vol.value}g`;
       name = `${name} ${suffix}`;
     }
+  } else {
+    // No usable volume — strip any *trailing* weight-like token so a
+    // sanity-rejected "3g" doesn't survive in the name. Only the trailing
+    // position is touched so we don't damage names with mid-string numbers
+    // like "Coca-Cola 0,5l Vanilla".
+    name = name
+      .replace(/\s+\d+(?:[.,]\d+)?\s*(?:g|ml|kg|l|cl|oz|sztuk?|szt)\.?\s*$/i, "")
+      .trim();
   }
 
   return name.trim();
