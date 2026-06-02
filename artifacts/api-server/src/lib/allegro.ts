@@ -2,10 +2,18 @@ import axios from "axios";
 import { logger } from "./logger";
 import { getUserToken } from "./allegro-auth";
 import { detectVolume } from "./auto-detect";
+import { getSellerSettings } from "./settings";
 
 const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID;
 const ALLEGRO_CLIENT_SECRET = process.env.ALLEGRO_CLIENT_SECRET;
 const ALLEGRO_BASE_URL = "https://api.allegro.pl";
+
+/**
+ * Allegro "Supermarket" root category (#258832). The whole product domain
+ * (premium imported sweets/chocolate/coffee) lives under this tree, so leaf
+ * resolution is anchored here — see resolveLeafCategory callers.
+ */
+export const SUPERMARKET_CATEGORY_ID = "258832";
 
 // ── ALLEGRO AUTH ────────────────────────────────────────────────────────────
 
@@ -788,12 +796,16 @@ export async function createAllegroOffer(payload: {
     stock: { available: 1, unit: "UNIT" },
     publication: { status: "ACTIVE" },
     payments: { invoice: "VAT" },
-    location: {
-      countryCode: "PL",
-      city: "Wrocław",
-      postCode: "50-202",
-      province: "DOLNOSLASKIE",
-    },
+    location: (() => {
+      // Prefer configured seller settings; fall back to the historical default.
+      const s = getSellerSettings();
+      return {
+        countryCode: "PL",
+        city: s?.city ?? "Wrocław",
+        postCode: s?.postCode ?? "50-202",
+        province: s?.state ?? "DOLNOSLASKIE",
+      };
+    })(),
   };
 
   if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];

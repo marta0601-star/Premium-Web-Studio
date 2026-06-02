@@ -14,9 +14,13 @@
  * picks (e.g. "Smak: Cookie dough" extracted from the product name) versus
  * deterministic ones ("Stan: Nowy", "EAN: …") where there is no ambiguity.
  *
- * Outside scope (per user policy — they prefer to fill these themselves):
- *   waga / masa / gramatura / weight
- *   kraj pochodzenia / kraj produkcji / country
+ * Auto-filled (added 2026-06 — owner now wants these pre-filled to confirm):
+ *   waga / masa / gramatura / weight   ← from OFF product_quantity / detectVolume
+ *   kraj pochodzenia / kraj produkcji  ← from OFF origins_tags, else EAN GS1 prefix
+ * Both are populated at MEDIUM/LOW confidence (data is noisy) so the user
+ * still reviews them — they are suggestions, not silent commits.
+ *
+ * Still skipped (regulated — user must verify against the physical product):
  *   termin przydatności / expiry / data ważności
  *   alergeny / allergens
  *   certyfikaty / certyfikaty ekologiczne / organic certifications
@@ -37,6 +41,8 @@ export interface AllegroFillerParam {
   type: string;
   required: boolean;
   options?: AllegroParamOption[];
+  /** e.g. "g", "kg", "ml", "l" — needed to fill numeric weight params correctly. */
+  unit?: string | null;
 }
 
 export interface FilledParameter {
@@ -49,7 +55,14 @@ export interface FilledParameter {
   /** "valuesIds" for dictionary fills, "values" for free-text fills. */
   kind: "values" | "valuesIds";
   confidence: "high" | "medium" | "low";
-  source: "default" | "scan" | "lookup" | "name_keyword" | "off_tags";
+  source:
+    | "default"
+    | "scan"
+    | "lookup"
+    | "name_keyword"
+    | "off_tags"
+    | "ean_country"
+    | "allegro_catalog";
 }
 
 export interface SkippedParameter {
@@ -82,9 +95,10 @@ export interface FillerOutput {
 
 // Param-name regexes that the user said NOT to auto-fill. Tested case-
 // insensitively against the trimmed parameter name.
+// NOTE: waga and kraj pochodzenia are intentionally NOT here anymore — they are
+// now auto-filled (see weight/country branches below). Only genuinely regulated
+// fields stay skipped.
 const SKIP_PATTERNS: Array<{ re: RegExp; reason: SkippedParameter["reason"] }> = [
-  { re: /^(waga|masa|gramatura|weight|masa netto|netto)\b/i, reason: "user_fills_manually" },
-  { re: /\b(kraj pochodzenia|kraj produkcji|country of origin|kraj prod)\b/i, reason: "user_fills_manually" },
   { re: /\b(termin przydatności|termin przydatnosci|data ważności|data waznosci|expiry|expiration)\b/i, reason: "regulated" },
   { re: /\b(alergeny|allergens|alergen)\b/i, reason: "regulated" },
   { re: /\b(certyfikaty|certyfikat|ekologiczne|organic|bio certif)\b/i, reason: "regulated" },
@@ -167,22 +181,23 @@ const COLOR_MAP: Array<{ re: RegExp; label: string }> = [
   { re: /\b(róż\w*|roz\w*|pink)\b/i, label: "Różowy" },
 ];
 
+// Multilingual: PL + EN + DE + FR keywords (domain = imported DE/FR sweets).
 const FLAVOR_MAP: Array<{ re: RegExp; label: string }> = [
-  { re: /\b(vanil\w*|wanili\w*)\b/i, label: "Waniliowy" },
-  { re: /\b(czekolad\w*|chocolat\w*|cookie dough|m\s?&?\s?m'?s|kakao)\b/i, label: "Czekoladowy" },
-  { re: /\b(jagod\w*|borówk\w*|borowk\w*|blueberry)\b/i, label: "Jagodowy" },
-  { re: /\b(truskaw\w*|strawberry)\b/i, label: "Truskawkowy" },
-  { re: /\b(malin\w*|raspberry)\b/i, label: "Malinowy" },
-  { re: /\b(pomarańcz\w*|pomaranc\w*|orange)\b/i, label: "Pomarańczowy" },
-  { re: /\b(cytry\w*|lemon)\b/i, label: "Cytrynowy" },
-  { re: /\b(mięt\w*|miet\w*|mint)\b/i, label: "Miętowy" },
-  { re: /\b(pistacj\w*|pistachio)\b/i, label: "Pistacjowy" },
-  { re: /\b(kawa|kawowy|coffee)\b/i, label: "Kawowy" },
-  { re: /\b(karmel\w*|caramel)\b/i, label: "Karmelowy" },
-  { re: /\b(jabł\w*|jabl\w*|apple)\b/i, label: "Jabłkowy" },
+  { re: /\b(vanil\w*|wanili\w*|vanille)\b/i, label: "Waniliowy" },
+  { re: /\b(czekolad\w*|chocolat\w*|cookie dough|m\s?&?\s?m'?s|kakao|schoko\w*|cacao)\b/i, label: "Czekoladowy" },
+  { re: /\b(jagod\w*|borówk\w*|borowk\w*|blueberry|heidelbeer\w*|myrtille\w*)\b/i, label: "Jagodowy" },
+  { re: /\b(truskaw\w*|strawberry|erdbeer\w*|fraise\w*)\b/i, label: "Truskawkowy" },
+  { re: /\b(malin\w*|raspberry|himbeer\w*|framboise\w*)\b/i, label: "Malinowy" },
+  { re: /\b(pomarańcz\w*|pomaranc\w*|orange|apfelsine\w*)\b/i, label: "Pomarańczowy" },
+  { re: /\b(cytry\w*|lemon|zitrone\w*|citron\w*)\b/i, label: "Cytrynowy" },
+  { re: /\b(mięt\w*|miet\w*|mint|minze\w*|menthe\w*)\b/i, label: "Miętowy" },
+  { re: /\b(pistacj\w*|pistachio|pistazie|pistache)\b/i, label: "Pistacjowy" },
+  { re: /\b(kawa|kawowy|coffee|kaffee|café|cafe)\b/i, label: "Kawowy" },
+  { re: /\b(karmel\w*|caramel|karamell)\b/i, label: "Karmelowy" },
+  { re: /\b(jabł\w*|jabl\w*|apple|apfel)\b/i, label: "Jabłkowy" },
   { re: /\b(banan\w*|banana)\b/i, label: "Bananowy" },
-  { re: /\b(kokos\w*|coconut)\b/i, label: "Kokosowy" },
-  { re: /\b(orzech\w*|nut|hazelnut|peanut)\b/i, label: "Orzechowy" },
+  { re: /\b(kokos\w*|coconut|noix de coco)\b/i, label: "Kokosowy" },
+  { re: /\b(orzech\w*|nut|hazelnut|peanut|haselnuss|noisette|nuss)\b/i, label: "Orzechowy" },
 ];
 
 const MATERIAL_MAP: Array<{ re: RegExp; label: string }> = [
@@ -239,12 +254,158 @@ function extractFirstFromMap(
   return null;
 }
 
+// ── Country of origin ────────────────────────────────────────────────────────
+
+// OFF country/origin tag (en:germany, de:deutschland, "France", …) → Polish label.
+const OFF_COUNTRY_MAP: Array<{ re: RegExp; label: string }> = [
+  { re: /german|deutschland|niemcy|allemagne/i, label: "Niemcy" },
+  { re: /poland|polska|pologne|polen/i, label: "Polska" },
+  { re: /\bital|włochy|wlochy|italie|italien/i, label: "Włochy" },
+  { re: /belg/i, label: "Belgia" },
+  { re: /netherland|holand|holland|pays-bas|niederlande|nederland/i, label: "Holandia" },
+  { re: /france|francj|frankreich|francia/i, label: "Francja" },
+  { re: /austria|österreich|osterreich|autriche/i, label: "Austria" },
+  { re: /switzerland|szwajcar|schweiz|suisse|svizzera/i, label: "Szwajcaria" },
+  { re: /spain|hiszpan|espagne|spanien|españa/i, label: "Hiszpania" },
+  { re: /united kingdom|wielka brytania|royaume-uni|\buk\b|great britain/i, label: "Wielka Brytania" },
+  { re: /czech|czechy|tchéqu|tschechien/i, label: "Czechy" },
+  { re: /slovak|słowacj|slowacj/i, label: "Słowacja" },
+  { re: /turk|turcj|türkei/i, label: "Turcja" },
+];
+
+// EAN GS1 prefix → Polish country (mirrors the frontend EAN_COUNTRY_MAP). This
+// is the *barcode-issuer* country, a reasonable origin default for our domain
+// (premium DE/FR/IT imports) but only LOW confidence.
+const EAN_PREFIX_COUNTRY: Array<[number, number, string]> = [
+  [300, 379, "Francja"],
+  [400, 440, "Niemcy"],
+  [500, 509, "Wielka Brytania"],
+  [590, 590, "Polska"],
+  [800, 839, "Włochy"],
+  [840, 849, "Hiszpania"],
+  [858, 858, "Czechy"],
+  [859, 859, "Słowacja"],
+  [869, 869, "Turcja"],
+];
+
+function countryFromOffTags(tags: string[] | undefined): string | null {
+  if (!tags) return null;
+  for (const tag of tags) {
+    const lbl = extractFirstFromMap(tag, OFF_COUNTRY_MAP);
+    if (lbl) return lbl;
+  }
+  return null;
+}
+
+function countryFromEan(ean: string): string | null {
+  const digits = ean.replace(/\D/g, "");
+  if (digits.length < 3) return null;
+  const prefix = parseInt(digits.slice(0, 3), 10);
+  if (Number.isNaN(prefix)) return null;
+  for (const [from, to, label] of EAN_PREFIX_COUNTRY) {
+    if (prefix >= from && prefix <= to) return label;
+  }
+  return null;
+}
+
+// ── OFF category tag → Polish "rodzaj/typ" candidate ─────────────────────────
+// OFF category tags arrive in EN/FR/DE and never match the Polish Allegro
+// dictionary directly, so we translate the most common food types.
+const OFF_TYPE_MAP: Array<{ re: RegExp; label: string }> = [
+  { re: /coffee|kawa|kaffee|café|cafe/i, label: "Kawa" },
+  // Match singular/plural/compound tea tags (en:tea, en:teas, en:green-teas,
+  // en:tea-bags) but NOT "tea-tree(-oil)"; bare tee/thé kept word-bounded.
+  { re: /\btea(?:s|-bags?)?\b(?!-tree)|herbat|\btee\b|thé/i, label: "Herbata" },
+  { re: /milk-chocolate|chocolat.*lait|chocolate|czekolad|schokolade/i, label: "Czekolada" },
+  { re: /chocolate-bar|candy-bar|biscuity-bar|\bbars?\b|baton|riegel/i, label: "Baton" },
+  { re: /gummy|gélifi|gelifi|jelly|żelk|zelk|fruchtgummi|gum/i, label: "Żelki" },
+  { re: /bonbon|candies|candy|cukierk|sweets|süßwaren|suesswaren|confiserie|confection/i, label: "Cukierki" },
+  { re: /biscuit|cookie|ciastk|herbatnik|keks|gâteau|gateau|wafer|wafl/i, label: "Ciastka" },
+  { re: /spread|tartiner|aufstrich|krem do smarowania/i, label: "Krem do smarowania" },
+  { re: /praline|pralin/i, label: "Praliny" },
+  { re: /chips|crisps|chrupk/i, label: "Chipsy" },
+  { re: /\bnuts?\b|orzech|nüsse|nuesse/i, label: "Orzechy" },
+];
+
+/**
+ * Walk category tags most-specific → most-generic and return the first label
+ * from `map`. Crucial because OFF parent tags are often wrong (e.g. Haribo
+ * Tagada is mis-tagged "chocolate-candies"); the specific leaf ("Fraises
+ * gélifiées") is usually right, so we must hit it before the noisy parents.
+ */
+function matchTagsSpecificFirst(
+  tags: string[] | undefined,
+  map: Array<{ re: RegExp; label: string }>,
+): string | null {
+  if (!tags) return null;
+  for (let i = tags.length - 1; i >= 0; i--) {
+    const lbl = extractFirstFromMap(tags[i], map);
+    if (lbl) return lbl;
+  }
+  return null;
+}
+
+function typeFromOffCategories(tags: string[] | undefined): string | null {
+  return matchTagsSpecificFirst(tags, OFF_TYPE_MAP);
+}
+
+/**
+ * A Polish product-type hint (e.g. "Czekolada", "Żelki", "Kawa") derived from
+ * OFF category tags. Used by the category resolver as an extra drill keyword so
+ * the Supermarket-subtree walk can match child category names even when the
+ * product name carries no recognizable keyword.
+ */
+export function deriveOffTypeHint(meta: LookupMeta | undefined): string | null {
+  return typeFromOffCategories(meta?.categoriesTags);
+}
+
+// ── Weight parsing for waga/masa params ──────────────────────────────────────
+
+interface ParsedWeight {
+  value: number;
+  unit: "g" | "ml";
+}
+
+/** Parse "500 g", "1,5 kg", "250 ml", "0.33 l" → normalized {value, unit:g|ml}. */
+function parseWeight(text: string | null | undefined): ParsedWeight | null {
+  if (!text) return null;
+  const t = text.replace(/\s+/g, " ").trim();
+  const m = t.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l)\b/i);
+  if (!m) return null;
+  const num = parseFloat(m[1].replace(",", "."));
+  if (Number.isNaN(num)) return null;
+  switch (m[2].toLowerCase()) {
+    case "kg": return { value: Math.round(num * 1000), unit: "g" };
+    case "g": return { value: Math.round(num), unit: "g" };
+    case "l": return { value: Math.round(num * 1000), unit: "ml" };
+    case "cl": return { value: Math.round(num * 10), unit: "ml" };
+    case "ml": return { value: Math.round(num), unit: "ml" };
+    default: return null;
+  }
+}
+
+/** Convert a normalized weight to the value a numeric Allegro param expects,
+ *  given that param's declared unit. Returns a string ready for `values`. */
+function weightForParamUnit(w: ParsedWeight, unit: string | null | undefined): string | null {
+  const u = (unit ?? "").toLowerCase();
+  if (w.unit === "g") {
+    if (u.includes("kg")) return String(+(w.value / 1000).toFixed(3));
+    // default grams (most Allegro food weight params use g or have no unit)
+    return String(w.value);
+  }
+  // volume
+  if (u.includes("l") && !u.includes("ml")) return String(+(w.value / 1000).toFixed(3));
+  return String(w.value);
+}
+
 // ── Param-name classifiers ───────────────────────────────────────────────────
 
 const NAME_RE = {
   ean: /\b(ean|gtin|kod kreskowy|kod producenta|barcode)\b/i,
   brand: /\b(marka|brand|producent|manufacturer)\b/i,
   condition: /\bstan\b/i,
+  weight: /\b(waga|masa|gramatura|gramatúra|weight|masa netto|netto)\b/i,
+  country: /\b(kraj pochodzenia|kraj produkcji|country of origin|kraj prod)\b/i,
   color: /\b(kolor|color|barwa)\b/i,
   flavor: /\b(smak|flavor|flavour)\b/i,
   type: /\b(rodzaj|typ |typ$)\b/i,
@@ -267,6 +428,11 @@ export function fillCategoryParameters(
   const nameLower = data.productName.toLowerCase();
   const colorFromName = extractFirstFromMap(nameLower, COLOR_MAP);
   const flavorFromName = extractFirstFromMap(nameLower, FLAVOR_MAP);
+  // Flavour from OFF category tags — walked most-specific first so the correct
+  // leaf wins over noisy parent tags. Lower confidence than name-derived.
+  // Ingredients are deliberately excluded — they list every component and would
+  // mislabel almost everything "Czekoladowy".
+  const flavorFromCategories = matchTagsSpecificFirst(data.offMeta?.categoriesTags, FLAVOR_MAP);
   const materialFromName = extractFirstFromMap(nameLower, MATERIAL_MAP);
   const sizeMatch = data.productName.match(SIZE_RE);
   const sizeFromName = sizeMatch ? sizeMatch[0] : null;
@@ -286,16 +452,8 @@ export function fillCategoryParameters(
     }
     return null;
   })();
-  // categoriesTags can carry extra rodzaj/typ hints — last segment after ":"
-  const typeFromOff = (() => {
-    const tags = data.offMeta?.categoriesTags ?? [];
-    if (tags.length === 0) return null;
-    // Walk from most-specific to most-generic
-    const last = tags[tags.length - 1];
-    const seg = last.split(":").pop();
-    if (!seg) return null;
-    return seg.replace(/-/g, " ").trim();
-  })();
+  // categoriesTags → Polish rodzaj/typ candidate (translated from EN/FR/DE).
+  const typeFromOff = typeFromOffCategories(data.offMeta?.categoriesTags);
 
   for (const p of allegroParams) {
     const reason = shouldSkip(p.name);
@@ -315,6 +473,82 @@ export function fillCategoryParameters(
         source: "scan",
       });
       continue;
+    }
+
+    // ── Weight / mass (waga, masa, gramatura) ─────────────────────────────
+    if (NAME_RE.weight.test(p.name)) {
+      const parsed = parseWeight(data.weight);
+      if (parsed) {
+        if (p.type === "dictionary" && p.options && p.options.length > 0) {
+          // Some categories model weight as ranges — try the raw string.
+          const m =
+            (data.weight ? matchOption(p.options, data.weight) : null) ??
+            matchOption(p.options, `${parsed.value} ${parsed.unit}`);
+          if (m) {
+            filled.push({
+              id: p.id, name: p.name, value: m.id, valueLabel: m.label,
+              // Cap to medium: OFF weight is a suggestion to verify, even on an
+              // exact dictionary-option match (mirrors the country branch + header policy).
+              kind: "valuesIds", confidence: capConfidence(m.confidence, "medium"), source: "lookup",
+            });
+            continue;
+          }
+        } else if (p.type === "float" || p.type === "integer") {
+          const v = weightForParamUnit(parsed, p.unit);
+          if (v) {
+            filled.push({
+              id: p.id, name: p.name, value: v, kind: "values",
+              confidence: "medium", source: "lookup",
+            });
+            continue;
+          }
+        } else if (p.type === "string" && data.weight) {
+          filled.push({
+            id: p.id, name: p.name, value: data.weight, kind: "values",
+            confidence: "medium", source: "lookup",
+          });
+          continue;
+        }
+      }
+      if (p.required) missingData++;
+      continue; // weight param handled (or genuinely unknown)
+    }
+
+    // ── Country of origin (kraj pochodzenia) ──────────────────────────────
+    if (NAME_RE.country.test(p.name)) {
+      // Prefer OFF origins; use OFF sales-countries ONLY if unambiguous (1).
+      const single =
+        data.offMeta?.countriesTags && data.offMeta.countriesTags.length === 1
+          ? data.offMeta.countriesTags
+          : undefined;
+      const fromOff =
+        countryFromOffTags(data.offMeta?.originsTags) ?? countryFromOffTags(single);
+      const fromEan = countryFromEan(data.ean);
+      const candidate = fromOff ?? fromEan;
+      const baseConf: FilledParameter["confidence"] = fromOff ? "medium" : "low";
+      const src: FilledParameter["source"] = fromOff ? "off_tags" : "ean_country";
+      if (candidate) {
+        if (p.type === "dictionary" && p.options && p.options.length > 0) {
+          const m = matchOption(p.options, candidate);
+          if (m) {
+            filled.push({
+              id: p.id, name: p.name, value: m.id, valueLabel: m.label,
+              kind: "valuesIds",
+              confidence: m.confidence === "low" ? "low" : baseConf,
+              source: src,
+            });
+            continue;
+          }
+        } else if (p.type === "string") {
+          filled.push({
+            id: p.id, name: p.name, value: candidate, kind: "values",
+            confidence: baseConf, source: src,
+          });
+          continue;
+        }
+      }
+      if (p.required) missingData++;
+      continue; // country param handled (or unknown)
     }
 
     if (NAME_RE.condition.test(p.name)) {
@@ -390,11 +624,21 @@ export function fillCategoryParameters(
       }
     }
 
-    if (NAME_RE.flavor.test(p.name) && flavorFromName) {
-      const filledItem = pickValue(p, flavorFromName, "name_keyword");
-      if (filledItem) {
-        filled.push(filledItem);
-        continue;
+    if (NAME_RE.flavor.test(p.name)) {
+      const flavorCandidate = flavorFromName ?? flavorFromCategories;
+      if (flavorCandidate) {
+        // Name-derived flavour is fairly trustworthy (medium); a flavour
+        // guessed from OFF categories is a hint only (low — show "sprawdź").
+        const filledItem = pickValue(
+          p,
+          flavorCandidate,
+          flavorFromName ? "name_keyword" : "off_tags",
+          flavorFromName ? "medium" : "low",
+        );
+        if (filledItem) {
+          filled.push(filledItem);
+          continue;
+        }
       }
     }
 
@@ -414,9 +658,9 @@ export function fillCategoryParameters(
       }
     }
 
-    // ── OFF tag-based ─────────────────────────────────────────────────────
+    // ── OFF tag-based (curated maps → medium confidence, "sprawdź") ────────
     if (NAME_RE.packaging.test(p.name) && packagingFromOff) {
-      const filledItem = pickValue(p, packagingFromOff, "off_tags");
+      const filledItem = pickValue(p, packagingFromOff, "off_tags", "medium");
       if (filledItem) {
         filled.push(filledItem);
         continue;
@@ -424,7 +668,7 @@ export function fillCategoryParameters(
     }
 
     if (NAME_RE.features.test(p.name) && labelFromOff) {
-      const filledItem = pickValue(p, labelFromOff, "off_tags");
+      const filledItem = pickValue(p, labelFromOff, "off_tags", "medium");
       if (filledItem) {
         filled.push(filledItem);
         continue;
@@ -432,14 +676,20 @@ export function fillCategoryParameters(
     }
 
     if (NAME_RE.type.test(p.name)) {
-      // Try OFF tag first (more specific), fall back to flavor / category keyword
+      // Try OFF tag first (translated + most-specific), fall back to flavour /
+      // category keyword. Either way it's an inference → cap at medium.
       const candidate =
         typeFromOff ??
         flavorFromName ??
         data.categoryKeyword ??
         null;
       if (candidate) {
-        const filledItem = pickValue(p, candidate, typeFromOff ? "off_tags" : "name_keyword");
+        const filledItem = pickValue(
+          p,
+          candidate,
+          typeFromOff ? "off_tags" : "name_keyword",
+          "medium",
+        );
         if (filledItem) {
           filled.push(filledItem);
           continue;
@@ -468,10 +718,21 @@ export function fillCategoryParameters(
  * respecting Allegro's value/valuesIds split. Returns null if a dictionary
  * had no plausible match.
  */
+const CONF_RANK: Record<FilledParameter["confidence"], number> = { low: 0, medium: 1, high: 2 };
+
+/** Lower of two confidence bands — used to cap noisy-source fills. */
+function capConfidence(
+  c: FilledParameter["confidence"],
+  cap: FilledParameter["confidence"],
+): FilledParameter["confidence"] {
+  return CONF_RANK[c] <= CONF_RANK[cap] ? c : cap;
+}
+
 function pickValue(
   p: AllegroFillerParam,
   candidate: string,
   source: FilledParameter["source"],
+  cap: FilledParameter["confidence"] = "high",
 ): FilledParameter | null {
   if (p.type === "dictionary" && p.options && p.options.length > 0) {
     const m = matchOption(p.options, candidate);
@@ -482,7 +743,9 @@ function pickValue(
       value: m.id,
       valueLabel: m.label,
       kind: "valuesIds",
-      confidence: m.confidence,
+      // An exact dictionary match doesn't make a noisy SOURCE reliable, so the
+      // caller can cap the band (e.g. flavour guessed from OFF category tags).
+      confidence: capConfidence(m.confidence, cap),
       source,
     };
   }
@@ -492,7 +755,7 @@ function pickValue(
       name: p.name,
       value: candidate,
       kind: "values",
-      confidence: "medium",
+      confidence: capConfidence("medium", cap),
       source,
     };
   }

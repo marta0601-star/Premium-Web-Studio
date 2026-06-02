@@ -130,6 +130,10 @@ export interface LookupMeta {
   labelsTags?: string[];
   ingredients?: string;
   quantityRaw?: string;
+  /** OFF countries_tags — where the product is *sold* (noisy, often many). */
+  countriesTags?: string[];
+  /** OFF origins_tags / manufacturing_places_tags — closer to country of origin (usually sparse). */
+  originsTags?: string[];
 }
 
 export interface LookupResult {
@@ -418,6 +422,8 @@ async function fetchOffOnce(
     labelsTags: stringArr("labels_tags"),
     ingredients: typeof p.ingredients_text === "string" ? (p.ingredients_text as string) : undefined,
     quantityRaw: typeof p.quantity === "string" ? (p.quantity as string) : undefined,
+    countriesTags: stringArr("countries_tags"),
+    originsTags: stringArr("origins_tags") ?? stringArr("manufacturing_places_tags"),
   };
 
   return {

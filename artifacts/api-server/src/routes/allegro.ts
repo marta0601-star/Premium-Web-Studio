@@ -13,6 +13,7 @@ import {
   uploadImageBinaryToAllegro,
   resolveLeafCategory,
   fetchCategoryChildrenList,
+  SUPERMARKET_CATEGORY_ID,
 } from "../lib/allegro";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
@@ -27,6 +28,7 @@ import {
 import {
   fillCategoryParameters,
   filledToPrefillValues,
+  deriveOffTypeHint,
   type AllegroFillerParam,
 } from "../lib/parameter-filler";
 
@@ -151,16 +153,85 @@ router.get("/scan", async (req, res) => {
         }
       }
 
+      // ── Catalog smart-fill parity ─────────────────────────────────────────
+      // The catalog hit is the highest-confidence path but historically got
+      // ZERO smart fill — only the catalog product's own parameter values. Run
+      // the same param-filler used on the external branch so condition=Nowy,
+      // EAN, brand, weight, country, rodzaj/smak are added on top. Catalog
+      // values stay authoritative for this exact product; the filler only
+      // populates parameters the catalog product didn't carry.
+      const catBrand = detectBrand(productName, null);
+      const catKeyword = detectCategoryKeyword(productName);
+      const catVol = detectVolume(
+        productName,
+        null,
+        catKeyword ?? resolvedCategoryName ?? null,
+      );
+      const catWeight = catVol ? formatVolumeForContext(catVol) : null;
+
+      const catFillerInput: AllegroFillerParam[] = parameters.map((p) => ({
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        required: p.required,
+        options: p.options,
+        unit: p.unit,
+      }));
+      const catFiller = fillCategoryParameters(catFillerInput, {
+        productName,
+        brand: catBrand,
+        categoryKeyword: catKeyword,
+        ean,
+        weight: catWeight,
+        // No OFF probe here — keep the catalog path fast (zero extra network).
+        offMeta: undefined,
+      });
+
+      const catalogFilledIds = new Set(Object.keys(prefillValues));
+      const catalogParamById = new Map(parameters.map((p) => [p.id, p]));
+
+      // Filler fills only what the catalog didn't, and we push those into
+      // prefillValues so the existing frontend prefill path renders them too.
+      const fillerAdded = catFiller.filled.filter((f) => !catalogFilledIds.has(f.id));
+      for (const f of fillerAdded) {
+        prefillValues[f.id] = [f.value];
+      }
+
+      // Source-attributed list for the UI: catalog values (authoritative) +
+      // the filler's additions, each carrying its own confidence/source.
+      const filledParameters = [
+        ...Array.from(catalogFilledIds).map((id) => {
+          const p = catalogParamById.get(id);
+          return {
+            id,
+            name: p?.name ?? id,
+            value: prefillValues[id]?.[0] ?? "",
+            kind: (p?.type === "dictionary" ? "valuesIds" : "values") as
+              | "values"
+              | "valuesIds",
+            confidence: "high" as const,
+            source: "allegro_catalog" as const,
+          };
+        }),
+        ...fillerAdded,
+      ];
+
       res.json({
         productId,
         productName,
         categoryId,
         categoryName: resolvedCategoryName,
+        categoryConfidence: "high",
+        categoryLeaf: true,
         images,
         parameters,
         prefillValues,
         productParamIds,
+        filledParameters,
+        skippedParameters: catFiller.skipped,
         source: "allegro_catalog",
+        brand: catBrand,
+        weight: catWeight,
         ean,
       });
       return;
@@ -212,12 +283,12 @@ router.get("/scan", async (req, res) => {
       "Auto-detection results"
     );
 
-    // ── Step 3b: Resolve Allegro category via matching-categories + drill-down
-    // Allegro often returns a non-leaf root like "Supermarket" (#258832)
-    // which the offer endpoint refuses ("category is not a leaf"). We ask
-    // matching-categories for the best phrase, then drill into children
-    // using a similarity score until we land on a leaf — or bail out and
-    // hand the user a manual picker.
+    // ── Step 3b: Resolve a LEAF category, anchored to the Supermarket subtree
+    // The whole product domain is food (Supermarket #258832). We therefore
+    // PRIMARILY drill the Supermarket subtree by similarity, which guarantees
+    // we land on a food leaf and never misroute a marketing-heavy name into a
+    // non-food category. Only if that finds nothing usable do we fall back to
+    // the historical matching-categories flow (rare non-food / bundled items).
     let detectedCategoryId: string | null = null;
     let detectedCategoryName: string | null = null;
     let categoryPath: string[] = [];
@@ -225,85 +296,132 @@ router.get("/scan", async (req, res) => {
     let categoryConfidence: "high" | "medium" | "low" | "none" = "none";
     let categoryResolutionTrace: unknown = undefined;
     const searchPhrase = cleanedName || categoryKeyword || "";
+    // Extra drill hint: a PL product-type derived from OFF tags (Czekolada,
+    // Żelki, Kawa…) so the Supermarket walk matches subcategory names even when
+    // the product name yields no keyword.
+    const drillKeyword = categoryKeyword ?? deriveOffTypeHint(result.meta);
 
-    let initialMatchId: string | null = null;
-    let initialMatchName: string | null = null;
-    try {
-      const token = await getUserToken();
-      const catResp = await axios.get(
-        `${ALLEGRO_BASE_URL}/sale/matching-categories?name=${encodeURIComponent(searchPhrase)}`,
+    // PRIMARY: drill from Supermarket #258832.
+    const supermarketResolved = await resolveLeafCategory(
+      SUPERMARKET_CATEGORY_ID,
+      cleanedName,
+      detectedBrand,
+      drillKeyword,
+    );
+    if (supermarketResolved.leaf && supermarketResolved.categoryId) {
+      detectedCategoryId = supermarketResolved.categoryId;
+      detectedCategoryName = supermarketResolved.categoryName;
+      categoryPath = supermarketResolved.categoryPath;
+      categoryLeaf = true;
+      categoryConfidence = supermarketResolved.confidence;
+      req.log.info(
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.allegro.public.v1+json",
-          },
-          timeout: 5000,
-        }
+          categoryId: detectedCategoryId,
+          categoryName: detectedCategoryName,
+          path: categoryPath,
+          confidence: categoryConfidence,
+        },
+        "Leaf category resolved under Supermarket subtree"
       );
-      const cats =
-        (catResp.data as { matchingCategories?: Array<{ id: string; name: string }> })
-          .matchingCategories || [];
-      const kwLower = searchPhrase.toLowerCase();
-      let bestCat = cats[0];
-      for (const cat of cats) {
-        const cLower = cat.name.toLowerCase();
-        if (cLower === kwLower || cLower.includes(kwLower) || kwLower.includes(cLower)) {
-          bestCat = cat;
-          break;
-        }
-      }
-      if (bestCat?.id) {
-        initialMatchId = bestCat.id;
-        initialMatchName = bestCat.name;
-        req.log.info(
-          {
-            phrase: searchPhrase,
-            initialId: initialMatchId,
-            initialName: initialMatchName,
-            candidateCount: cats.length,
-          },
-          "matching-categories returned candidate"
-        );
-      }
-    } catch (catErr: unknown) {
-      const e = catErr as { message?: string };
-      req.log.warn({ phrase: searchPhrase, msg: e.message }, "matching-categories failed");
     }
+    categoryResolutionTrace = {
+      strategy: "supermarket-first",
+      supermarket: {
+        seedId: SUPERMARKET_CATEGORY_ID,
+        path: supermarketResolved.categoryPath,
+        confidence: supermarketResolved.confidence,
+        leaf: supermarketResolved.leaf,
+        steps: supermarketResolved.trace,
+      },
+    };
 
-    if (initialMatchId) {
-      const resolved = await resolveLeafCategory(
-        initialMatchId,
-        cleanedName,
-        detectedBrand,
-        categoryKeyword,
-      );
-      categoryResolutionTrace = {
-        initial: { id: initialMatchId, name: initialMatchName },
-        path: resolved.categoryPath,
-        confidence: resolved.confidence,
-        leaf: resolved.leaf,
-        steps: resolved.trace,
-      };
-      if (resolved.leaf && resolved.categoryId) {
-        detectedCategoryId = resolved.categoryId;
-        detectedCategoryName = resolved.categoryName;
-        categoryPath = resolved.categoryPath;
-        categoryLeaf = true;
-        categoryConfidence = resolved.confidence;
-        req.log.info(
+    // FALLBACK: matching-categories, only if Supermarket drill found no leaf.
+    if (!detectedCategoryId) {
+      let initialMatchId: string | null = null;
+      let initialMatchName: string | null = null;
+      try {
+        const token = await getUserToken();
+        const catResp = await axios.get(
+          `${ALLEGRO_BASE_URL}/sale/matching-categories?name=${encodeURIComponent(searchPhrase)}`,
           {
-            categoryId: detectedCategoryId,
-            categoryName: detectedCategoryName,
-            path: categoryPath,
-            confidence: categoryConfidence,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.allegro.public.v1+json",
+            },
+            timeout: 5000,
+          }
+        );
+        const cats =
+          (catResp.data as { matchingCategories?: Array<{ id: string; name: string }> })
+            .matchingCategories || [];
+        const kwLower = searchPhrase.toLowerCase();
+        let bestCat = cats[0];
+        for (const cat of cats) {
+          const cLower = cat.name.toLowerCase();
+          if (cLower === kwLower || cLower.includes(kwLower) || kwLower.includes(cLower)) {
+            bestCat = cat;
+            break;
+          }
+        }
+        if (bestCat?.id) {
+          initialMatchId = bestCat.id;
+          initialMatchName = bestCat.name;
+          req.log.info(
+            {
+              phrase: searchPhrase,
+              initialId: initialMatchId,
+              initialName: initialMatchName,
+              candidateCount: cats.length,
+            },
+            "matching-categories fallback candidate"
+          );
+        }
+      } catch (catErr: unknown) {
+        const e = catErr as { message?: string };
+        req.log.warn({ phrase: searchPhrase, msg: e.message }, "matching-categories failed");
+      }
+
+      if (initialMatchId) {
+        const resolved = await resolveLeafCategory(
+          initialMatchId,
+          cleanedName,
+          detectedBrand,
+          drillKeyword,
+        );
+        categoryResolutionTrace = {
+          strategy: "matching-categories-fallback",
+          supermarket: {
+            seedId: SUPERMARKET_CATEGORY_ID,
+            confidence: supermarketResolved.confidence,
+            leaf: supermarketResolved.leaf,
           },
-          "Leaf category resolved"
-        );
-      } else {
-        req.log.warn(
-          { initialId: initialMatchId, trace: resolved.trace },
-          "Leaf resolution failed — frontend will prompt manual selection"
-        );
+          initial: { id: initialMatchId, name: initialMatchName },
+          path: resolved.categoryPath,
+          confidence: resolved.confidence,
+          leaf: resolved.leaf,
+          steps: resolved.trace,
+        };
+        if (resolved.leaf && resolved.categoryId) {
+          detectedCategoryId = resolved.categoryId;
+          detectedCategoryName = resolved.categoryName;
+          categoryPath = resolved.categoryPath;
+          categoryLeaf = true;
+          categoryConfidence = resolved.confidence;
+          req.log.info(
+            {
+              categoryId: detectedCategoryId,
+              categoryName: detectedCategoryName,
+              path: categoryPath,
+              confidence: categoryConfidence,
+            },
+            "Leaf category resolved (fallback)"
+          );
+        } else {
+          req.log.warn(
+            { initialId: initialMatchId, trace: resolved.trace },
+            "Leaf resolution failed — frontend will prompt manual selection"
+          );
+        }
       }
     }
 
@@ -352,6 +470,7 @@ router.get("/scan", async (req, res) => {
       type: p.type,
       required: p.required,
       options: p.options,
+      unit: p.unit,
     }));
     const fillerOutput = fillCategoryParameters(fillerInput, {
       productName: cleanedName,

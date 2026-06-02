@@ -26,14 +26,54 @@ interface AllegroParam {
   restrictions: Record<string, unknown> | null;
 }
 
+// Per-field auto-fill source (mirrors backend FilledParameter.source) + "client"
+// for values the frontend derived on its own.
+type ParamSource =
+  | "default"
+  | "scan"
+  | "lookup"
+  | "name_keyword"
+  | "off_tags"
+  | "ean_country"
+  | "allegro_catalog"
+  | "client";
+
+type FillConfidence = "high" | "medium" | "low";
+
+interface ServerFilledParameter {
+  id: string;
+  name: string;
+  value: string;
+  valueLabel?: string;
+  kind: "values" | "valuesIds";
+  confidence: FillConfidence;
+  source: ParamSource;
+}
+
+interface ServerSkippedParameter {
+  id: string;
+  name: string;
+  reason: "user_fills_manually" | "regulated" | "unknown_value";
+}
+
+interface ParamFillMeta {
+  source: ParamSource;
+  confidence: FillConfidence;
+}
+
 interface ExtendedScanResult {
   productId: string | null;
   productName: string | null;
   categoryId: string | null;
   categoryName: string | null;
+  categoryConfidence?: "high" | "medium" | "low" | "none";
+  categoryPath?: string[];
+  categoryLeaf?: boolean;
   images: Array<{ url: string }>;
   parameters: AllegroParam[];
   prefillValues: Record<string, string[]>;
+  filledParameters?: ServerFilledParameter[];
+  skippedParameters?: ServerSkippedParameter[];
   productParamIds?: string[];
   source: string | null;
   brand?: string | null;
@@ -191,10 +231,17 @@ function autoFillParam(
 function buildAutoFilledState(
   params: AllegroParam[],
   prefillValues: Record<string, string[]>,
-  ctx: ProductContext
-): { formState: Record<string, ParameterValue>; autoFilledIds: Set<string> } {
+  ctx: ProductContext,
+  serverFilled?: ServerFilledParameter[]
+): {
+  formState: Record<string, ParameterValue>;
+  autoFilledIds: Set<string>;
+  paramMeta: Record<string, ParamFillMeta>;
+} {
   const formState: Record<string, ParameterValue> = {};
   const autoFilledIds = new Set<string>();
+  const paramMeta: Record<string, ParamFillMeta> = {};
+  const serverById = new Map((serverFilled ?? []).map((f) => [f.id, f]));
 
   for (const param of params) {
     const nameLower = param.name.toLowerCase();
@@ -209,6 +256,7 @@ function buildAutoFilledState(
         if (matched) {
           formState[param.id] = { id: param.id, valuesIds: [matched] };
           autoFilledIds.add(param.id);
+          paramMeta[param.id] = { source: "lookup", confidence: "high" };
         } else {
           // Brand not in options list — leave empty so user selects manually
           formState[param.id] = { id: param.id };
@@ -216,11 +264,24 @@ function buildAutoFilledState(
       } else if (param.type === "string") {
         formState[param.id] = { id: param.id, values: [ctx.brand] };
         autoFilledIds.add(param.id);
+        paramMeta[param.id] = { source: "lookup", confidence: "high" };
       }
       continue; // Skip Allegro catalog prefill for brand
     }
 
-    // 1. Allegro catalog prefill (highest priority for non-brand params)
+    // 1. Server-computed fill — carries confidence + source attribution.
+    const sf = serverById.get(param.id);
+    if (sf && sf.value) {
+      formState[param.id] =
+        sf.kind === "valuesIds"
+          ? { id: param.id, valuesIds: [sf.value] }
+          : { id: param.id, values: [sf.value] };
+      autoFilledIds.add(param.id);
+      paramMeta[param.id] = { source: sf.source, confidence: sf.confidence };
+      continue;
+    }
+
+    // 2. Allegro catalog prefill (non-brand params the server didn't attribute).
     const catalogValues = prefillValues[param.id];
     if (catalogValues && catalogValues.length > 0) {
       if (param.type === "dictionary") {
@@ -229,20 +290,47 @@ function buildAutoFilledState(
         formState[param.id] = { id: param.id, values: catalogValues };
       }
       autoFilledIds.add(param.id);
+      paramMeta[param.id] = { source: "allegro_catalog", confidence: "high" };
       continue;
     }
 
-    // 2. Smart auto-fill from product context
+    // 3. Client-side smart auto-fill fallback (e.g. after manual category change).
     const { value, autoFilled } = autoFillParam(param, ctx);
     if (value) {
       formState[param.id] = value;
-      if (autoFilled) autoFilledIds.add(param.id);
+      if (autoFilled) {
+        autoFilledIds.add(param.id);
+        paramMeta[param.id] = { source: "client", confidence: "medium" };
+      }
     } else {
       formState[param.id] = { id: param.id };
     }
   }
 
-  return { formState, autoFilledIds };
+  return { formState, autoFilledIds, paramMeta };
+}
+
+// ── Per-field source/confidence presentation ─────────────────────────────────
+
+function paramSourceLabel(source: ParamSource): string {
+  switch (source) {
+    case "allegro_catalog": return "Katalog Allegro";
+    case "lookup": return "Baza produktów";
+    case "off_tags": return "OpenFoodFacts";
+    case "ean_country": return "Kod EAN";
+    case "name_keyword": return "Z nazwy";
+    case "scan": return "Skan";
+    case "default": return "Domyślne";
+    case "client": return "Auto";
+    default: return "Auto";
+  }
+}
+
+// Tailwind classes for the confidence badge (high=green, medium=amber, low=orange).
+function confidenceBadgeClass(confidence: FillConfidence): string {
+  if (confidence === "medium") return "text-amber-400";
+  if (confidence === "low") return "text-orange-400";
+  return "text-green-400";
 }
 
 // ── Source utilities ─────────────────────────────────────────────────────────
@@ -555,6 +643,8 @@ export default function Home() {
   const [parameters, setParameters] = useState<AllegroParam[]>([]);
   const [formState, setFormState] = useState<Record<string, ParameterValue>>({});
   const [autoFilledIds, setAutoFilledIds] = useState<Set<string>>(new Set());
+  const [paramMeta, setParamMeta] = useState<Record<string, ParamFillMeta>>({});
+  const [skippedParams, setSkippedParams] = useState<ServerSkippedParameter[]>([]);
 
   const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -597,9 +687,10 @@ export default function Home() {
       setCategoryId(catId);
       setCategoryName(catName);
       setParameters(params);
-      const { formState: fs, autoFilledIds: ai } = buildAutoFilledState(params, prefillValues, ctx);
+      const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, prefillValues, ctx);
       setFormState(fs);
       setAutoFilledIds(ai);
+      setParamMeta(pm);
       setLoadingParams(false);
     },
     []
@@ -639,6 +730,8 @@ export default function Home() {
     setParameters([]);
     setFormState({});
     setAutoFilledIds(new Set());
+    setParamMeta({});
+    setSkippedParams([]);
     setCategorySuggestions([]);
     if (userImagePreviewUrl) URL.revokeObjectURL(userImagePreviewUrl);
     setUserImagePreviewUrl(null);
@@ -668,15 +761,18 @@ export default function Home() {
         country,
       };
 
+      setSkippedParams(data.skippedParameters || []);
+
       if (kind === "allegro") {
         // Allegro catalog — parameters already in data.parameters
         const params = data.parameters || [];
         setCategoryId(data.categoryId);
         setCategoryName(data.categoryName || "");
         setParameters(params);
-        const { formState: fs, autoFilledIds: ai } = buildAutoFilledState(params, data.prefillValues || {}, ctx);
+        const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, data.prefillValues || {}, ctx, data.filledParameters);
         setFormState(fs);
         setAutoFilledIds(ai);
+        setParamMeta(pm);
         setStep("FORM");
       } else {
         // External source — backend auto-detects category and loads params
@@ -691,9 +787,10 @@ export default function Home() {
 
         if (params.length > 0) {
           // Backend detected category AND loaded params — build form state from them
-          const { formState: fs, autoFilledIds: ai } = buildAutoFilledState(params, data.prefillValues || {}, ctx);
+          const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, data.prefillValues || {}, ctx, data.filledParameters);
           setFormState(fs);
           setAutoFilledIds(ai);
+          setParamMeta(pm);
           // Don't auto-open picker — just show the detected category with the change button
         }
 
@@ -796,8 +893,9 @@ export default function Home() {
 
   const updateForm = useCallback((id: string, value: Partial<ParameterValue>) => {
     setFormState((prev) => ({ ...prev, [id]: { ...prev[id], ...value, id } }));
-    // Once user manually changes a field, remove it from auto-filled
+    // Once user manually changes a field, it's confirmed — drop auto-fill marks.
     setAutoFilledIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    setParamMeta((prev) => { const next = { ...prev }; delete next[id]; return next; });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -877,6 +975,8 @@ export default function Home() {
     setParameters([]);
     setFormState({});
     setAutoFilledIds(new Set());
+    setParamMeta({});
+    setSkippedParams([]);
     setManualEan("");
     setCurrentEan("");
     setOfferId(null);
@@ -1176,19 +1276,24 @@ export default function Home() {
                     </div>
                   )}
 
-                  {!loadingParams && parameters.some((p) => p.required) && (
+                  {!loadingParams && parameters.some((p) => p.required || autoFilledIds.has(p.id)) && (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {parameters.filter((p) => p.required).map((param) => {
+                        {parameters.filter((p) => p.required || autoFilledIds.has(p.id)).map((param) => {
                                 const isAutoFilled = autoFilledIds.has(param.id);
+                                const meta = paramMeta[param.id];
                                 const hasValue =
                                   (formState[param.id]?.values?.[0] && formState[param.id]?.values?.[0] !== "") ||
                                   (formState[param.id]?.valuesIds?.[0] && formState[param.id]?.valuesIds?.[0] !== "");
                                 const isEmptyRequired = param.required && !hasValue && submitAttempted;
-                                const borderClass = isAutoFilled
-                                  ? "border-green-500/50 bg-green-500/5"
-                                  : isEmptyRequired
+                                const borderClass = isEmptyRequired
                                   ? "border-red-500/50 bg-red-500/5"
+                                  : isAutoFilled && meta?.confidence === "medium"
+                                  ? "border-amber-500/40 bg-amber-500/5"
+                                  : isAutoFilled && meta?.confidence === "low"
+                                  ? "border-orange-500/40 bg-orange-500/5"
+                                  : isAutoFilled
+                                  ? "border-green-500/50 bg-green-500/5"
                                   : "";
 
                                 return (
@@ -1198,8 +1303,13 @@ export default function Home() {
                                         {param.name}
                                         {param.required && <span className="text-primary text-xs">*</span>}
                                         {isAutoFilled && (
-                                          <span className="text-green-400 text-xs font-normal flex items-center gap-0.5">
-                                            <CheckCheck className="w-3 h-3" /> auto
+                                          <span
+                                            className={`text-xs font-normal flex items-center gap-0.5 ${meta ? confidenceBadgeClass(meta.confidence) : "text-green-400"}`}
+                                            title={meta ? `Źródło: ${paramSourceLabel(meta.source)} · pewność: ${meta.confidence === "high" ? "wysoka" : meta.confidence === "medium" ? "średnia" : "niska"}` : "Wypełnione automatycznie"}
+                                          >
+                                            <CheckCheck className="w-3 h-3" />
+                                            {meta ? paramSourceLabel(meta.source) : "auto"}
+                                            {meta && meta.confidence !== "high" && <span className="opacity-80">· sprawdź</span>}
                                           </span>
                                         )}
                                       </span>
@@ -1215,7 +1325,7 @@ export default function Home() {
                                         className={borderClass}
                                       />
                                     ) : param.type === "boolean" ? (
-                                      <div className={`flex h-12 items-center px-4 rounded-xl bg-black/20 border ${isAutoFilled ? "border-green-500/50" : "border-white/5"}`}>
+                                      <div className={`flex h-12 items-center px-4 rounded-xl bg-black/20 border ${borderClass || "border-white/5"}`}>
                                         <PremiumSwitch
                                           checked={formState[param.id]?.values?.[0] === "true"}
                                           onChange={(val) => updateForm(param.id, { values: [val ? "true" : "false"] })}
@@ -1249,6 +1359,21 @@ export default function Home() {
                         })}
                       </div>
 
+                      {/* Fields we deliberately leave for manual entry (regulated / to verify) */}
+                      {skippedParams.filter((s) => s.reason !== "unknown_value").length > 0 && (
+                        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                          <p className="text-xs text-white/50 mb-1.5 flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" /> Uzupełnij ręcznie (nie wypełniamy automatycznie):
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {skippedParams.filter((s) => s.reason !== "unknown_value").map((s) => (
+                              <span key={s.id} className="text-xs px-2 py-0.5 rounded-md bg-black/30 text-white/60">
+                                {s.name}{s.reason === "regulated" ? " · regulowane" : ""}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
