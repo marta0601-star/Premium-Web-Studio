@@ -17,6 +17,7 @@ import {
 } from "../lib/allegro";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan } from "../lib/lookup";
+import { isVisionEnabled, extractProductFromImage } from "../lib/vision";
 import { getSellerSettings, saveSellerSettings } from "../lib/settings";
 import {
   detectCategoryKeyword,
@@ -689,6 +690,168 @@ router.post("/upload-image", async (req, res) => {
     req.log.error({ err }, "Error in upload-image endpoint");
     res.status(500).json({ error: "server_error" });
   }
+});
+
+// ── POST /api/allegro/scan-photo ────────────────────────────────────────────
+// Vision fallback: when EAN lookup found nothing, the client posts a package
+// photo (binary image body, optional ?ean=). Claude extracts product fields,
+// which then flow through the SAME Supermarket-anchored category resolution +
+// param-filler as a normal scan, so the draft shape is identical.
+// Gated behind ANTHROPIC_API_KEY — returns 503 when the feature is off.
+router.post("/scan-photo", async (req, res) => {
+  if (!isVisionEnabled()) {
+    res.status(503).json({
+      error: "vision_disabled",
+      message: "Rozpoznawanie ze zdjęcia jest wyłączone (brak ANTHROPIC_API_KEY).",
+    });
+    return;
+  }
+
+  const contentType = ((req.headers["content-type"] as string) || "image/jpeg")
+    .split(";")[0]
+    .trim();
+  const ean = typeof req.query.ean === "string" ? req.query.ean : "";
+
+  const chunks: Buffer[] = [];
+  req.on("data", (chunk: Buffer) => chunks.push(chunk));
+  req.on("error", (err) => {
+    req.log.error({ err }, "scan-photo: error reading body");
+    res.status(500).json({ error: "read_error" });
+  });
+  req.on("end", async () => {
+    try {
+      const data = Buffer.concat(chunks);
+      if (!data.length) {
+        res.status(400).json({ error: "empty_image" });
+        return;
+      }
+
+      const vision = await extractProductFromImage(data.toString("base64"), contentType);
+      if (!vision) {
+        res.status(404).json({
+          error: "vision_no_data",
+          message: "Nie udało się rozpoznać produktu ze zdjęcia.",
+        });
+        return;
+      }
+
+      // Build a name from the recognised parts (flavour included so the filler's
+      // name-keyword extraction can use it), then run the same detection chain.
+      const rawName = [vision.brand, vision.name, vision.flavor]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const detectedBrand = detectBrand(rawName, vision.brand);
+      const categoryKeyword = detectCategoryKeyword(rawName);
+      const weightProbe: { reason?: string } = {};
+      const detectedVolume = detectVolume(
+        rawName,
+        vision.weight,
+        categoryKeyword ?? null,
+        weightProbe,
+      );
+      const cleanedName = cleanProductName(rawName, detectedBrand, detectedVolume);
+      const normalizedWeight = detectedVolume
+        ? formatVolumeForContext(detectedVolume)
+        : vision.weight;
+
+      // Vision gives no OFF category tags; pass ingredients + country (origin) so
+      // the filler's country branch and ingredient-aware logic still work.
+      const meta = {
+        ingredients: vision.ingredients ?? undefined,
+        originsTags: vision.country ? [vision.country] : undefined,
+      };
+
+      // Resolve a leaf under Supermarket (#258832). Vision items are the long
+      // tail, so we keep it simple: Supermarket drill only, manual pick if it
+      // doesn't land (the UI already supports changing the category).
+      const drillKeyword = categoryKeyword ?? deriveOffTypeHint(meta);
+      const resolved = await resolveLeafCategory(
+        SUPERMARKET_CATEGORY_ID,
+        cleanedName,
+        detectedBrand,
+        drillKeyword,
+      );
+      const detectedCategoryId = resolved.leaf ? resolved.categoryId : null;
+
+      let parameters: ReturnType<typeof mapParam>[] = [];
+      let productParamIds: string[] = [];
+      if (detectedCategoryId) {
+        try {
+          const token = await getUserToken();
+          const hdr = {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.allegro.public.v1+json",
+          };
+          const [paramsRes, ppRes] = await Promise.allSettled([
+            getCategoryParameters(detectedCategoryId),
+            axios.get(
+              `${ALLEGRO_BASE_URL}/sale/categories/${detectedCategoryId}/product-parameters?language=pl-PL`,
+              { headers: hdr, timeout: 8000 },
+            ),
+          ]);
+          if (paramsRes.status === "fulfilled") {
+            const raw = (paramsRes.value as { parameters?: RawAllegroParam[] }).parameters || [];
+            parameters = raw.map((p) => mapParam(p));
+          }
+          if (ppRes.status === "fulfilled") {
+            const pp = (ppRes.value.data as { parameters?: RawAllegroParam[] }).parameters || [];
+            productParamIds = pp.map((p) => p.id);
+          }
+        } catch (paramErr: unknown) {
+          const e = paramErr as { message?: string };
+          req.log.warn({ msg: e.message }, "scan-photo: error fetching parameters");
+        }
+      }
+
+      const fillerInput: AllegroFillerParam[] = parameters.map((p) => ({
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        required: p.required,
+        options: p.options,
+        unit: p.unit,
+      }));
+      const fillerOutput = fillCategoryParameters(fillerInput, {
+        productName: cleanedName || rawName,
+        brand: detectedBrand,
+        categoryKeyword,
+        ean,
+        weight: normalizedWeight,
+        offMeta: meta,
+      });
+      const prefillValues = filledToPrefillValues(fillerOutput.filled);
+
+      req.log.info(
+        { vision, categoryId: detectedCategoryId, fillerStats: fillerOutput.stats },
+        "scan-photo: draft built from vision",
+      );
+
+      res.json({
+        productId: null,
+        productName: cleanedName || rawName,
+        categoryId: detectedCategoryId,
+        categoryName: resolved.categoryName,
+        categoryPath: resolved.categoryPath,
+        categoryLeaf: resolved.leaf,
+        categoryConfidence: resolved.confidence,
+        images: [],
+        parameters,
+        prefillValues,
+        productParamIds,
+        filledParameters: fillerOutput.filled,
+        skippedParameters: fillerOutput.skipped,
+        source: "vision",
+        brand: detectedBrand,
+        weight: normalizedWeight,
+        vision,
+        ean,
+      });
+    } catch (err: unknown) {
+      req.log.error({ err }, "scan-photo: failed");
+      res.status(500).json({ error: "server_error" });
+    }
+  });
 });
 
 // ── POST /api/allegro/create-offer ──────────────────────────────────────────

@@ -665,6 +665,7 @@ export default function Home() {
   const [imageUploading, setImageUploading] = useState(false);
   const [description, setDescription] = useState<string>("");
   const [productTitle, setProductTitle] = useState<string>("");
+  const [photoScanning, setPhotoScanning] = useState(false);
 
   const scanMutation = useScanBarcode();
   const submitMutation = useSubmitOffer();
@@ -857,6 +858,61 @@ export default function Home() {
       }
     }
   }, [scanMutation, userImagePreviewUrl]);
+
+  // Vision fallback: recognise the product from a package photo when EAN lookup
+  // found nothing. Populates the form exactly like a normal scan.
+  const handleScanPhoto = useCallback(async (file: File) => {
+    setErrorMsg(null);
+    setPhotoScanning(true);
+    try {
+      const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const resp = await fetch(`${BASE}/api/allegro/scan-photo?ean=${encodeURIComponent(currentEan)}`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      if (resp.status === 503) {
+        setErrorMsg("Rozpoznawanie ze zdjęcia jest wyłączone (brak klucza API). Skontaktuj się z administratorem.");
+        return;
+      }
+      if (!resp.ok) {
+        setErrorMsg("Nie udało się rozpoznać produktu ze zdjęcia. Uzupełnij dane ręcznie.");
+        return;
+      }
+      const data = (await resp.json()) as ExtendedScanResult;
+      setScannedData(data);
+      setProductParamIds(data.productParamIds || []);
+      setSkippedParams(data.skippedParameters || []);
+      if (data.productName) setProductTitle(data.productName);
+
+      const country = getCountryFromEan(currentEan);
+      const ctx: ProductContext = {
+        ean: currentEan,
+        brand: data.brand,
+        weight: data.weight,
+        productName: data.productName,
+        country,
+      };
+      const defaultCatId = data.categoryId || "258832";
+      const defaultCatName = data.categoryName || "Supermarket";
+      setCategoryId(defaultCatId);
+      setCategoryName(defaultCatName);
+      const params = data.parameters || [];
+      setParameters(params);
+      const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, data.prefillValues || {}, ctx, data.filledParameters);
+      setFormState(fs);
+      setAutoFilledIds(ai);
+      setParamMeta(pm);
+      setShowCategoryPicker(false);
+      if (params.length === 0) {
+        fetchCategoryChildren(defaultCatId).then(setCategorySuggestions);
+      }
+    } catch {
+      setErrorMsg("Błąd podczas rozpoznawania zdjęcia.");
+    } finally {
+      setPhotoScanning(false);
+    }
+  }, [currentEan]);
 
   const handleCategoryChange = useCallback(
     async (cat: CategorySuggestion) => {
@@ -1231,6 +1287,22 @@ export default function Home() {
                           <AlertCircle className="w-3 h-3" /> Nazwa jest wymagana
                         </p>
                       )}
+                      {/* Vision fallback — recognise product from a package photo */}
+                      <div className="pt-1">
+                        <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors ${photoScanning ? "border-white/10 text-white/40 cursor-wait" : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer"}`}>
+                          {photoScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                          {photoScanning ? "Rozpoznaję…" : "Rozpoznaj ze zdjęcia (AI)"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            disabled={photoScanning}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScanPhoto(f); e.target.value = ""; }}
+                          />
+                        </label>
+                        <p className="text-white/30 text-xs mt-1">Zrób zdjęcie opakowania — AI odczyta markę, nazwę, wagę i smak.</p>
+                      </div>
                     </div>
                   ) : (
                     <h2 className="text-2xl sm:text-3xl font-display text-white leading-tight">{scannedData.productName}</h2>
