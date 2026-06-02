@@ -2,7 +2,19 @@ import axios from "axios";
 import { logger } from "./logger";
 import { getUserToken } from "./allegro-auth";
 import { detectVolume } from "./auto-detect";
-import { getSellerSettings } from "./settings";
+
+/**
+ * Seller ship-from location — HARD-LOCKED to Wrocław. This is the physical
+ * origin of shipments, never a product attribute, so it must be immune to any
+ * value coming from a scan, the Allegro catalog, or vision. Single source of
+ * truth; do not read it from settings or product data.
+ */
+export const SELLER_LOCATION = {
+  countryCode: "PL",
+  city: "Wrocław",
+  postCode: "50-202",
+  province: "DOLNOSLASKIE",
+} as const;
 
 const ALLEGRO_CLIENT_ID = process.env.ALLEGRO_CLIENT_ID;
 const ALLEGRO_CLIENT_SECRET = process.env.ALLEGRO_CLIENT_SECRET;
@@ -796,16 +808,10 @@ export async function createAllegroOffer(payload: {
     stock: { available: 1, unit: "UNIT" },
     publication: { status: "ACTIVE" },
     payments: { invoice: "VAT" },
-    location: (() => {
-      // Prefer configured seller settings; fall back to the historical default.
-      const s = getSellerSettings();
-      return {
-        countryCode: "PL",
-        city: s?.city ?? "Wrocław",
-        postCode: s?.postCode ?? "50-202",
-        province: s?.state ?? "DOLNOSLASKIE",
-      };
-    })(),
+    // Seller location is HARD-LOCKED to Wrocław (see SELLER_LOCATION). It must
+    // never be influenced by scan/catalog/vision data — it is the physical ship
+    // origin, not a product attribute. Deliberately not read from settings.
+    location: { ...SELLER_LOCATION },
   };
 
   if (allegroImageUrl) commonOfferFields.images = [allegroImageUrl];

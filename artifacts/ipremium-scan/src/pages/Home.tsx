@@ -36,6 +36,8 @@ type ParamSource =
   | "off_tags"
   | "ean_country"
   | "allegro_catalog"
+  | "vision"
+  | "llm_match"
   | "client";
 
 type FillConfidence = "high" | "medium" | "low";
@@ -48,6 +50,7 @@ interface ServerFilledParameter {
   kind: "values" | "valuesIds";
   confidence: FillConfidence;
   source: ParamSource;
+  sourceDetail?: string;
 }
 
 interface ServerSkippedParameter {
@@ -56,9 +59,16 @@ interface ServerSkippedParameter {
   reason: "user_fills_manually" | "regulated" | "unknown_value";
 }
 
+interface CatalogDiff {
+  field: string;
+  catalog: string;
+  web: string;
+}
+
 interface ParamFillMeta {
   source: ParamSource;
   confidence: FillConfidence;
+  sourceDetail?: string;
 }
 
 interface ExtendedScanResult {
@@ -74,6 +84,17 @@ interface ExtendedScanResult {
   prefillValues: Record<string, string[]>;
   filledParameters?: ServerFilledParameter[];
   skippedParameters?: ServerSkippedParameter[];
+  catalogDiffs?: CatalogDiff[];
+  gaps?: Array<{ id: string; name: string }>;
+  vision?: {
+    brand: string | null;
+    name: string | null;
+    net_weight_g: number | null;
+    flavor: string | null;
+    ingredients: string[];
+    country_of_origin: string | null;
+    category_hint: string | null;
+  };
   productParamIds?: string[];
   source: string | null;
   brand?: string | null;
@@ -125,6 +146,44 @@ function getCountryFromEan(ean: string): string | null {
     if (prefix3 >= from && prefix3 <= to) return country;
   }
   return null;
+}
+
+// Downscale a captured photo (JPEG, ~1280px) so the vision payload stays small
+// and the API call stays cheap. Falls back to the raw bytes if canvas is unavailable.
+async function downscaleToBase64(file: File, maxDim = 1280): Promise<{ data: string; mediaType: string }> {
+  try {
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result as string);
+      fr.onerror = () => reject(new Error("read failed"));
+      fr.readAsDataURL(file);
+    });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("decode failed"));
+      i.src = dataUrl;
+    });
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { data: dataUrl.split(",")[1] ?? "", mediaType: file.type || "image/jpeg" };
+    ctx.drawImage(img, 0, 0, w, h);
+    const out = canvas.toDataURL("image/jpeg", 0.82);
+    return { data: out.split(",")[1] ?? "", mediaType: "image/jpeg" };
+  } catch {
+    const raw: string = await new Promise((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve((fr.result as string).split(",")[1] ?? "");
+      fr.onerror = () => resolve("");
+      fr.readAsDataURL(file);
+    });
+    return { data: raw, mediaType: file.type || "image/jpeg" };
+  }
 }
 
 // ── Smart auto-fill logic ────────────────────────────────────────────────────
@@ -277,7 +336,7 @@ function buildAutoFilledState(
           ? { id: param.id, valuesIds: [sf.value] }
           : { id: param.id, values: [sf.value] };
       autoFilledIds.add(param.id);
-      paramMeta[param.id] = { source: sf.source, confidence: sf.confidence };
+      paramMeta[param.id] = { source: sf.source, confidence: sf.confidence, sourceDetail: sf.sourceDetail };
       continue;
     }
 
@@ -312,13 +371,29 @@ function buildAutoFilledState(
 
 // ── Per-field source/confidence presentation ─────────────────────────────────
 
-function paramSourceLabel(source: ParamSource): string {
+function paramSourceLabel(source: ParamSource, detail?: string): string {
+  // A precise web source (e.g. "openfoodfacts/de", "google_kaufland") wins.
+  if (detail) {
+    const d = detail.toLowerCase();
+    if (d.startsWith("openfoodfacts")) return "OpenFoodFacts";
+    if (d === "upcitemdb") return "UPCitemDB";
+    if (d.startsWith("ceneo")) return "Ceneo";
+    if (d.startsWith("skapiec")) return "Skąpiec";
+    if (d.startsWith("allegro")) return "Allegro";
+    if (d === "vision") return "Zdjęcie (AI)";
+    if (d.startsWith("google_") || d.startsWith("bing")) {
+      const shop = d.replace(/^google_|^bing_/, "").replace(/_/g, ".");
+      return `Web (${shop})`;
+    }
+  }
   switch (source) {
     case "allegro_catalog": return "Katalog Allegro";
     case "lookup": return "Baza produktów";
     case "off_tags": return "OpenFoodFacts";
     case "ean_country": return "Kod EAN";
     case "name_keyword": return "Z nazwy";
+    case "vision": return "Zdjęcie (AI)";
+    case "llm_match": return "AI (dopasowanie)";
     case "scan": return "Skan";
     case "default": return "Domyślne";
     case "client": return "Auto";
@@ -645,6 +720,7 @@ export default function Home() {
   const [autoFilledIds, setAutoFilledIds] = useState<Set<string>>(new Set());
   const [paramMeta, setParamMeta] = useState<Record<string, ParamFillMeta>>({});
   const [skippedParams, setSkippedParams] = useState<ServerSkippedParameter[]>([]);
+  const [catalogDiffs, setCatalogDiffs] = useState<CatalogDiff[]>([]);
 
   const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -733,6 +809,7 @@ export default function Home() {
     setAutoFilledIds(new Set());
     setParamMeta({});
     setSkippedParams([]);
+    setCatalogDiffs([]);
     setCategorySuggestions([]);
     if (userImagePreviewUrl) URL.revokeObjectURL(userImagePreviewUrl);
     setUserImagePreviewUrl(null);
@@ -763,6 +840,7 @@ export default function Home() {
       };
 
       setSkippedParams(data.skippedParameters || []);
+      setCatalogDiffs(data.catalogDiffs || []);
 
       if (kind === "allegro") {
         // Allegro catalog — parameters already in data.parameters
@@ -861,15 +939,17 @@ export default function Home() {
 
   // Vision fallback: recognise the product from a package photo when EAN lookup
   // found nothing. Populates the form exactly like a normal scan.
-  const handleScanPhoto = useCallback(async (file: File) => {
+  const handleScanPhoto = useCallback(async (files: File[]) => {
+    if (!files.length) return;
     setErrorMsg(null);
     setPhotoScanning(true);
     try {
+      const images = await Promise.all(files.slice(0, 2).map((f) => downscaleToBase64(f)));
       const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const resp = await fetch(`${BASE}/api/allegro/scan-photo?ean=${encodeURIComponent(currentEan)}`, {
+      const resp = await fetch(`${BASE}/api/allegro/scan-photo`, {
         method: "POST",
-        headers: { "Content-Type": file.type || "image/jpeg" },
-        body: file,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images, ean: currentEan }),
       });
       if (resp.status === 503) {
         setErrorMsg("Rozpoznawanie ze zdjęcia jest wyłączone (brak klucza API). Skontaktuj się z administratorem.");
@@ -880,39 +960,68 @@ export default function Home() {
         return;
       }
       const data = (await resp.json()) as ExtendedScanResult;
-      setScannedData(data);
-      setProductParamIds(data.productParamIds || []);
-      setSkippedParams(data.skippedParameters || []);
-      if (data.productName) setProductTitle(data.productName);
+      const v = data.vision;
 
-      const country = getCountryFromEan(currentEan);
-      const ctx: ProductContext = {
-        ean: currentEan,
-        brand: data.brand,
-        weight: data.weight,
-        productName: data.productName,
-        country,
-      };
-      const defaultCatId = data.categoryId || "258832";
-      const defaultCatName = data.categoryName || "Supermarket";
-      setCategoryId(defaultCatId);
-      setCategoryName(defaultCatName);
-      const params = data.parameters || [];
-      setParameters(params);
-      const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, data.prefillValues || {}, ctx, data.filledParameters);
-      setFormState(fs);
-      setAutoFilledIds(ai);
-      setParamMeta(pm);
-      setShowCategoryPicker(false);
-      if (params.length === 0) {
-        fetchCategoryChildren(defaultCatId).then(setCategorySuggestions);
+      const haveCategory = !!categoryId && parameters.length > 0;
+      if (!haveCategory) {
+        // Case A — nothing usable from the web yet: adopt the vision draft wholesale.
+        setScannedData(data);
+        setProductParamIds(data.productParamIds || []);
+        setSkippedParams(data.skippedParameters || []);
+        if (data.productName) setProductTitle(data.productName);
+        const ctx: ProductContext = {
+          ean: currentEan,
+          brand: data.brand,
+          weight: data.weight,
+          productName: data.productName,
+          country: v?.country_of_origin ?? getCountryFromEan(currentEan),
+        };
+        const defaultCatId = data.categoryId || "258832";
+        setCategoryId(defaultCatId);
+        setCategoryName(data.categoryName || "Supermarket");
+        const params = data.parameters || [];
+        setParameters(params);
+        const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, data.prefillValues || {}, ctx, data.filledParameters);
+        setFormState(fs);
+        setAutoFilledIds(ai);
+        setParamMeta(pm);
+        setShowCategoryPicker(false);
+        if (params.length === 0) fetchCategoryChildren(defaultCatId).then(setCategorySuggestions);
+      } else {
+        // Case B — a category/web draft already exists: vision fills ONLY the
+        // still-empty fields of the CURRENT params; never overwrites known values.
+        const ctx: ProductContext = {
+          ean: currentEan,
+          brand: v?.brand ?? data.brand,
+          weight: v?.net_weight_g ? `${v.net_weight_g} g` : data.weight,
+          productName: [v?.brand, v?.name, v?.flavor].filter(Boolean).join(" ") || data.productName,
+          country: v?.country_of_origin ?? null,
+        };
+        const nextForm = { ...formState };
+        const nextIds = new Set(autoFilledIds);
+        const nextMeta = { ...paramMeta };
+        for (const param of parameters) {
+          const cur = nextForm[param.id];
+          const hasVal = (cur?.values?.[0] && cur.values[0] !== "") || (cur?.valuesIds?.[0] && cur.valuesIds[0] !== "");
+          if (hasVal) continue; // gap-only: never overwrite known values
+          const { value, autoFilled } = autoFillParam(param, ctx);
+          if (value && autoFilled) {
+            nextForm[param.id] = value;
+            nextIds.add(param.id);
+            nextMeta[param.id] = { source: "vision", confidence: "medium", sourceDetail: "vision" };
+          }
+        }
+        setFormState(nextForm);
+        setAutoFilledIds(nextIds);
+        setParamMeta(nextMeta);
+        if (!productTitle && (v?.name || data.productName)) setProductTitle(v?.name || data.productName || "");
       }
     } catch {
       setErrorMsg("Błąd podczas rozpoznawania zdjęcia.");
     } finally {
       setPhotoScanning(false);
     }
-  }, [currentEan]);
+  }, [currentEan, categoryId, parameters, formState, autoFilledIds, paramMeta, productTitle]);
 
   const handleCategoryChange = useCallback(
     async (cat: CategorySuggestion) => {
@@ -1033,6 +1142,7 @@ export default function Home() {
     setAutoFilledIds(new Set());
     setParamMeta({});
     setSkippedParams([]);
+    setCatalogDiffs([]);
     setManualEan("");
     setCurrentEan("");
     setOfferId(null);
@@ -1148,6 +1258,22 @@ export default function Home() {
 
               {/* Source Banner */}
               <SourceBanner source={scannedData.source} productId={scannedData.productId} productName={scannedData.productName} />
+
+              {/* Catalog vs web mismatch — likely wrong match (single vs multipack) */}
+              {catalogDiffs.length > 0 && (
+                <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                  <p className="text-amber-300 text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                    <AlertCircle className="w-4 h-4" /> Katalog Allegro różni się od danych z internetu — sprawdź, czy to ten wariant:
+                  </p>
+                  <div className="space-y-0.5">
+                    {catalogDiffs.map((d) => (
+                      <p key={d.field} className="text-xs text-white/70">
+                        <span className="text-white/50">{d.field}:</span> Katalog: <span className="text-white">{d.catalog}</span> · Web: <span className="text-amber-300">{d.web}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Product header */}
               <div className="flex flex-col md:flex-row gap-8 mb-8">
@@ -1287,22 +1413,6 @@ export default function Home() {
                           <AlertCircle className="w-3 h-3" /> Nazwa jest wymagana
                         </p>
                       )}
-                      {/* Vision fallback — recognise product from a package photo */}
-                      <div className="pt-1">
-                        <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors ${photoScanning ? "border-white/10 text-white/40 cursor-wait" : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer"}`}>
-                          {photoScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                          {photoScanning ? "Rozpoznaję…" : "Rozpoznaj ze zdjęcia (AI)"}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            disabled={photoScanning}
-                            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScanPhoto(f); e.target.value = ""; }}
-                          />
-                        </label>
-                        <p className="text-white/30 text-xs mt-1">Zrób zdjęcie opakowania — AI odczyta markę, nazwę, wagę i smak.</p>
-                      </div>
                     </div>
                   ) : (
                     <h2 className="text-2xl sm:text-3xl font-display text-white leading-tight">{scannedData.productName}</h2>
@@ -1377,10 +1487,10 @@ export default function Home() {
                                         {isAutoFilled && (
                                           <span
                                             className={`text-xs font-normal flex items-center gap-0.5 ${meta ? confidenceBadgeClass(meta.confidence) : "text-green-400"}`}
-                                            title={meta ? `Źródło: ${paramSourceLabel(meta.source)} · pewność: ${meta.confidence === "high" ? "wysoka" : meta.confidence === "medium" ? "średnia" : "niska"}` : "Wypełnione automatycznie"}
+                                            title={meta ? `Źródło: ${paramSourceLabel(meta.source, meta.sourceDetail)} · pewność: ${meta.confidence === "high" ? "wysoka" : meta.confidence === "medium" ? "średnia" : "niska"}` : "Wypełnione automatycznie"}
                                           >
                                             <CheckCheck className="w-3 h-3" />
-                                            {meta ? paramSourceLabel(meta.source) : "auto"}
+                                            {meta ? paramSourceLabel(meta.source, meta.sourceDetail) : "auto"}
                                             {meta && meta.confidence !== "high" && <span className="opacity-80">· sprawdź</span>}
                                           </span>
                                         )}
@@ -1449,6 +1559,38 @@ export default function Home() {
                     </>
                   )}
                 </div>
+
+                {/* Vision fallback — LAST RESORT, shown only when web enrichment left gaps */}
+                {(() => {
+                  const requiredEmpty = parameters.filter(
+                    (p) => p.required && !((formState[p.id]?.values?.[0]) || (formState[p.id]?.valuesIds?.[0])),
+                  );
+                  const noName = !scannedData.productName && !productTitle.trim();
+                  if (!(parameters.length === 0 || requiredEmpty.length > 0 || noName)) return null;
+                  return (
+                    <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 space-y-2">
+                      <p className="text-sm text-white/70">
+                        Nie udało się pobrać wszystkiego z internetu
+                        {requiredEmpty.length ? ` (brakuje: ${requiredEmpty.slice(0, 4).map((p) => p.name).join(", ")})` : ""}
+                        . Zrób zdjęcia opakowania — AI uzupełni tylko brakujące pola.
+                      </p>
+                      <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors ${photoScanning ? "border-white/10 text-white/40 cursor-wait" : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer"}`}>
+                        {photoScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                        {photoScanning ? "Rozpoznaję…" : "Dodaj zdjęcia (przód + tył)"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          multiple
+                          className="hidden"
+                          disabled={photoScanning}
+                          onChange={(e) => { const fs = Array.from(e.target.files ?? []); if (fs.length) handleScanPhoto(fs); e.target.value = ""; }}
+                        />
+                      </label>
+                      <p className="text-white/30 text-xs">Zrób 2 zdjęcia: przód (marka, nazwa) i tył (waga, skład, kraj pochodzenia).</p>
+                    </div>
+                  );
+                })()}
 
                 {/* Description field */}
                 <div className="space-y-2 pt-2">

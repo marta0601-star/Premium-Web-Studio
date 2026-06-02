@@ -16,8 +16,9 @@ import {
   SUPERMARKET_CATEGORY_ID,
 } from "../lib/allegro";
 import { getUserToken } from "../lib/allegro-auth";
-import { lookupEan } from "../lib/lookup";
-import { isVisionEnabled, extractProductFromImage } from "../lib/vision";
+import { lookupEan, type LookupResult } from "../lib/lookup";
+import { isVisionEnabled, extractProductFromImages, type VisionImage } from "../lib/vision";
+import { isLlmEnabled, semanticPickOption } from "../lib/llm";
 import { getSellerSettings, saveSellerSettings } from "../lib/settings";
 import {
   detectCategoryKeyword,
@@ -31,6 +32,7 @@ import {
   filledToPrefillValues,
   deriveOffTypeHint,
   type AllegroFillerParam,
+  type FilledParameter,
 } from "../lib/parameter-filler";
 
 const ALLEGRO_BASE_URL = "https://api.allegro.pl";
@@ -61,6 +63,116 @@ function mapParam(p: RawAllegroParam, required?: boolean) {
     options: (p.dictionary || []).map((d) => ({ id: d.id, name: d.value })),
     restrictions: p.restrictions ?? null,
   };
+}
+
+type MappedParam = ReturnType<typeof mapParam>;
+
+// Dictionary params worth a semantic (LLM) match when string-fuzzy left them empty.
+const SEMANTIC_PARAM_RE = /\b(smak|flavor|flavour|rodzaj|typ)\b/i;
+// "Key" fields we escalate (web → vision) even when not strictly required.
+const KEY_PARAM_RE = /\b(waga|masa|gramatura|weight|marka|brand|kraj pochodzenia|smak|rodzaj)\b/i;
+
+/** Short product description fed to the semantic matcher. */
+function buildProductContext(
+  name: string,
+  brand: string | null,
+  meta?: { categoriesTags?: string[]; ingredients?: string },
+  extra?: string | null,
+): string {
+  const parts = [
+    brand ? `Marka: ${brand}` : null,
+    name ? `Nazwa: ${name}` : null,
+    extra ? `Typ: ${extra}` : null,
+    meta?.categoriesTags?.length ? `Kategorie: ${meta.categoriesTags.slice(-4).join(", ").replace(/[-:]/g, " ")}` : null,
+    meta?.ingredients ? `Skład: ${meta.ingredients.slice(0, 160)}` : null,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+/**
+ * For dictionary params (smak/rodzaj/typ) the deterministic filler left empty,
+ * ask Claude to pick the best option across PL/DE/EN/FR. No-op without a key.
+ */
+async function semanticDictFill(
+  parameters: MappedParam[],
+  filledIds: Set<string>,
+  productContext: string,
+): Promise<FilledParameter[]> {
+  if (!isLlmEnabled() || !productContext) return [];
+  const targets = parameters.filter(
+    (p) =>
+      p.type === "dictionary" &&
+      p.options.length > 0 &&
+      !filledIds.has(p.id) &&
+      SEMANTIC_PARAM_RE.test(p.name),
+  );
+  const results = await Promise.all(
+    targets.map(async (p) => {
+      const m = await semanticPickOption(p.name, productContext, p.options);
+      if (!m) return null;
+      const fp: FilledParameter = {
+        id: p.id,
+        name: p.name,
+        value: m.id,
+        valueLabel: m.valueLabel,
+        kind: "valuesIds",
+        confidence: "medium",
+        source: "llm_match",
+      };
+      return fp;
+    }),
+  );
+  return results.filter((x): x is FilledParameter => x !== null);
+}
+
+/** Empty required params + empty key params — used to gate the vision fallback. */
+function computeGaps(parameters: MappedParam[], filledIds: Set<string>): Array<{ id: string; name: string }> {
+  return parameters
+    .filter((p) => !filledIds.has(p.id) && (p.required || KEY_PARAM_RE.test(p.name)))
+    .map((p) => ({ id: p.id, name: p.name }));
+}
+
+/** Resolve a promise but give up (→ null) after `ms` so a slow scraper can't
+ *  hold the response hostage. The work keeps running; we just stop waiting. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+const normName = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+/** Rough grams/ml from a free weight string, reusing detectVolume's parser. */
+function gramsOf(s: string | null | undefined): number | null {
+  if (!s) return null;
+  const v = detectVolume(s, null, null);
+  return v ? v.value : null;
+}
+
+/**
+ * Compare catalog-derived vs web-derived values to flag a likely bad EAN match
+ * (single vs multipack, wrong product). Catalog stays authoritative — these are
+ * only "sprawdź?" hints for the user.
+ */
+function catalogVsWebDiffs(
+  catBrand: string | null,
+  catWeight: string | null,
+  web: LookupResult | null,
+): Array<{ field: string; catalog: string; web: string }> {
+  const diffs: Array<{ field: string; catalog: string; web: string }> = [];
+  if (!web?.found) return diffs;
+  const webBrand = detectBrand(web.name ?? "", web.brand ?? web.fieldSources?.brand?.value ?? null);
+  if (catBrand && webBrand && normName(catBrand) !== normName(webBrand)) {
+    diffs.push({ field: "Marka", catalog: catBrand, web: webBrand });
+  }
+  const catG = gramsOf(catWeight);
+  const webWeightStr = web.weight ?? web.fieldSources?.weight?.value ?? null;
+  const webG = gramsOf(webWeightStr);
+  if (catG && webG && Math.abs(catG - webG) / Math.max(catG, webG) > 0.2) {
+    diffs.push({ field: "Waga", catalog: catWeight ?? `${catG} g`, web: webWeightStr ?? `${webG} g` });
+  }
+  return diffs;
 }
 
 // ── GET /api/allegro/scan ────────────────────────────────────────────────────
@@ -117,6 +229,10 @@ router.get("/scan", async (req, res) => {
           prefillValues[pp.id] = pp.values;
         }
       }
+
+      // Kick off web enrichment IN PARALLEL — used only to flag catalog/web
+      // mismatches (single vs multipack, wrong match). Catalog stays authoritative.
+      const webEnrichPromise: Promise<LookupResult | null> = lookupEan(ean).catch(() => null);
 
       // Fetch category parameters + product-parameters + name in parallel
       let parameters: ReturnType<typeof mapParam>[] = [];
@@ -217,6 +333,14 @@ router.get("/scan", async (req, res) => {
         ...fillerAdded,
       ];
 
+      // Bounded wait: the diff is a nice-to-have, so don't hold the (fast,
+      // authoritative) catalog response hostage to slow web scrapers.
+      const web = await withTimeout(webEnrichPromise, 7000);
+      const catalogDiffs = catalogVsWebDiffs(catBrand, catWeight, web);
+      if (catalogDiffs.length) {
+        req.log.info({ ean, catalogDiffs }, "Catalog vs web mismatch flagged");
+      }
+
       res.json({
         productId,
         productName,
@@ -230,6 +354,7 @@ router.get("/scan", async (req, res) => {
         productParamIds,
         filledParameters,
         skippedParameters: catFiller.skipped,
+        catalogDiffs,
         source: "allegro_catalog",
         brand: catBrand,
         weight: catWeight,
@@ -464,7 +589,15 @@ router.get("/scan", async (req, res) => {
       }
     }
 
-    // ── Step 3d: Auto-fill category parameters from lookup data ──────────────
+    // ── Step 3d: Auto-fill category parameters from aggregated web data ──────
+    // If the winning result had no weight, fall back to the aggregated best.
+    let effectiveWeight = normalizedWeight;
+    if (!effectiveWeight && result.fieldSources?.weight?.value) {
+      const aggProbe: { reason?: string } = {};
+      const aggVol = detectVolume(result.fieldSources.weight.value, null, categoryKeyword ?? null, aggProbe);
+      effectiveWeight = aggVol ? formatVolumeForContext(aggVol) : null;
+    }
+
     const fillerInput: AllegroFillerParam[] = parameters.map((p) => ({
       id: p.id,
       name: p.name,
@@ -478,10 +611,28 @@ router.get("/scan", async (req, res) => {
       brand: detectedBrand,
       categoryKeyword,
       ean,
-      weight: normalizedWeight,
+      weight: effectiveWeight,
       offMeta: result.meta,
+      fieldSources: result.fieldSources,
     });
-    const prefillValues = filledToPrefillValues(fillerOutput.filled);
+
+    // Semantic LLM pass for dictionary smak/rodzaj the fuzzy filler left empty.
+    let allFilled = fillerOutput.filled;
+    const filledIds = new Set(allFilled.map((f) => f.id));
+    const productContext = buildProductContext(
+      cleanedName,
+      detectedBrand,
+      result.meta,
+      deriveOffTypeHint(result.meta),
+    );
+    const semanticFills = await semanticDictFill(parameters, filledIds, productContext);
+    if (semanticFills.length) {
+      allFilled = [...allFilled, ...semanticFills];
+      semanticFills.forEach((f) => filledIds.add(f.id));
+    }
+
+    const prefillValues = filledToPrefillValues(allFilled);
+    const gaps = computeGaps(parameters, filledIds);
 
     req.log.info(
       {
@@ -489,6 +640,8 @@ router.get("/scan", async (req, res) => {
         paramCount: parameters.length,
         productParamCount: productParamIds.length,
         fillerStats: fillerOutput.stats,
+        semanticFills: semanticFills.length,
+        gaps: gaps.length,
       },
       "Category parameters loaded + auto-filled"
     );
@@ -505,13 +658,15 @@ router.get("/scan", async (req, res) => {
       parameters,
       prefillValues,
       productParamIds,
-      filledParameters: fillerOutput.filled,
+      filledParameters: allFilled,
       skippedParameters: fillerOutput.skipped,
+      gaps,
       source: result.source,
       brand: detectedBrand,
-      weight: normalizedWeight,
+      weight: effectiveWeight,
       category: result.category,
       meta: result.meta,
+      fieldSources: result.fieldSources,
       logs: result.logs,
       debug: {
         ...(result.debug ?? {}),
@@ -693,11 +848,12 @@ router.post("/upload-image", async (req, res) => {
 });
 
 // ── POST /api/allegro/scan-photo ────────────────────────────────────────────
-// Vision fallback: when EAN lookup found nothing, the client posts a package
-// photo (binary image body, optional ?ean=). Claude extracts product fields,
-// which then flow through the SAME Supermarket-anchored category resolution +
-// param-filler as a normal scan, so the draft shape is identical.
-// Gated behind ANTHROPIC_API_KEY — returns 503 when the feature is off.
+// VISION FALLBACK — last resort, used only after web enrichment leaves gaps.
+// Body: JSON { images: [{ data: base64, mediaType }], ean? } — front + back of
+// the package. Claude extracts fields, which flow through the SAME
+// Supermarket-anchored category resolution + param-filler as a normal scan.
+// The frontend merges the result into EMPTY fields only (it never overwrites
+// values already obtained from the catalog/web). Gated by ANTHROPIC_API_KEY.
 router.post("/scan-photo", async (req, res) => {
   if (!isVisionEnabled()) {
     res.status(503).json({
@@ -707,151 +863,157 @@ router.post("/scan-photo", async (req, res) => {
     return;
   }
 
-  const contentType = ((req.headers["content-type"] as string) || "image/jpeg")
-    .split(";")[0]
-    .trim();
-  const ean = typeof req.query.ean === "string" ? req.query.ean : "";
-
-  const chunks: Buffer[] = [];
-  req.on("data", (chunk: Buffer) => chunks.push(chunk));
-  req.on("error", (err) => {
-    req.log.error({ err }, "scan-photo: error reading body");
-    res.status(500).json({ error: "read_error" });
-  });
-  req.on("end", async () => {
-    try {
-      const data = Buffer.concat(chunks);
-      if (!data.length) {
-        res.status(400).json({ error: "empty_image" });
-        return;
-      }
-
-      const vision = await extractProductFromImage(data.toString("base64"), contentType);
-      if (!vision) {
-        res.status(404).json({
-          error: "vision_no_data",
-          message: "Nie udało się rozpoznać produktu ze zdjęcia.",
-        });
-        return;
-      }
-
-      // Build a name from the recognised parts (flavour included so the filler's
-      // name-keyword extraction can use it), then run the same detection chain.
-      const rawName = [vision.brand, vision.name, vision.flavor]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      const detectedBrand = detectBrand(rawName, vision.brand);
-      const categoryKeyword = detectCategoryKeyword(rawName);
-      const weightProbe: { reason?: string } = {};
-      const detectedVolume = detectVolume(
-        rawName,
-        vision.weight,
-        categoryKeyword ?? null,
-        weightProbe,
-      );
-      const cleanedName = cleanProductName(rawName, detectedBrand, detectedVolume);
-      const normalizedWeight = detectedVolume
-        ? formatVolumeForContext(detectedVolume)
-        : vision.weight;
-
-      // Vision gives no OFF category tags; pass ingredients + country (origin) so
-      // the filler's country branch and ingredient-aware logic still work.
-      const meta = {
-        ingredients: vision.ingredients ?? undefined,
-        originsTags: vision.country ? [vision.country] : undefined,
-      };
-
-      // Resolve a leaf under Supermarket (#258832). Vision items are the long
-      // tail, so we keep it simple: Supermarket drill only, manual pick if it
-      // doesn't land (the UI already supports changing the category).
-      const drillKeyword = categoryKeyword ?? deriveOffTypeHint(meta);
-      const resolved = await resolveLeafCategory(
-        SUPERMARKET_CATEGORY_ID,
-        cleanedName,
-        detectedBrand,
-        drillKeyword,
-      );
-      const detectedCategoryId = resolved.leaf ? resolved.categoryId : null;
-
-      let parameters: ReturnType<typeof mapParam>[] = [];
-      let productParamIds: string[] = [];
-      if (detectedCategoryId) {
-        try {
-          const token = await getUserToken();
-          const hdr = {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.allegro.public.v1+json",
-          };
-          const [paramsRes, ppRes] = await Promise.allSettled([
-            getCategoryParameters(detectedCategoryId),
-            axios.get(
-              `${ALLEGRO_BASE_URL}/sale/categories/${detectedCategoryId}/product-parameters?language=pl-PL`,
-              { headers: hdr, timeout: 8000 },
-            ),
-          ]);
-          if (paramsRes.status === "fulfilled") {
-            const raw = (paramsRes.value as { parameters?: RawAllegroParam[] }).parameters || [];
-            parameters = raw.map((p) => mapParam(p));
-          }
-          if (ppRes.status === "fulfilled") {
-            const pp = (ppRes.value.data as { parameters?: RawAllegroParam[] }).parameters || [];
-            productParamIds = pp.map((p) => p.id);
-          }
-        } catch (paramErr: unknown) {
-          const e = paramErr as { message?: string };
-          req.log.warn({ msg: e.message }, "scan-photo: error fetching parameters");
-        }
-      }
-
-      const fillerInput: AllegroFillerParam[] = parameters.map((p) => ({
-        id: p.id,
-        name: p.name,
-        type: p.type,
-        required: p.required,
-        options: p.options,
-        unit: p.unit,
+  try {
+    const body = (req.body ?? {}) as {
+      images?: Array<{ data?: string; mediaType?: string }>;
+      ean?: string;
+    };
+    const ean =
+      typeof body.ean === "string"
+        ? body.ean
+        : typeof req.query.ean === "string"
+        ? req.query.ean
+        : "";
+    const images: VisionImage[] = (body.images ?? [])
+      .filter((im) => typeof im?.data === "string" && (im.data as string).length > 0)
+      .map((im) => ({
+        data: im.data as string,
+        mediaType: typeof im.mediaType === "string" ? im.mediaType : "image/jpeg",
       }));
-      const fillerOutput = fillCategoryParameters(fillerInput, {
-        productName: cleanedName || rawName,
-        brand: detectedBrand,
-        categoryKeyword,
-        ean,
-        weight: normalizedWeight,
-        offMeta: meta,
-      });
-      const prefillValues = filledToPrefillValues(fillerOutput.filled);
-
-      req.log.info(
-        { vision, categoryId: detectedCategoryId, fillerStats: fillerOutput.stats },
-        "scan-photo: draft built from vision",
-      );
-
-      res.json({
-        productId: null,
-        productName: cleanedName || rawName,
-        categoryId: detectedCategoryId,
-        categoryName: resolved.categoryName,
-        categoryPath: resolved.categoryPath,
-        categoryLeaf: resolved.leaf,
-        categoryConfidence: resolved.confidence,
-        images: [],
-        parameters,
-        prefillValues,
-        productParamIds,
-        filledParameters: fillerOutput.filled,
-        skippedParameters: fillerOutput.skipped,
-        source: "vision",
-        brand: detectedBrand,
-        weight: normalizedWeight,
-        vision,
-        ean,
-      });
-    } catch (err: unknown) {
-      req.log.error({ err }, "scan-photo: failed");
-      res.status(500).json({ error: "server_error" });
+    if (!images.length) {
+      res.status(400).json({ error: "no_images", message: "Brak zdjęć." });
+      return;
     }
-  });
+
+    const vision = await extractProductFromImages(images);
+    if (!vision) {
+      res.status(404).json({
+        error: "vision_no_data",
+        message: "Nie udało się rozpoznać produktu ze zdjęcia.",
+      });
+      return;
+    }
+
+    // Build a name from the recognised parts (flavour included so name-keyword
+    // extraction can use it), then run the same detection chain as a scan.
+    const rawName = [vision.brand, vision.name, vision.flavor].filter(Boolean).join(" ").trim();
+    const detectedBrand = detectBrand(rawName, vision.brand);
+    const categoryKeyword = detectCategoryKeyword(rawName);
+    const visionWeightStr = vision.net_weight_g ? `${vision.net_weight_g} g` : null;
+    const weightProbe: { reason?: string } = {};
+    const detectedVolume = detectVolume(rawName, visionWeightStr, categoryKeyword ?? null, weightProbe);
+    const cleanedName = cleanProductName(rawName, detectedBrand, detectedVolume);
+    const normalizedWeight = detectedVolume ? formatVolumeForContext(detectedVolume) : visionWeightStr;
+
+    // Country of origin comes from the BACK-of-pack photo, not OFF tags.
+    const meta = {
+      ingredients: vision.ingredients.length ? vision.ingredients.join(", ") : undefined,
+      originsTags: vision.country_of_origin ? [vision.country_of_origin] : undefined,
+    };
+
+    // Resolve a leaf under Supermarket (#258832), using the vision category_hint
+    // as an extra drill keyword. Manual pick if it doesn't land.
+    const drillKeyword = categoryKeyword ?? vision.category_hint ?? deriveOffTypeHint(meta);
+    const resolved = await resolveLeafCategory(SUPERMARKET_CATEGORY_ID, cleanedName, detectedBrand, drillKeyword);
+    const detectedCategoryId = resolved.leaf ? resolved.categoryId : null;
+
+    let parameters: MappedParam[] = [];
+    let productParamIds: string[] = [];
+    if (detectedCategoryId) {
+      try {
+        const token = await getUserToken();
+        const hdr = {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.allegro.public.v1+json",
+        };
+        const [paramsRes, ppRes] = await Promise.allSettled([
+          getCategoryParameters(detectedCategoryId),
+          axios.get(
+            `${ALLEGRO_BASE_URL}/sale/categories/${detectedCategoryId}/product-parameters?language=pl-PL`,
+            { headers: hdr, timeout: 8000 },
+          ),
+        ]);
+        if (paramsRes.status === "fulfilled") {
+          const raw = (paramsRes.value as { parameters?: RawAllegroParam[] }).parameters || [];
+          parameters = raw.map((p) => mapParam(p));
+        }
+        if (ppRes.status === "fulfilled") {
+          const pp = (ppRes.value.data as { parameters?: RawAllegroParam[] }).parameters || [];
+          productParamIds = pp.map((p) => p.id);
+        }
+      } catch (paramErr: unknown) {
+        const e = paramErr as { message?: string };
+        req.log.warn({ msg: e.message }, "scan-photo: error fetching parameters");
+      }
+    }
+
+    const fillerInput: AllegroFillerParam[] = parameters.map((p) => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      required: p.required,
+      options: p.options,
+      unit: p.unit,
+    }));
+    const fillerOutput = fillCategoryParameters(fillerInput, {
+      productName: cleanedName || rawName,
+      brand: detectedBrand,
+      categoryKeyword,
+      ean,
+      weight: normalizedWeight,
+      offMeta: meta,
+    });
+
+    let allFilled = fillerOutput.filled;
+    // These fields were read off the photo — tag them as vision-sourced.
+    for (const f of allFilled) {
+      if (f.source !== "llm_match" && /marka|brand|waga|masa|gramatura|kraj pochodzenia|smak/i.test(f.name)) {
+        f.source = "vision";
+        f.sourceDetail = "vision";
+      }
+    }
+    // Semantic LLM pass for dictionary smak/rodzaj still empty.
+    const filledIds = new Set(allFilled.map((f) => f.id));
+    const productContext = buildProductContext(cleanedName, detectedBrand, meta, vision.category_hint);
+    const semanticFills = await semanticDictFill(parameters, filledIds, productContext);
+    if (semanticFills.length) {
+      allFilled = [...allFilled, ...semanticFills];
+      semanticFills.forEach((f) => filledIds.add(f.id));
+    }
+
+    const prefillValues = filledToPrefillValues(allFilled);
+    const gaps = computeGaps(parameters, filledIds);
+
+    req.log.info(
+      { vision, categoryId: detectedCategoryId, fillerStats: fillerOutput.stats, gaps: gaps.length },
+      "scan-photo: draft built from vision",
+    );
+
+    res.json({
+      productId: null,
+      productName: cleanedName || rawName,
+      categoryId: detectedCategoryId,
+      categoryName: resolved.categoryName,
+      categoryPath: resolved.categoryPath,
+      categoryLeaf: resolved.leaf,
+      categoryConfidence: resolved.confidence,
+      images: [],
+      parameters,
+      prefillValues,
+      productParamIds,
+      filledParameters: allFilled,
+      skippedParameters: fillerOutput.skipped,
+      gaps,
+      source: "vision",
+      brand: detectedBrand,
+      weight: normalizedWeight,
+      vision,
+      ean,
+    });
+  } catch (err: unknown) {
+    req.log.error({ err }, "scan-photo: failed");
+    res.status(500).json({ error: "server_error" });
+  }
 });
 
 // ── POST /api/allegro/create-offer ──────────────────────────────────────────

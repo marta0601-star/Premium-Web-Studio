@@ -136,6 +136,22 @@ export interface LookupMeta {
   originsTags?: string[];
 }
 
+/** One field's best value with its provenance, for per-field aggregation. */
+export interface FieldSource {
+  value: string;
+  source: string;
+  confidence: "high" | "medium" | "low";
+}
+
+/** Best value per logical field, aggregated across ALL web sources. */
+export interface FieldSources {
+  name?: FieldSource;
+  brand?: FieldSource;
+  weight?: FieldSource;
+  country?: FieldSource;
+  ingredients?: FieldSource;
+}
+
 export interface LookupResult {
   found: boolean;
   name?: string | null;
@@ -148,6 +164,8 @@ export interface LookupResult {
   logs: string[];
   debug?: LookupDebug;
   meta?: LookupMeta;
+  /** Per-field winners across all sources (set by lookupEan for found results). */
+  fieldSources?: FieldSources;
 }
 
 // ── EAN variants for fuzzy matching ──────────────────────────────────────────
@@ -965,6 +983,57 @@ function scoreResult(r: LookupResult, sourceName: string): ScoreOutcome {
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
+// Reliability tier of a source, used both for picking per-field winners and
+// for the confidence we report on aggregated fields.
+function sourceTier(source: string): "high" | "medium" | "low" {
+  const s = source.toLowerCase();
+  if (
+    s.startsWith("openfoodfacts") ||
+    s.startsWith("openbeautyfacts") ||
+    s.startsWith("openpetfoodfacts") ||
+    s === "allegro_search"
+  )
+    return "high";
+  if (s === "upcitemdb" || s.startsWith("ceneo") || s.startsWith("skapiec")) return "medium";
+  return "low";
+}
+
+/**
+ * Aggregate the best value PER FIELD across every source that returned data,
+ * not just the single winning result. Lets the param-filler take, say, the
+ * weight from OFF even when the highest-scoring overall hit was an image-only
+ * Google result — and records WHICH source each field came from.
+ */
+function buildFieldSources(hits: LookupResult[]): FieldSources {
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  const ordered = [...hits].sort(
+    (a, b) => rank[sourceTier(a.source ?? "")] - rank[sourceTier(b.source ?? "")],
+  );
+  const fs: FieldSources = {};
+  const pick = (
+    field: keyof FieldSources,
+    getter: (h: LookupResult) => string | null | undefined,
+  ) => {
+    for (const h of ordered) {
+      const v = getter(h);
+      if (v && v.trim()) {
+        fs[field] = {
+          value: v.trim(),
+          source: h.source ?? "unknown",
+          confidence: sourceTier(h.source ?? ""),
+        };
+        return;
+      }
+    }
+  };
+  pick("name", (h) => h.name);
+  pick("brand", (h) => h.brand);
+  pick("weight", (h) => h.weight);
+  pick("ingredients", (h) => h.meta?.ingredients);
+  pick("country", (h) => h.meta?.originsTags?.[0]);
+  return fs;
+}
+
 export async function lookupEan(ean: string): Promise<LookupResult> {
   const startedAt = Date.now();
   const sources: SourceTrace[] = [];
@@ -1001,6 +1070,12 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
     trackSource("google_barcodelookup", sources, (s) => googleTextSearch(`site:barcodelookup.com ${ean}`, "Google/BarcodeDB", "google_barcodelookup", logs, s)),
     trackSource("google_ean_search", sources, (s) => googleTextSearch(`site:ean-search.org ${ean}`, "Google/EANsearch", "google_ean_search", logs, s)),
     trackSource("google_kaufland", sources, (s) => googleTextSearch(`site:kaufland.de ${ean}`, "Google/Kaufland", "google_kaufland", logs, s)),
+    // German e-shops — the goods are mostly DE/CZ imports, so manufacturer/shop
+    // pages there often carry weight, ingredients and origin the PL sources miss.
+    trackSource("google_rossmann_de", sources, (s) => googleTextSearch(`site:rossmann.de ${ean}`, "Google/Rossmann.de", "google_rossmann_de", logs, s)),
+    trackSource("google_mueller_de", sources, (s) => googleTextSearch(`site:mueller.de ${ean}`, "Google/Mueller.de", "google_mueller_de", logs, s)),
+    trackSource("google_dm_de", sources, (s) => googleTextSearch(`site:dm.de ${ean}`, "Google/dm.de", "google_dm_de", logs, s)),
+    trackSource("google_mytime_de", sources, (s) => googleTextSearch(`site:mytime.de ${ean}`, "Google/myTime.de", "google_mytime_de", logs, s)),
     trackSource("google_lidl_pl", sources, (s) => googleTextSearch(`site:lidl.pl ${ean}`, "Google/Lidl", "google_lidl_pl", logs, s)),
     trackSource("google_rossmann", sources, (s) => googleTextSearch(`site:rossmann.pl ${ean}`, "Google/Rossmann", "google_rossmann", logs, s)),
     trackSource("google_empik", sources, (s) => googleTextSearch(`site:empik.com ${ean}`, "Google/Empik", "google_empik", logs, s)),
@@ -1113,6 +1188,7 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
   return {
     ...winner,
     image: image ?? null,
+    fieldSources: buildFieldSources(allHits),
     logs,
     debug: {
       sources,

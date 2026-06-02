@@ -22,14 +22,23 @@ const VISION_MODEL = process.env.VISION_MODEL || "claude-haiku-4-5-20251001";
 const SUPPORTED_MEDIA = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export interface VisionExtract {
-  name: string | null;
   brand: string | null;
-  /** Net weight/volume incl. unit, e.g. "500 g", "250 ml". */
-  weight: string | null;
+  /** Product name WITHOUT the brand. */
+  name: string | null;
+  /** Net weight in grams (converted from kg if needed); null if not legible. */
+  net_weight_g: number | null;
   flavor: string | null;
-  ingredients: string | null;
-  /** Country of origin/manufacture if printed on the pack. */
-  country: string | null;
+  ingredients: string[];
+  /** Country of MANUFACTURE from the back of pack; null if absent. */
+  country_of_origin: string | null;
+  /** Short free-text product type, e.g. "ground coffee", "gummy candy". */
+  category_hint: string | null;
+}
+
+export interface VisionImage {
+  /** base64-encoded image bytes (no data: prefix). */
+  data: string;
+  mediaType: string;
 }
 
 /** True when a key is configured — used to gate the route and the UI affordance. */
@@ -42,14 +51,21 @@ export function isVisionEnabled(): boolean {
  * feature is disabled, the API errors, or nothing usable was read — callers
  * treat null as "couldn't recognise, fall back to manual entry".
  */
-export async function extractProductFromImage(
-  base64: string,
-  mediaType: string,
+export async function extractProductFromImages(
+  images: VisionImage[],
 ): Promise<VisionExtract | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null; // disabled — never calls the paid API
+  if (!images.length) return null;
 
-  const mt = SUPPORTED_MEDIA.includes(mediaType) ? mediaType : "image/jpeg";
+  const imageBlocks = images.slice(0, 4).map((img) => ({
+    type: "image" as const,
+    source: {
+      type: "base64" as const,
+      media_type: SUPPORTED_MEDIA.includes(img.mediaType) ? img.mediaType : "image/jpeg",
+      data: img.data,
+    },
+  }));
 
   try {
     const resp = await fetch(ANTHROPIC_API_URL, {
@@ -61,20 +77,36 @@ export async function extractProductFromImage(
       },
       body: JSON.stringify({
         model: VISION_MODEL,
-        max_tokens: 512,
+        max_tokens: 1024,
         tools: [
           {
             name: "product_details",
-            description: "Structured product data read off a food package photo.",
+            description: "Structured product data read off food package photos (front + back).",
             input_schema: {
               type: "object",
               properties: {
-                name: { type: "string", description: "Product name as printed, WITHOUT the brand" },
                 brand: { type: "string", description: "Brand / manufacturer" },
-                weight: { type: "string", description: "Net weight or volume including unit, e.g. '500 g', '250 ml'" },
+                name: { type: "string", description: "Product name as printed, WITHOUT the brand" },
+                net_weight_g: {
+                  type: "number",
+                  description:
+                    "Net weight in GRAMS. Convert kg→g (×1000). For liquids give the ml number. null if not legible.",
+                },
                 flavor: { type: "string", description: "Flavour / variant if any" },
-                ingredients: { type: "string", description: "Ingredients list if legible" },
-                country: { type: "string", description: "Country of origin/manufacture if printed" },
+                ingredients: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Ingredients, one per array item, if legible (usually on the back).",
+                },
+                country_of_origin: {
+                  type: "string",
+                  description:
+                    "Country of MANUFACTURE from the back of pack ('Wyprodukowano w' / 'Hergestellt in' / manufacturer address). null if absent.",
+                },
+                category_hint: {
+                  type: "string",
+                  description: "Short product type, e.g. 'milk chocolate', 'gummy candy', 'ground coffee'.",
+                },
               },
               required: [],
             },
@@ -85,12 +117,13 @@ export async function extractProductFromImage(
           {
             role: "user",
             content: [
-              { type: "image", source: { type: "base64", media_type: mt, data: base64 } },
+              ...imageBlocks,
               {
                 type: "text",
                 text:
-                  "Read the product details off this food package photo and call the product_details tool. " +
-                  "Leave a field empty if it is not clearly legible. Do NOT guess or invent values.",
+                  "These photos show the FRONT and BACK of one food package. Read its details and call the " +
+                  "product_details tool. Weight, ingredients and country of manufacture are usually on the BACK. " +
+                  "Leave a field empty/null if it is not clearly legible. Do NOT guess or invent values.",
               },
             ],
           },
@@ -112,13 +145,27 @@ export async function extractProductFromImage(
       const v = inp[k];
       return typeof v === "string" && v.trim() ? v.trim() : null;
     };
+    const num = (k: string): number | null => {
+      const v = inp[k];
+      if (typeof v === "number" && isFinite(v) && v > 0) return Math.round(v);
+      if (typeof v === "string") {
+        const n = parseFloat(v.replace(",", "."));
+        return isFinite(n) && n > 0 ? Math.round(n) : null;
+      }
+      return null;
+    };
+    const ingredients = Array.isArray(inp.ingredients)
+      ? (inp.ingredients as unknown[]).filter((x): x is string => typeof x === "string" && x.trim() !== "")
+      : [];
+
     const out: VisionExtract = {
-      name: str("name"),
       brand: str("brand"),
-      weight: str("weight"),
+      name: str("name"),
+      net_weight_g: num("net_weight_g"),
       flavor: str("flavor"),
-      ingredients: str("ingredients"),
-      country: str("country"),
+      ingredients,
+      country_of_origin: str("country_of_origin"),
+      category_hint: str("category_hint"),
     };
     // Need at least a name or brand to be useful.
     if (!out.name && !out.brand) return null;

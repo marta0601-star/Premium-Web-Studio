@@ -26,7 +26,7 @@
  *   certyfikaty / certyfikaty ekologiczne / organic certifications
  */
 
-import type { LookupMeta } from "./lookup";
+import type { LookupMeta, FieldSources } from "./lookup";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,11 @@ export interface FilledParameter {
     | "name_keyword"
     | "off_tags"
     | "ean_country"
-    | "allegro_catalog";
+    | "allegro_catalog"
+    | "vision"
+    | "llm_match";
+  /** Precise origin of the value when known, e.g. "openfoodfacts/de", "google_kaufland". */
+  sourceDetail?: string;
 }
 
 export interface SkippedParameter {
@@ -78,6 +82,8 @@ export interface FillerInput {
   ean: string;
   weight: string | null; // already sanitised; null if rejected or absent
   offMeta?: LookupMeta;
+  /** Per-field provenance from the web aggregator, used to tag fills precisely. */
+  fieldSources?: FieldSources;
 }
 
 export interface FillerOutput {
@@ -516,13 +522,11 @@ export function fillCategoryParameters(
 
     // ── Country of origin (kraj pochodzenia) ──────────────────────────────
     if (NAME_RE.country.test(p.name)) {
-      // Prefer OFF origins; use OFF sales-countries ONLY if unambiguous (1).
-      const single =
-        data.offMeta?.countriesTags && data.offMeta.countriesTags.length === 1
-          ? data.offMeta.countriesTags
-          : undefined;
-      const fromOff =
-        countryFromOffTags(data.offMeta?.originsTags) ?? countryFromOffTags(single);
+      // Country of ORIGIN only — never OFF countries_tags (those are sales
+      // markets, not manufacture). Use OFF origins_tags / manufacturing places
+      // (or a value the caller put there from a back-of-pack photo), else the
+      // EAN GS1 prefix as a low-confidence default.
+      const fromOff = countryFromOffTags(data.offMeta?.originsTags);
       const fromEan = countryFromEan(data.ean);
       const candidate = fromOff ?? fromEan;
       const baseConf: FilledParameter["confidence"] = fromOff ? "medium" : "low";
@@ -699,6 +703,16 @@ export function fillCategoryParameters(
 
     // No match — count as missing if required, otherwise just leave it
     if (p.required) missingData++;
+  }
+
+  // Attach precise web provenance (e.g. "openfoodfacts/de", "google_kaufland")
+  // to the fields that come from the aggregator, so the UI can show the source.
+  if (data.fieldSources) {
+    for (const f of filled) {
+      if (NAME_RE.brand.test(f.name)) f.sourceDetail ??= data.fieldSources.brand?.source;
+      else if (NAME_RE.weight.test(f.name)) f.sourceDetail ??= data.fieldSources.weight?.source;
+      else if (NAME_RE.country.test(f.name)) f.sourceDetail ??= data.fieldSources.country?.source;
+    }
   }
 
   return {
