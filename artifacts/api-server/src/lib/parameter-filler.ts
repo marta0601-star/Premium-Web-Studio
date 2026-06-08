@@ -393,15 +393,19 @@ function parseWeight(text: string | null | undefined): ParsedWeight | null {
 /** Convert a normalized weight to the value a numeric Allegro param expects,
  *  given that param's declared unit. Returns a string ready for `values`. */
 function weightForParamUnit(w: ParsedWeight, unit: string | null | undefined): string | null {
+  // A zero/negative weight is never valid data and Allegro rejects numeric params
+  // ≤ 0 — never emit it.
+  if (!(w.value > 0)) return null;
   const u = (unit ?? "").toLowerCase();
+  const nonZero = (n: number): string | null => (n > 0 ? String(n) : null);
   if (w.unit === "g") {
-    if (u.includes("kg")) return String(+(w.value / 1000).toFixed(3));
+    if (u.includes("kg")) return nonZero(+(w.value / 1000).toFixed(3));
     // default grams (most Allegro food weight params use g or have no unit)
-    return String(w.value);
+    return nonZero(w.value);
   }
   // volume
-  if (u.includes("l") && !u.includes("ml")) return String(+(w.value / 1000).toFixed(3));
-  return String(w.value);
+  if (u.includes("l") && !u.includes("ml")) return nonZero(+(w.value / 1000).toFixed(3));
+  return nonZero(w.value);
 }
 
 // ── Param-name classifiers ───────────────────────────────────────────────────

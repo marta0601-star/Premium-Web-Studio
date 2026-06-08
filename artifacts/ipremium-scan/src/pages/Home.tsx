@@ -818,6 +818,9 @@ export default function Home() {
     try {
       const data = await scanMutation.mutateAsync(trimmed) as ExtendedScanResult;
       setScannedData(data);
+      // Seed the editable title from the detected name so the heading is always
+      // populated AND correctable — and never vanishes while editing other fields.
+      setProductTitle(data.productName || "");
       setProductParamIds(data.productParamIds || []);
       setDescription(`EAN: ${trimmed}`);
 
@@ -1397,26 +1400,26 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* Product name — editable input for manual entry, static heading otherwise */}
-                  {(!scannedData.productId && !scannedData.productName) ? (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-white/40">
-                        Nazwa produktu <span className="text-primary">*</span>
-                      </label>
-                      <PremiumInput
-                        value={productTitle}
-                        onChange={(e) => setProductTitle(e.target.value)}
-                        placeholder="Wpisz pełną nazwę produktu..."
-                      />
-                      {submitAttempted && !productTitle.trim() && (
-                        <p className="text-red-400 text-xs flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" /> Nazwa jest wymagana
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <h2 className="text-2xl sm:text-3xl font-display text-white leading-tight">{scannedData.productName}</h2>
-                  )}
+                  {/* Product name — always an editable, controlled field so it
+                      keeps its value while other fields are edited and can be
+                      corrected (e.g. messy catalog titles). Single source of
+                      truth: productTitle (seeded from the scan result). */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-white/40">
+                      Nazwa produktu <span className="text-primary">*</span>
+                    </label>
+                    <PremiumInput
+                      value={productTitle}
+                      onChange={(e) => setProductTitle(e.target.value)}
+                      placeholder="Wpisz pełną nazwę produktu..."
+                      className="text-lg sm:text-xl font-display !py-3"
+                    />
+                    {submitAttempted && !productTitle.trim() && (
+                      <p className="text-red-400 text-xs flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Nazwa jest wymagana
+                      </p>
+                    )}
+                  </div>
 
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                     {scannedData.productId && (

@@ -433,6 +433,7 @@ router.get("/scan", async (req, res) => {
       cleanedName,
       detectedBrand,
       drillKeyword,
+      { productContext: buildProductContext(cleanedName, detectedBrand, result.meta, drillKeyword) },
     );
     if (supermarketResolved.leaf && supermarketResolved.categoryId) {
       detectedCategoryId = supermarketResolved.categoryId;
@@ -513,6 +514,7 @@ router.get("/scan", async (req, res) => {
           cleanedName,
           detectedBrand,
           drillKeyword,
+          { productContext: buildProductContext(cleanedName, detectedBrand, result.meta, drillKeyword) },
         );
         categoryResolutionTrace = {
           strategy: "matching-categories-fallback",
@@ -914,7 +916,9 @@ router.post("/scan-photo", async (req, res) => {
     // Resolve a leaf under Supermarket (#258832), using the vision category_hint
     // as an extra drill keyword. Manual pick if it doesn't land.
     const drillKeyword = categoryKeyword ?? vision.category_hint ?? deriveOffTypeHint(meta);
-    const resolved = await resolveLeafCategory(SUPERMARKET_CATEGORY_ID, cleanedName, detectedBrand, drillKeyword);
+    const resolved = await resolveLeafCategory(SUPERMARKET_CATEGORY_ID, cleanedName, detectedBrand, drillKeyword, {
+      productContext: buildProductContext(cleanedName, detectedBrand, meta, vision.category_hint ?? drillKeyword),
+    });
     const detectedCategoryId = resolved.leaf ? resolved.categoryId : null;
 
     let parameters: MappedParam[] = [];

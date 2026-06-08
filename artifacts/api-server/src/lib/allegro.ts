@@ -2,6 +2,7 @@ import axios from "axios";
 import { logger } from "./logger";
 import { getUserToken } from "./allegro-auth";
 import { detectVolume } from "./auto-detect";
+import { isLlmEnabled, semanticPickOption } from "./llm";
 
 /**
  * Seller ship-from location — HARD-LOCKED to Wrocław. This is the physical
@@ -284,6 +285,7 @@ export async function resolveLeafCategory(
   productName: string,
   brand: string | null,
   categoryKeyword: string | null,
+  opts?: { productContext?: string },
 ): Promise<ResolveLeafResult> {
   const trace: ResolveLeafTrace[] = [];
   const path: string[] = [];
@@ -367,16 +369,42 @@ export async function resolveLeafCategory(
       trace.push({ id: s.id, name: s.name, leaf: s.leaf, score: s.score, reason: s.reason });
     }
 
-    const winner = scored[0];
+    let winner = scored[0];
     if (!winner || winner.score < MIN_DRILL_SCORE) {
-      return {
-        categoryId: null,
-        categoryName: null,
-        categoryPath: path,
-        leaf: false,
-        confidence: "none",
-        trace,
-      };
+      // Deterministic scoring is unsure — ask Claude to pick the best subcategory
+      // from the candidate names given the product context. This rescues the
+      // common "fell back to Supermarket root" case for non-catalog products.
+      // Gated behind ANTHROPIC_API_KEY (no key → no call, original bail stands).
+      let llmPicked = false;
+      if (isLlmEnabled() && opts?.productContext && children.length > 1) {
+        try {
+          const pick = await semanticPickOption(
+            "Podkategoria Allegro (wybierz najlepiej pasującą kategorię produktu)",
+            opts.productContext,
+            children.map((c) => ({ id: c.id, name: c.name })),
+          );
+          const chosen = pick && children.find((c) => c.id === pick.id);
+          if (chosen) {
+            winner = { ...chosen, score: MIN_DRILL_SCORE, reason: "llm tie-break" };
+            const t = trace.find((tt) => tt.id === chosen.id);
+            if (t) t.reason = `${t.reason} +llm`;
+            llmPicked = true;
+            logger.info({ parentId: current.id, chosenId: chosen.id, chosenName: chosen.name }, "resolveLeafCategory: LLM tie-break picked subcategory");
+          }
+        } catch (llmErr) {
+          logger.warn({ llmErr }, "resolveLeafCategory: LLM tie-break failed");
+        }
+      }
+      if (!llmPicked) {
+        return {
+          categoryId: null,
+          categoryName: null,
+          categoryPath: path,
+          leaf: false,
+          confidence: "none",
+          trace,
+        };
+      }
     }
 
     // Mark winner in the trace
@@ -736,6 +764,9 @@ export async function createAllegroOffer(payload: {
   const paramFlags = new Map<string, { describesProduct: boolean; describesOffer: boolean }>();
   // paramNameToId: map of lowercase param name → id (for DuplicateDetectionMissingParametersException)
   const paramNameToId = new Map<string, string>();
+  // paramTypes: map of paramId → numeric type, used to strip 0/empty numbers that
+  // Allegro rejects ("wielkość musi należeć do zakresu od 1 …").
+  const paramTypes = new Map<string, "float" | "integer" | "string" | "dictionary">();
   try {
     const rawData = await getCategoryParameters(payload.categoryId);
     const rawParams = (
@@ -743,6 +774,7 @@ export async function createAllegroOffer(payload: {
         parameters?: Array<{
           id: string;
           name?: string;
+          type?: string;
           options?: { describesOffer?: boolean; describesProduct?: boolean };
         }>;
       }
@@ -752,11 +784,74 @@ export async function createAllegroOffer(payload: {
         describesProduct: rp.options?.describesProduct ?? false,
         describesOffer: rp.options?.describesOffer ?? false,
       });
+      if (rp.type === "float" || rp.type === "integer" || rp.type === "string" || rp.type === "dictionary") {
+        paramTypes.set(rp.id, rp.type);
+      }
       if (rp.name) paramNameToId.set(rp.name.toLowerCase().trim(), rp.id);
     }
     logger.info({ flagCount: paramFlags.size, categoryId: payload.categoryId }, "Loaded category param flags");
   } catch (flagErr) {
     logger.warn({ flagErr }, "Could not fetch category param flags — will rely on retry to correct placement");
+  }
+
+  // ── Guard: never build an offer/product proposal in a non-leaf category ───────
+  // Allegro rejects products posted into non-leaf categories (e.g. the Supermarket
+  // root #258832) with the cryptic "wielkość musi należeć do zakresu od 1 do
+  // 2147483647" error. This happens when auto-categorisation failed to drill to a
+  // leaf and the frontend fell back to the Supermarket root. Fail early with an
+  // actionable message instead of letting Allegro return the confusing one.
+  try {
+    const node = await fetchCategoryNode(payload.categoryId);
+    if (!node.leaf) {
+      logger.warn(
+        { categoryId: payload.categoryId, categoryName: node.name },
+        "Refusing to create offer in non-leaf category"
+      );
+      throw {
+        statusCode: 422,
+        allegroErrors: [
+          {
+            code: "NonLeafCategory",
+            path: "category.id",
+            userMessage:
+              "Nie udało się automatycznie dopasować kategorii końcowej. Użyj przycisku zmiany kategorii i wybierz konkretną (końcową) kategorię, a następnie spróbuj ponownie.",
+          },
+        ],
+      };
+    }
+  } catch (guardErr) {
+    // Re-throw our own structured guard error; swallow only genuine lookup failures
+    // (network/transient) so we don't block a valid leaf on a flaky category fetch.
+    if (guardErr && typeof guardErr === "object" && "allegroErrors" in guardErr) throw guardErr;
+    logger.warn({ guardErr, categoryId: payload.categoryId }, "Leaf-category check failed — proceeding (Allegro will validate)");
+  }
+
+  // ── Sanitise numeric parameter values ────────────────────────────────────────
+  // Drop float/integer values that are empty, non-numeric or ≤ 0. A weight/volume
+  // of 0 is never valid data and Allegro rejects it; values can arrive as "0" from
+  // catalog prefill, the auto-filler, or a user clearing the field.
+  if (paramTypes.size > 0) {
+    const before = payload.parameters.length;
+    const sanitized = payload.parameters
+      .map((p) => {
+        const t = paramTypes.get(p.id);
+        if ((t === "float" || t === "integer") && p.values && p.values.length > 0) {
+          const kept = p.values.filter((v) => {
+            const n = Number(String(v).replace(",", "."));
+            return Number.isFinite(n) && n > 0;
+          });
+          return { ...p, values: kept };
+        }
+        return p;
+      })
+      .filter((p) => (p.values && p.values.length > 0) || (p.valuesIds && p.valuesIds.length > 0));
+    if (sanitized.length !== before) {
+      logger.info(
+        { before, after: sanitized.length, categoryId: payload.categoryId },
+        "Dropped 0/empty numeric parameter values before offer creation"
+      );
+    }
+    payload = { ...payload, parameters: sanitized };
   }
 
   // ── Step 3: initial split of parameters into product-level vs offer-level ────
