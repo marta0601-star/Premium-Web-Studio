@@ -117,7 +117,7 @@ app.get("/o-aplikacji", (_req: Request, res: Response) => {
   poprzez REST API Allegro (autoryzacja OAuth 2.0).
 </p>
 <hr>
-<p><strong>Kontakt:</strong> <a href="mailto:smart0601@interia.pl">smart0601@interia.pl</a></p>
+<p><strong>Kontakt:</strong> <a href="mailto:office@ipremiumclub.eu">office@ipremiumclub.eu</a></p>
 <p class="muted">iPremium scan &middot; ${ALLEGRO_USER_AGENT}</p>
 </body>
 </html>`);
