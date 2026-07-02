@@ -19,6 +19,7 @@
 
 import axios from "axios";
 import { logger } from "./logger";
+import { stampAllegroUserAgent } from "./allegro-config";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -357,6 +358,11 @@ export function setupTokenRefreshScheduler(): void {
  * Call this once at server startup, AFTER the token is loaded.
  */
 export function setupAllegroAxiosInterceptor(): void {
+  // Request interceptor: stamp the mandatory Allegro User-Agent on every
+  // Allegro-bound request (REST API, token exchange, refresh, device flow).
+  // Allegro rejects requests without it from 2026-06-30.
+  axios.interceptors.request.use(stampAllegroUserAgent);
+
   axios.interceptors.response.use(
     (response) => response,
     async (error) => {

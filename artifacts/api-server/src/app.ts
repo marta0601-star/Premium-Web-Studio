@@ -13,6 +13,7 @@ import fs from "fs";
 import router from "./routes";
 import oauthPublicRouter from "./routes/oauth-public";
 import { logger } from "./lib/logger";
+import { ALLEGRO_USER_AGENT } from "./lib/allegro-config";
 
 const app: Express = express();
 
@@ -75,6 +76,52 @@ app.use(
 // authorization_code is short-lived (~60 s), so any extra hop through the
 // password form would burn the window.
 app.use(oauthPublicRouter);
+
+// ── Public application info page ─────────────────────────────────────────────
+// Referenced as the DocumentationURL in the Allegro User-Agent header. Must be
+// reachable WITHOUT the app-password gate — Allegro crawls it unauthenticated.
+// Declared before the /api gate and the SPA catch-all so it wins the route.
+app.get("/o-aplikacji", (_req: Request, res: Response) => {
+  res
+    .type("html")
+    .send(`<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>iPremium scan — o aplikacji</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         max-width: 42rem; margin: 3rem auto; padding: 0 1.25rem; line-height: 1.6; }
+  h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+  .muted { opacity: .7; font-size: .95rem; }
+  a { color: inherit; }
+  hr { border: 0; border-top: 1px solid rgba(127,127,127,.3); margin: 1.5rem 0; }
+</style>
+</head>
+<body>
+<h1>iPremium scan</h1>
+<p class="muted">Wewnętrzne narzędzie do tworzenia ofert Allegro.</p>
+<hr>
+<p>
+  <strong>iPremium scan</strong> to prywatne, wewnętrzne narzędzie służące do
+  przygotowywania i wystawiania ofert w serwisie Allegro dla własnego sklepu
+  (importowane słodycze, czekolada i kawa). Aplikacja korzysta z oficjalnego
+  API Allegro wyłącznie na potrzeby konta sprzedawcy jej operatora.
+  Nie jest to usługa publiczna ani produkt oferowany osobom trzecim.
+</p>
+<p>
+  Aplikacja odczytuje i tworzy oferty, kategorie oraz parametry produktów
+  poprzez REST API Allegro (autoryzacja OAuth 2.0).
+</p>
+<hr>
+<p><strong>Kontakt:</strong> <a href="mailto:smart0601@interia.pl">smart0601@interia.pl</a></p>
+<p class="muted">iPremium scan &middot; ${ALLEGRO_USER_AGENT}</p>
+</body>
+</html>`);
+});
 
 // ── /api auth gate ───────────────────────────────────────────────────────────
 // Paths are RELATIVE to the /api mount (Express strips the prefix before the
