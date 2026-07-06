@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createRequire } from "node:module";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import axios, { AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
 import {
   ALLEGRO_APPLICATION_NAME,
@@ -116,42 +118,63 @@ describe("stampAllegroUserAgent", () => {
   });
 });
 
-// End-to-end: prove the installed global request interceptor actually sends the
-// header on a real axios call (no network — captured by a mock adapter).
-describe("global axios interceptor (installed by setupAllegroAxiosInterceptor)", () => {
+// WIRE PROOF: the previous version of these tests used a mock adapter that just
+// echoed `config` back, so it only proved the interceptor SET the header on the
+// config object — NOT that the header survives axios's real HTTP adapter and
+// leaves the process. That gap let a "green" suite coexist with a panel that saw
+// no User-Agent. These tests exercise the real `http` adapter against a local
+// capture server and assert the User-Agent the server ACTUALLY received on the
+// wire. The `allegro.pl` marker in the query makes isAllegroRequest() match (the
+// real code path) while the request physically hits 127.0.0.1.
+describe("global axios interceptor — real wire (installed by setupAllegroAxiosInterceptor)", () => {
+  let server: http.Server;
+  let port: number;
+  let prevAdapter: unknown;
+  const received: Array<{ ua?: string; url?: string }> = [];
+
   beforeAll(async () => {
     const { setupAllegroAxiosInterceptor } = await import("./allegro-auth");
     setupAllegroAxiosInterceptor();
-    axios.defaults.adapter = async (config) => ({
-      data: {},
-      status: 200,
-      statusText: "OK",
-      headers: {},
-      config,
+    // Force the genuine HTTP adapter (some suites swap in a mock adapter).
+    prevAdapter = axios.defaults.adapter;
+    axios.defaults.adapter = "http";
+
+    server = http.createServer((req, res) => {
+      received.push({ ua: req.headers["user-agent"], url: req.url });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end("{}");
     });
-  });
-
-  it("sends User-Agent on an Allegro REST API GET", async () => {
-    const res = await axios.get("https://api.allegro.pl/sale/categories/1");
-    expect(
-      (res.config.headers as AxiosHeaders).get("User-Agent"),
-    ).toBe(ALLEGRO_USER_AGENT);
-  });
-
-  it("sends User-Agent on an Allegro OAuth token POST", async () => {
-    const res = await axios.post(
-      "https://allegro.pl/auth/oauth/token",
-      "grant_type=client_credentials",
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", () => resolve()),
     );
-    expect(
-      (res.config.headers as AxiosHeaders).get("User-Agent"),
-    ).toBe(ALLEGRO_USER_AGENT);
+    port = (server.address() as AddressInfo).port;
   });
 
-  it("does not stamp non-Allegro requests", async () => {
-    const res = await axios.get("https://world.openfoodfacts.org/api/v2/x");
-    expect(
-      (res.config.headers as AxiosHeaders).get("User-Agent"),
-    ).toBeUndefined();
+  afterAll(async () => {
+    axios.defaults.adapter = prevAdapter as typeof axios.defaults.adapter;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it("puts the Allegro User-Agent on the wire for an Allegro REST-shaped GET", async () => {
+    await axios.get(`http://127.0.0.1:${port}/sale/categories/1?probe=api.allegro.pl`, {
+      headers: { Authorization: "Bearer test" },
+    });
+    expect(received.at(-1)?.ua).toBe(ALLEGRO_USER_AGENT);
+  });
+
+  it("puts the Allegro User-Agent on the wire for an OAuth token POST", async () => {
+    await axios.post(
+      `http://127.0.0.1:${port}/auth/oauth/token?host=allegro.pl`,
+      "grant_type=client_credentials",
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
+    );
+    expect(received.at(-1)?.ua).toBe(ALLEGRO_USER_AGENT);
+  });
+
+  it("leaves the default UA on the wire for non-Allegro requests", async () => {
+    await axios.get(`http://127.0.0.1:${port}/openfoodfacts`);
+    const ua = received.at(-1)?.ua;
+    expect(ua).toMatch(/^axios\//); // axios's own default, not ours
+    expect(ua).not.toBe(ALLEGRO_USER_AGENT);
   });
 });

@@ -10,11 +10,18 @@
 import { AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
 
 /**
- * ApplicationName registered with Allegro. Case-sensitive, no spaces — must
- * match the name on the Allegro Developer registration. If the registered name
- * ever differs, change it HERE (single source of truth).
+ * ApplicationName sent in the Allegro User-Agent. Case-sensitive — Allegro
+ * requires it to be *exactly* the name of the registered application
+ * ("musi mieć dokładnie taką samą nazwę jak w Allegro") and uses it as a
+ * whitelisting factor, so it must not drift once accepted.
+ *
+ * Defaults to "iPremium-scan". Overridable via the `ALLEGRO_APPLICATION_NAME`
+ * env var so ops can correct it to the exact registered name (e.g. from the
+ * Allegro Developer panel) WITHOUT a source change/redeploy-from-scratch, in
+ * case the registration name differs from this default.
  */
-export const ALLEGRO_APPLICATION_NAME = "iPremium-scan";
+export const ALLEGRO_APPLICATION_NAME =
+  process.env["ALLEGRO_APPLICATION_NAME"]?.trim() || "iPremium-scan";
 
 /**
  * App version. Kept in sync with api-server `package.json` "version"
