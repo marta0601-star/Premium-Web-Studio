@@ -1,0 +1,1167 @@
+{
+ "node": {
+  "id": "74017",
+  "name": "Ciastka i ciasteczka",
+  "parent": {
+   "id": "74016"
+  },
+  "leaf": true,
+  "options": {
+   "advertisement": false,
+   "offersWithProductPublicationEnabled": true,
+   "productCreationEnabled": true,
+   "sellerCanRequirePurchaseComments": false
+  }
+ },
+ "parameters": [
+  {
+   "id": "130691",
+   "name": "Produkt nie zawiera",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": "130691_8192",
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "130691_8388608",
+     "value": "antyzbrylaczy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_4194304",
+     "value": "barwników",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_65536",
+     "value": "cholesterolu",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_4",
+     "value": "cukru",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_524288",
+     "value": "drożdży",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_2",
+     "value": "glutenu",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_32768",
+     "value": "GMO",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_1048576",
+     "value": "jajek",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_128",
+     "value": "konserwantów",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_1",
+     "value": "laktozy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_262144",
+     "value": "nabiału",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_8",
+     "value": "oleju palmowego",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_32",
+     "value": "orzechów",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_16384",
+     "value": "pestek",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_131072",
+     "value": "pszenicy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_16",
+     "value": "soi",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_2097152",
+     "value": "tłuszczy trans (utwardzanych)",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "130691_8192",
+     "value": "nie dotyczy",
+     "dependsOnValueIds": []
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": true
+   }
+  },
+  {
+   "id": "250319",
+   "name": "Rodzaj",
+   "type": "dictionary",
+   "required": true,
+   "requiredForProduct": true,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "250319_2087641",
+     "value": "babeczki",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "250319_1879962",
+     "value": "biszkopty",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "values": [
+       "Biszkopty"
+      ]
+     }
+    },
+    {
+     "id": "250319_1879963",
+     "value": "ciastka kruche",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "values": [
+       "Ciastka kruche"
+      ]
+     }
+    },
+    {
+     "id": "250319_1879964",
+     "value": "markizy",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "values": [
+       "Markizy"
+      ]
+     }
+    },
+    {
+     "id": "250319_2087082",
+     "value": "mochi",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "250319_1879965",
+     "value": "pierniki",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "values": [
+       "Pierniki"
+      ]
+     }
+    },
+    {
+     "id": "250319_1879967",
+     "value": "pozostałe",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "values": [
+       "Pozostałe"
+      ]
+     }
+    },
+    {
+     "id": "250319_2046580",
+     "value": "rogaliki",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "250319_1879966",
+     "value": "wafle",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "values": [
+       "Wafle"
+      ]
+     }
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "17448",
+   "name": "Waga produktu z opakowaniem jednostkowym",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "kg",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 3
+   }
+  },
+  {
+   "id": "225693",
+   "name": "EAN (GTIN)",
+   "type": "string",
+   "required": true,
+   "requiredForProduct": true,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "minLength": 8,
+    "maxLength": 14,
+    "allowedNumberOfValues": 1
+   }
+  },
+  {
+   "id": "233345",
+   "name": "Cechy dodatkowe",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "233345_869017",
+     "value": "bez laktozy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_32768",
+     "value": "brak",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_1",
+     "value": "ekologiczne",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "ids": [
+       "233345_1742197"
+      ],
+      "values": [
+       "BIO"
+      ]
+     }
+    },
+    {
+     "id": "233345_4096",
+     "value": "koszerne",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_2052109",
+     "value": "nierafinowany",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_2",
+     "value": "niesiarkowane",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_32",
+     "value": "niski indeks glikemiczny",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_1188824",
+     "value": "niskodrażniące",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_256",
+     "value": "niskotłuszczowe",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_128",
+     "value": "odpowiednie dla diety ketogenicznej",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_512",
+     "value": "produkt chłodniczy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_2048",
+     "value": "raw (surowe)",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_1024",
+     "value": "superfood",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_16384",
+     "value": "w czekoladzie",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_4",
+     "value": "wegańskie",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_8",
+     "value": "wegetariańskie",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_65536",
+     "value": "w posypce",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_64",
+     "value": "wysoka zawartość błonnika",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_16",
+     "value": "wysokobiałkowe",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "233345_131072",
+     "value": "wzbogacone sokiem owocowym",
+     "dependsOnValueIds": []
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": true
+   }
+  },
+  {
+   "id": "10643",
+   "name": "Certyfikat",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "10643_2048",
+     "value": "B Corp",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_2097152",
+     "value": "brak",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_1789396",
+     "value": "Certyfikat produkcji ekologicznej UE",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "ids": [
+       "10643_65536",
+       "10643_4",
+       "10643_8192"
+      ],
+      "values": [
+       "Rolnictwo Ekologiczne",
+       "Ekogwarancja",
+       "Ekologiczny"
+      ]
+     }
+    },
+    {
+     "id": "10643_262144",
+     "value": "Chroniona nazwa pochodzenia",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_524288",
+     "value": "Chronione oznaczenie geograficzne",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_131072",
+     "value": "Dziedzictwo Kulinarne",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_16384",
+     "value": "EU Flower (Europejska Stokrotka)",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_1024",
+     "value": "Fair Trade (Sprawiedliwy Handel)",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_1048576",
+     "value": "Gwarantowana tradycyjna specjalność",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_64",
+     "value": "Jakość Tradycja",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_4194304",
+     "value": "Licencja na Znak Przekreślonego Kłosa",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_32768",
+     "value": "OK Compost",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "10643_4096",
+     "value": "Rainforest Alliance",
+     "dependsOnValueIds": []
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": true
+   }
+  },
+  {
+   "id": "221929",
+   "name": "Waga",
+   "type": "float",
+   "required": true,
+   "requiredForProduct": true,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000000,
+    "range": false,
+    "precision": 3
+   },
+   "formerData": {
+    "names": [
+     "Waga w ofercie"
+    ]
+   }
+  },
+  {
+   "id": "229205",
+   "name": "Stan opakowania",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": "11323",
+    "describesProduct": false,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "229205_340245",
+     "value": "oryginalne",
+     "dependsOnValueIds": [
+      "11323_253798",
+      "11323_246534",
+      "11323_1",
+      "11323_1223636",
+      "11323_1223462",
+      "11323_2036072",
+      "11323_246510",
+      "11323_253802",
+      "11323_852680",
+      "11323_246514",
+      "11323_253806",
+      "11323_246466",
+      "11323_2",
+      "11323_1223635",
+      "11323_238066",
+      "11323_238058",
+      "11323_246462",
+      "11323_238062",
+      "11323_246538",
+      "11323_1223453",
+      "11323_238070"
+     ]
+    },
+    {
+     "id": "229205_340249",
+     "value": "otwarte",
+     "dependsOnValueIds": [
+      "11323_253798",
+      "11323_246534",
+      "11323_1223636",
+      "11323_1223462",
+      "11323_2036072",
+      "11323_246510",
+      "11323_253802",
+      "11323_852680",
+      "11323_246514",
+      "11323_253806",
+      "11323_246466",
+      "11323_2",
+      "11323_1223635",
+      "11323_238066",
+      "11323_238058",
+      "11323_246462",
+      "11323_238062",
+      "11323_246538",
+      "11323_1223453",
+      "11323_238070"
+     ]
+    },
+    {
+     "id": "229205_340253",
+     "value": "uszkodzone",
+     "dependsOnValueIds": [
+      "11323_253798",
+      "11323_246534",
+      "11323_1223636",
+      "11323_1223462",
+      "11323_2036072",
+      "11323_246510",
+      "11323_253802",
+      "11323_852680",
+      "11323_246514",
+      "11323_253806",
+      "11323_246466",
+      "11323_2",
+      "11323_1223635",
+      "11323_238066",
+      "11323_238058",
+      "11323_246462",
+      "11323_238062",
+      "11323_246538",
+      "11323_1223453",
+      "11323_238070"
+     ],
+     "formerData": {
+      "values": [
+       "uszkodzony",
+       "niesprawny",
+       "niesprawne"
+      ]
+     }
+    },
+    {
+     "id": "229205_340257",
+     "value": "zastępcze",
+     "dependsOnValueIds": [
+      "11323_253798",
+      "11323_246534",
+      "11323_1223636",
+      "11323_1223462",
+      "11323_2036072",
+      "11323_246510",
+      "11323_253802",
+      "11323_852680",
+      "11323_246514",
+      "11323_253806",
+      "11323_246466",
+      "11323_2",
+      "11323_1223635",
+      "11323_238066",
+      "11323_238058",
+      "11323_246462",
+      "11323_238062",
+      "11323_246538",
+      "11323_1223453",
+      "11323_238070"
+     ]
+    },
+    {
+     "id": "229205_340261",
+     "value": "brak opakowania",
+     "dependsOnValueIds": [
+      "11323_253798",
+      "11323_246534",
+      "11323_1223636",
+      "11323_1223462",
+      "11323_2036072",
+      "11323_246510",
+      "11323_253802",
+      "11323_852680",
+      "11323_246514",
+      "11323_253806",
+      "11323_246466",
+      "11323_2",
+      "11323_1223635",
+      "11323_238066",
+      "11323_238058",
+      "11323_246462",
+      "11323_238062",
+      "11323_246538",
+      "11323_1223453",
+      "11323_238070"
+     ]
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "224017",
+   "name": "Kod producenta",
+   "type": "string",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "minLength": 1,
+    "maxLength": 45,
+    "allowedNumberOfValues": 1
+   }
+  },
+  {
+   "id": "244509",
+   "name": "Nazwa handlowa",
+   "type": "string",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "minLength": 1,
+    "maxLength": 100,
+    "allowedNumberOfValues": 1
+   }
+  },
+  {
+   "id": "248811",
+   "name": "Marka",
+   "type": "dictionary",
+   "required": true,
+   "requiredForProduct": true,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "248811_1958440",
+     "value": "Ciasteczka z Krakowa",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "248811_1958518",
+     "value": "Cola Cao",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "248811_1960342",
+     "value": "Hellena",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "248811_1964134",
+     "value": "Skittles",
+     "dependsOnValueIds": []
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   },
+   "formerData": {
+    "ids": [
+     "248926"
+    ],
+    "names": [
+     "Marka (nowa)",
+     "Marka keyboardu",
+     "Producent radia",
+     "Producent (new)",
+     "Wydawnictwo",
+     "Producent akumulatora",
+     "Producent (n)",
+     "Producent wagi",
+     "Marka telefonu",
+     "Producent piły",
+     "Marka / wytwórnia",
+     "Producent części",
+     "Wydawca",
+     "Marka opon",
+     "Producent anteny"
+    ]
+   },
+   "_fixtureNote": "dictionary trimmed from 9829 to the 4 entries used by the parameter-mismatch fixtures"
+  },
+  {
+   "id": "237026",
+   "name": "Rodzaj pierników",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": {
+    "parametersWithValue": [
+     {
+      "id": "250319",
+      "oneOfValueIds": [
+       "250319_1879965"
+      ]
+     }
+    ]
+   },
+   "unit": null,
+   "options": {
+    "ambiguousValueId": "237026_935550",
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "237026_407482",
+     "value": "bez polewy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237026_407474",
+     "value": "w czekoladzie",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237026_407478",
+     "value": "w lukrze",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237026_935550",
+     "value": "inny",
+     "dependsOnValueIds": []
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   },
+   "formerData": {
+    "names": [
+     "Rodzaj"
+    ]
+   }
+  },
+  {
+   "id": "237018",
+   "name": "Smak nadzienia",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": {
+    "parametersWithValue": [
+     {
+      "id": "250319",
+      "oneOfValueIds": [
+       "250319_1879964",
+       "250319_1879966"
+      ]
+     }
+    ]
+   },
+   "unit": null,
+   "options": {
+    "ambiguousValueId": "237018_935624",
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "237018_935621",
+     "value": "brak",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407450",
+     "value": "ciasteczkowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407462",
+     "value": "czekoladowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407446",
+     "value": "karmelowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407466",
+     "value": "kawowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407458",
+     "value": "miętowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_643869",
+     "value": "orzechowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407470",
+     "value": "owocowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407454",
+     "value": "śmietankowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_407442",
+     "value": "waniliowy",
+     "dependsOnValueIds": []
+    },
+    {
+     "id": "237018_935624",
+     "value": "inny",
+     "dependsOnValueIds": []
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "250661",
+   "name": "Wartość energetyczna",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "kcal",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 170000,
+    "range": false,
+    "precision": 2
+   },
+   "formerData": {
+    "names": [
+     "wartość energetyczna"
+    ]
+   }
+  },
+  {
+   "id": "250662",
+   "name": "Tłuszcz",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250663",
+   "name": "Kwasy tłuszczowe nasycone",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250664",
+   "name": "Węglowodany",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250665",
+   "name": "Cukry",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250666",
+   "name": "Błonnik",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250667",
+   "name": "Białko",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250668",
+   "name": "Sól",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": "g",
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250792",
+   "name": "Kod taryfy celnej",
+   "type": "string",
+   "required": false,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": true,
+    "customValuesEnabled": false
+   },
+   "restrictions": {
+    "minLength": 8,
+    "maxLength": 14,
+    "allowedNumberOfValues": 20
+   },
+   "formerData": {
+    "names": [
+     "HSN"
+    ]
+   }
+  },
+  {
+   "id": "11323",
+   "name": "Stan",
+   "type": "dictionary",
+   "required": true,
+   "requiredForProduct": false,
+   "requiredIf": null,
+   "displayedIf": null,
+   "unit": null,
+   "options": {
+    "ambiguousValueId": null,
+    "dependsOnParameterId": null,
+    "describesProduct": false,
+    "customValuesEnabled": false
+   },
+   "dictionary": [
+    {
+     "id": "11323_1",
+     "value": "Nowy",
+     "dependsOnValueIds": [],
+     "formerData": {
+      "values": [
+       "nowe",
+       "nowa"
+      ]
+     }
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  }
+ ]
+}

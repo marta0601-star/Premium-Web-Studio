@@ -1,0 +1,632 @@
+{
+ "products": [
+  {
+   "id": "1cec1ba8-032e-4fe3-8d14-7d5f02968ca3",
+   "name": "Rebelle Gummy Bears Strawberry Apple & Lemon Sugar Free",
+   "category": {
+    "id": "74023",
+    "path": [
+     {
+      "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+      "name": "Allegro"
+     },
+     {
+      "id": "258832",
+      "name": "Supermarket"
+     },
+     {
+      "id": "73973",
+      "name": "Produkty spożywcze"
+     },
+     {
+      "id": "74016",
+      "name": "Słodycze, przekąski, desery"
+     },
+     {
+      "id": "74023",
+      "name": "Żelki, galaretki, pianki"
+     }
+    ],
+    "similar": [
+     {
+      "id": "251902",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "251902",
+        "name": "Zestawy prezentowe"
+       }
+      ]
+     },
+     {
+      "id": "261432",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74016",
+        "name": "Słodycze, przekąski, desery"
+       },
+       {
+        "id": "261432",
+        "name": "Toffi, krówki, karmelki"
+       }
+      ]
+     },
+     {
+      "id": "74018",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74016",
+        "name": "Słodycze, przekąski, desery"
+       },
+       {
+        "id": "74018",
+        "name": "Cukierki i draże"
+       }
+      ]
+     },
+     {
+      "id": "74017",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74016",
+        "name": "Słodycze, przekąski, desery"
+       },
+       {
+        "id": "74017",
+        "name": "Ciastka i ciasteczka"
+       }
+      ]
+     },
+     {
+      "id": "261420",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "261415",
+        "name": "Produkty bezglutenowe"
+       },
+       {
+        "id": "261420",
+        "name": "Słodycze i przekąski bezglutenowe"
+       }
+      ]
+     },
+     {
+      "id": "99477",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "11763",
+        "name": "Dziecko"
+       },
+       {
+        "id": "99333",
+        "name": "Karmienie dziecka"
+       },
+       {
+        "id": "99470",
+        "name": "Żywność dla dzieci"
+       },
+       {
+        "id": "99477",
+        "name": "Ciasteczka i przekąski"
+       }
+      ]
+     },
+     {
+      "id": "260532",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "4bd97d96-f0ff-46cb-a52c-2992bd972bb1",
+        "name": "Firma i usługi"
+       },
+       {
+        "id": "64477",
+        "name": "Biuro i Reklama"
+       },
+       {
+        "id": "64485",
+        "name": "Reklama"
+       },
+       {
+        "id": "64598",
+        "name": "Gadżety"
+       },
+       {
+        "id": "260532",
+        "name": "Cukierki"
+       }
+      ]
+     },
+     {
+      "id": "261435",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74016",
+        "name": "Słodycze, przekąski, desery"
+       },
+       {
+        "id": "261433",
+        "name": "Desery"
+       },
+       {
+        "id": "261435",
+        "name": "Kisiel"
+       }
+      ]
+     },
+     {
+      "id": "261479",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74016",
+        "name": "Słodycze, przekąski, desery"
+       },
+       {
+        "id": "261479",
+        "name": "Lizaki"
+       }
+      ]
+     },
+     {
+      "id": "74021",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74016",
+        "name": "Słodycze, przekąski, desery"
+       },
+       {
+        "id": "74021",
+        "name": "Batony i wafelki"
+       }
+      ]
+     },
+     {
+      "id": "261647",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74069",
+        "name": "Produkty wegetariańskie i wegańskie"
+       },
+       {
+        "id": "261647",
+        "name": "Słodycze i przekąski"
+       }
+      ]
+     },
+     {
+      "id": "261779",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "74062",
+        "name": "Zdrowa żywność"
+       },
+       {
+        "id": "261779",
+        "name": "Fit słodycze i przekąski"
+       }
+      ]
+     },
+     {
+      "id": "258272",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "ea5b98dd-4b6f-4bd0-8c80-22c2629132d0",
+        "name": "Moda"
+       },
+       {
+        "id": "1454",
+        "name": "Odzież, Obuwie, Dodatki"
+       },
+       {
+        "id": "74169",
+        "name": "Ślub i wesele"
+       },
+       {
+        "id": "258223",
+        "name": "Podziękowania"
+       },
+       {
+        "id": "258252",
+        "name": "Dla Gości"
+       },
+       {
+        "id": "258272",
+        "name": "Słodycze"
+       }
+      ]
+     },
+     {
+      "id": "261183",
+      "path": [
+       {
+        "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+        "name": "Allegro"
+       },
+       {
+        "id": "258832",
+        "name": "Supermarket"
+       },
+       {
+        "id": "73973",
+        "name": "Produkty spożywcze"
+       },
+       {
+        "id": "261155",
+        "name": "Dla diabetyków"
+       },
+       {
+        "id": "261183",
+        "name": "Słodycze dla diabetyków"
+       }
+      ]
+     }
+    ]
+   },
+   "parameters": [
+    {
+     "id": "248811",
+     "name": "Marka",
+     "valuesLabels": [
+      "bez marki"
+     ],
+     "valuesIds": [
+      "248811_958954"
+     ],
+     "values": null,
+     "unit": null,
+     "options": {
+      "identifiesProduct": true
+     }
+    },
+    {
+     "id": "221929",
+     "name": "Waga",
+     "valuesLabels": [
+      "50,000 g"
+     ],
+     "values": [
+      "50.000"
+     ],
+     "unit": "g",
+     "options": {
+      "identifiesProduct": true
+     }
+    },
+    {
+     "id": "225693",
+     "name": "EAN (GTIN)",
+     "valuesLabels": [
+      "3770028156375"
+     ],
+     "values": [
+      "3770028156375"
+     ],
+     "unit": null,
+     "options": {
+      "identifiesProduct": true,
+      "isGTIN": true
+     }
+    },
+    {
+     "id": "249183",
+     "name": "Rodzaj",
+     "valuesLabels": [
+      "żelki"
+     ],
+     "valuesIds": [
+      "249183_1120034"
+     ],
+     "values": null,
+     "unit": null,
+     "options": {
+      "identifiesProduct": false
+     }
+    },
+    {
+     "id": "244509",
+     "name": "Nazwa handlowa",
+     "valuesLabels": [
+      "Rebelle Gummy Bears Strawberry Apple & Lemon Sugar Free"
+     ],
+     "values": [
+      "Rebelle Gummy Bears Strawberry Apple & Lemon Sugar Free"
+     ],
+     "unit": null,
+     "options": {
+      "identifiesProduct": false
+     }
+    },
+    {
+     "id": "250792",
+     "name": "Kod taryfy celnej",
+     "valuesLabels": [
+      "17049065"
+     ],
+     "values": [
+      "17049065"
+     ],
+     "unit": null,
+     "options": {
+      "identifiesProduct": false,
+      "isAiCoCreated": true
+     }
+    },
+    {
+     "id": "250668",
+     "name": "Sól",
+     "valuesLabels": [
+      "0,07 g"
+     ],
+     "values": [
+      "0.07"
+     ],
+     "unit": "g",
+     "options": {
+      "identifiesProduct": false
+     }
+    }
+   ],
+   "images": [
+    {
+     "url": "https://a.allegroimg.com/original/115f7b/969ede2a4b6392764b2cf66440d7"
+    },
+    {
+     "url": "https://a.allegroimg.com/original/118457/bc108d8f471da21419dffb4bea80"
+    }
+   ],
+   "description": {
+    "sections": [
+     {
+      "items": [
+       {
+        "type": "TEXT",
+        "content": "<h2>Rebelle Gummy Bears Strawberry Apple &amp; Lemon Sugar Free</h2> <p>Owocowe żelki w kształcie misiów, bez dodatku cukru i o niskiej zawartości cukru.</p> <p>Rebelle Oursons to klasyczne żelki misie w nowoczesnej, <b>mniej cukrowej wersji</b>. Mają owocowy smak, miękką i sprężystą konsystencję oraz charakterystyczne kolorowe kształty, które dobrze znają fani tradycyjnych gummy bears.</p> <p>Producent podkreśla brak dodatku cukru, 98% mniej cukrów, brak aspartamu oraz <b>obniżoną kaloryczność. </b>Słodycz pochodzi z substancji słodzących, m.in. erytrytolu i glikozydów stewiolowych.</p> <p>To ciekawa propozycja dla osób, które lubią owocowe żelki, ale szukają <b>wersji z niższą zawartością cukru.</b> Poręczna paczka 50 g sprawdzi się jako mała przekąska do pracy, szkoły, kina czy w podróży.</p>"
+       }
+      ]
+     },
+     {
+      "items": [
+       {
+        "type": "IMAGE",
+        "url": "https://a.allegroimg.com/original/115f7b/969ede2a4b6392764b2cf66440d7"
+       },
+       {
+        "type": "TEXT",
+        "content": "<p><b>Kraj pochodzenia:</b> Francja</p> <p><b>Masa netto:</b> 50g</p> <p><b>Skład</b>: Błonnik pokarmowy: polidekstroza, izomaltooligosacharydy*; substancje słodzące: erytrytol, glikozydy stewiolowe ze stewii; żelatyna; regulator kwasowości: kwas cytrynowy; barwiące środki spożywcze: koncentraty z marchwi, czarnej porzeczki, spiruliny, jabłka i dyni; aromaty naturalne; substancje glazurujące: wosk carnauba, biały i żółty wosk pszczeli. *Izomaltooligosacharydy są źródłem glukozy. Informacja dodatkowa: Bez dodatku cukru. Bez aspartamu. Produkt o niskiej zawartości cukru.</p>"
+       }
+      ]
+     },
+     {
+      "items": [
+       {
+        "type": "IMAGE",
+        "url": "https://a.allegroimg.com/original/118457/bc108d8f471da21419dffb4bea80"
+       }
+      ]
+     }
+    ]
+   },
+   "publication": {
+    "status": "LISTED"
+   },
+   "aiCoCreatedContent": {
+    "paths": [
+     "parameters"
+    ],
+    "images": []
+   },
+   "hasProtectedBrand": false,
+   "trustedContent": {
+    "paths": [],
+    "productPaths": []
+   }
+  }
+ ],
+ "categories": {
+  "subcategories": [
+   {
+    "id": "5",
+    "name": "Dom i Ogród",
+    "count": 0
+   },
+   {
+    "id": "11763",
+    "name": "Dziecko",
+    "count": 0
+   },
+   {
+    "id": "42540aec-367a-4e5e-b411-17c09b08e41f",
+    "name": "Elektronika",
+    "count": 0
+   },
+   {
+    "id": "4bd97d96-f0ff-46cb-a52c-2992bd972bb1",
+    "name": "Firma i usługi",
+    "count": 0
+   },
+   {
+    "id": "a408e75a-cede-4587-8526-54e9be600d9f",
+    "name": "Kolekcje i sztuka",
+    "count": 0
+   },
+   {
+    "id": "38d588fd-7e9c-4c42-a4ae-6831775eca45",
+    "name": "Kultura i rozrywka",
+    "count": 0
+   },
+   {
+    "id": "ea5b98dd-4b6f-4bd0-8c80-22c2629132d0",
+    "name": "Moda",
+    "count": 0
+   },
+   {
+    "id": "3",
+    "name": "Motoryzacja",
+    "count": 0
+   },
+   {
+    "id": "20782",
+    "name": "Nieruchomości",
+    "count": 0
+   },
+   {
+    "id": "3919",
+    "name": "Sport i turystyka",
+    "count": 0
+   },
+   {
+    "id": "258832",
+    "name": "Supermarket",
+    "count": 1
+   },
+   {
+    "id": "1429",
+    "name": "Uroda",
+    "count": 0
+   },
+   {
+    "id": "121882",
+    "name": "Zdrowie",
+    "count": 0
+   }
+  ],
+  "path": [
+   {
+    "id": "954b95b6-43cf-4104-8354-dea4d9b10ddf",
+    "name": "Allegro"
+   }
+  ]
+ },
+ "filters": [],
+ "nextPage": null
+}

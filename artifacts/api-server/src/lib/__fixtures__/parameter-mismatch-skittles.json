@@ -1,0 +1,165 @@
+{
+  "request": {
+    "name": "Skittles Chewies NoShell Fruits 137g",
+    "sellingMode": {
+      "format": "BUY_NOW",
+      "price": {
+        "amount": "999",
+        "currency": "PLN"
+      }
+    },
+    "stock": {
+      "available": 1,
+      "unit": "UNIT"
+    },
+    "publication": {
+      "status": "ACTIVE"
+    },
+    "payments": {
+      "invoice": "VAT"
+    },
+    "location": {
+      "countryCode": "PL",
+      "city": "Wrocław",
+      "postCode": "50-202",
+      "province": "DOLNOSLASKIE"
+    },
+    "images": [
+      "https://a.allegroimg.com/original/1162ed/9888cf9244b4ad46af28964110e1"
+    ],
+    "description": {
+      "sections": [
+        {
+          "items": [
+            {
+              "type": "TEXT",
+              "content": "<p>EAN: 4009900538800</p>"
+            }
+          ]
+        }
+      ]
+    },
+    "delivery": {
+      "shippingRates": {
+        "id": "8796383a-bea3-4854-9969-126d9b5e8412"
+      }
+    },
+    "afterSalesServices": {
+      "impliedWarranty": {
+        "id": "a684cf17-dcd6-44c0-9825-0d37ffa25c1d"
+      },
+      "returnPolicy": {
+        "id": "52194f5f-e4ab-47cf-95af-a98aca4e5fe1"
+      }
+    },
+    "category": {
+      "id": "74019"
+    },
+    "productSet": [
+      {
+        "product": {
+          "id": "a44ab83f-c542-49e5-b80b-ecbce2c8acc6",
+          "parameters": [
+            {
+              "id": "17448",
+              "values": [
+                "0.13"
+              ]
+            },
+            {
+              "id": "221929",
+              "values": [
+                "137"
+              ]
+            },
+            {
+              "id": "222637",
+              "values": [
+                "1"
+              ]
+            },
+            {
+              "id": "224017",
+              "values": [
+                "Hell"
+              ]
+            },
+            {
+              "id": "225693",
+              "values": [
+                "4009900538800"
+              ]
+            },
+            {
+              "id": "244509",
+              "values": [
+                "skittles"
+              ]
+            },
+            {
+              "id": "248811",
+              "valuesIds": [
+                "248811_1960342"
+              ]
+            },
+            {
+              "id": "250792",
+              "values": [
+                "17049071"
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": [
+      {
+        "id": "11323",
+        "valuesIds": [
+          "11323_1"
+        ]
+      },
+      {
+        "id": "229205",
+        "valuesIds": [
+          "229205_340245"
+        ]
+      }
+    ]
+  },
+  "response": {
+    "errors": [
+      {
+        "code": "PARAMETER_MISMATCH",
+        "message": "The provided parameter 'Marka (id: 248811)' value 'Hellena' does not match the existing parameter value 'Skittles'",
+        "details": null,
+        "path": "productSet[0].product.parameters",
+        "userMessage": "Product is already in the Catalog. We tried to link it with your offer, but the value of the parameter `Marka`in the offer is `Hellena` and differs from the value of the parameter in our Catalog `Skittles`. To list the offer, change the value to `Skittles`.",
+        "metadata": {
+          "currentParameterValueId": "248811_1960342",
+          "productId": "a44ab83f-c542-49e5-b80b-ecbce2c8acc6",
+          "parameterId": "248811",
+          "expectedParameterValueId": "248811_1964134",
+          "parameterName": "Marka",
+          "expectedParameterValue": "Skittles",
+          "currentParameterValue": "Hellena"
+        }
+      },
+      {
+        "code": "PARAMETER_MISMATCH",
+        "message": "The provided parameter 'Waga (id: 221929)' value '137.000' does not match the existing parameter value '0.137'",
+        "details": null,
+        "path": "productSet[0].product.parameters",
+        "userMessage": "Product is already in the Catalog. We tried to link it with your offer, but the value of the parameter `Waga`in the offer is `137.000` and differs from the value of the parameter in our Catalog `0.137`. To list the offer, change the value to `0.137`.",
+        "metadata": {
+          "parameterName": "Waga",
+          "productId": "a44ab83f-c542-49e5-b80b-ecbce2c8acc6",
+          "parameterId": "221929",
+          "expectedParameterValue": "0.137",
+          "currentParameterValue": "137.000"
+        }
+      }
+    ]
+  },
+  "httpStatus": 422
+}

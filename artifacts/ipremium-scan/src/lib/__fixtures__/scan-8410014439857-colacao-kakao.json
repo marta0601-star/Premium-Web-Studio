@@ -1,0 +1,798 @@
+{
+ "productId": "01ce846d-dd69-4b71-b231-438117ad9efd",
+ "productName": "Kakao Cola Cao 300 g",
+ "categoryId": "261004",
+ "categoryName": "Kakao",
+ "categoryConfidence": "high",
+ "categoryLeaf": true,
+ "images": [
+  {
+   "url": "https://a.allegroimg.com/original/117383/b5c7e18d406c8bd04b1ab1d56585"
+  }
+ ],
+ "parameters": [
+  {
+   "id": "11323",
+   "name": "Stan",
+   "type": "dictionary",
+   "required": true,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "11323_1",
+     "name": "Nowy"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "248811",
+   "name": "Marka",
+   "type": "dictionary",
+   "required": true,
+   "requiredForProduct": true,
+   "unit": null,
+   "options": [
+    {
+     "id": "248811_1958518",
+     "name": "Cola Cao"
+    },
+    {
+     "id": "248811_1962677",
+     "name": "Okakao"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   },
+   "_fixtureNote": "options trimmed from 9829 to the catalog value + the option the pre-fix fuzzy match picked"
+  },
+  {
+   "id": "250324",
+   "name": "Rodzaj",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "250324_1880741",
+     "name": "Czekolada do picia"
+    },
+    {
+     "id": "250324_1880742",
+     "name": "Kakao"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "245777",
+   "name": "Odmiana kakao",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "245777_564441",
+     "name": "Chuncho"
+    },
+    {
+     "id": "245777_564429",
+     "name": "Criollo"
+    },
+    {
+     "id": "245777_564433",
+     "name": "Forastero"
+    },
+    {
+     "id": "245777_564437",
+     "name": "Trinitario"
+    },
+    {
+     "id": "245777_564445",
+     "name": "inna"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "225181",
+   "name": "Opakowanie",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "225181_310709",
+     "name": "kartonik"
+    },
+    {
+     "id": "225181_310693",
+     "name": "pudełko plastikowe"
+    },
+    {
+     "id": "225181_578797",
+     "name": "puszka"
+    },
+    {
+     "id": "225181_310705",
+     "name": "saszetka"
+    },
+    {
+     "id": "225181_310697",
+     "name": "zgrzewany worek"
+    },
+    {
+     "id": "225181_564409",
+     "name": "zgrzewany worek z zamknięciem strunowym"
+    },
+    {
+     "id": "225181_310713",
+     "name": "inne"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "230801",
+   "name": "Waga",
+   "type": "integer",
+   "required": true,
+   "requiredForProduct": true,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 40000,
+    "range": false
+   }
+  },
+  {
+   "id": "208222",
+   "name": "Zawartość  kakao",
+   "type": "integer",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "%",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 100,
+    "range": false
+   }
+  },
+  {
+   "id": "233345",
+   "name": "Cechy dodatkowe",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "233345_869017",
+     "name": "bez laktozy"
+    },
+    {
+     "id": "233345_32768",
+     "name": "brak"
+    },
+    {
+     "id": "233345_1",
+     "name": "ekologiczne"
+    },
+    {
+     "id": "233345_4096",
+     "name": "koszerne"
+    },
+    {
+     "id": "233345_2052109",
+     "name": "nierafinowany"
+    },
+    {
+     "id": "233345_2",
+     "name": "niesiarkowane"
+    },
+    {
+     "id": "233345_32",
+     "name": "niski indeks glikemiczny"
+    },
+    {
+     "id": "233345_1188824",
+     "name": "niskodrażniące"
+    },
+    {
+     "id": "233345_256",
+     "name": "niskotłuszczowe"
+    },
+    {
+     "id": "233345_128",
+     "name": "odpowiednie dla diety ketogenicznej"
+    },
+    {
+     "id": "233345_512",
+     "name": "produkt chłodniczy"
+    },
+    {
+     "id": "233345_2048",
+     "name": "raw (surowe)"
+    },
+    {
+     "id": "233345_1024",
+     "name": "superfood"
+    },
+    {
+     "id": "233345_16384",
+     "name": "w czekoladzie"
+    },
+    {
+     "id": "233345_4",
+     "name": "wegańskie"
+    },
+    {
+     "id": "233345_8",
+     "name": "wegetariańskie"
+    },
+    {
+     "id": "233345_65536",
+     "name": "w posypce"
+    },
+    {
+     "id": "233345_64",
+     "name": "wysoka zawartość błonnika"
+    },
+    {
+     "id": "233345_16",
+     "name": "wysokobiałkowe"
+    },
+    {
+     "id": "233345_131072",
+     "name": "wzbogacone sokiem owocowym"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": true
+   }
+  },
+  {
+   "id": "10643",
+   "name": "Certyfikat",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "10643_2048",
+     "name": "B Corp"
+    },
+    {
+     "id": "10643_2097152",
+     "name": "brak"
+    },
+    {
+     "id": "10643_1789396",
+     "name": "Certyfikat produkcji ekologicznej UE"
+    },
+    {
+     "id": "10643_262144",
+     "name": "Chroniona nazwa pochodzenia"
+    },
+    {
+     "id": "10643_524288",
+     "name": "Chronione oznaczenie geograficzne"
+    },
+    {
+     "id": "10643_131072",
+     "name": "Dziedzictwo Kulinarne"
+    },
+    {
+     "id": "10643_16384",
+     "name": "EU Flower (Europejska Stokrotka)"
+    },
+    {
+     "id": "10643_1024",
+     "name": "Fair Trade (Sprawiedliwy Handel)"
+    },
+    {
+     "id": "10643_1048576",
+     "name": "Gwarantowana tradycyjna specjalność"
+    },
+    {
+     "id": "10643_64",
+     "name": "Jakość Tradycja"
+    },
+    {
+     "id": "10643_4194304",
+     "name": "Licencja na Znak Przekreślonego Kłosa"
+    },
+    {
+     "id": "10643_32768",
+     "name": "OK Compost"
+    },
+    {
+     "id": "10643_4096",
+     "name": "Rainforest Alliance"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": true
+   }
+  },
+  {
+   "id": "130691",
+   "name": "Produkt nie zawiera",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "130691_8388608",
+     "name": "antyzbrylaczy"
+    },
+    {
+     "id": "130691_4194304",
+     "name": "barwników"
+    },
+    {
+     "id": "130691_65536",
+     "name": "cholesterolu"
+    },
+    {
+     "id": "130691_4",
+     "name": "cukru"
+    },
+    {
+     "id": "130691_524288",
+     "name": "drożdży"
+    },
+    {
+     "id": "130691_2",
+     "name": "glutenu"
+    },
+    {
+     "id": "130691_32768",
+     "name": "GMO"
+    },
+    {
+     "id": "130691_1048576",
+     "name": "jajek"
+    },
+    {
+     "id": "130691_1787378",
+     "name": "kofeiny w ilości większej niż 150 mg/l"
+    },
+    {
+     "id": "130691_128",
+     "name": "konserwantów"
+    },
+    {
+     "id": "130691_1",
+     "name": "laktozy"
+    },
+    {
+     "id": "130691_262144",
+     "name": "nabiału"
+    },
+    {
+     "id": "130691_8",
+     "name": "oleju palmowego"
+    },
+    {
+     "id": "130691_32",
+     "name": "orzechów"
+    },
+    {
+     "id": "130691_16384",
+     "name": "pestek"
+    },
+    {
+     "id": "130691_131072",
+     "name": "pszenicy"
+    },
+    {
+     "id": "130691_16",
+     "name": "soi"
+    },
+    {
+     "id": "130691_1787377",
+     "name": "tauryny"
+    },
+    {
+     "id": "130691_2097152",
+     "name": "tłuszczy trans (utwardzanych)"
+    },
+    {
+     "id": "130691_8192",
+     "name": "nie dotyczy"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": true
+   }
+  },
+  {
+   "id": "225693",
+   "name": "EAN (GTIN)",
+   "type": "string",
+   "required": true,
+   "requiredForProduct": true,
+   "unit": null,
+   "options": [],
+   "restrictions": {
+    "minLength": 8,
+    "maxLength": 14,
+    "allowedNumberOfValues": 1
+   }
+  },
+  {
+   "id": "224017",
+   "name": "Kod producenta",
+   "type": "string",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [],
+   "restrictions": {
+    "minLength": 1,
+    "maxLength": 45,
+    "allowedNumberOfValues": 1
+   }
+  },
+  {
+   "id": "244509",
+   "name": "Nazwa handlowa",
+   "type": "string",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [],
+   "restrictions": {
+    "minLength": 1,
+    "maxLength": 100,
+    "allowedNumberOfValues": 1
+   }
+  },
+  {
+   "id": "17448",
+   "name": "Waga produktu z opakowaniem jednostkowym",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "kg",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 3
+   }
+  },
+  {
+   "id": "250792",
+   "name": "Kod taryfy celnej",
+   "type": "string",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [],
+   "restrictions": {
+    "minLength": 8,
+    "maxLength": 14,
+    "allowedNumberOfValues": 20
+   }
+  },
+  {
+   "id": "229205",
+   "name": "Stan opakowania",
+   "type": "dictionary",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": null,
+   "options": [
+    {
+     "id": "229205_340245",
+     "name": "oryginalne"
+    },
+    {
+     "id": "229205_340249",
+     "name": "otwarte"
+    },
+    {
+     "id": "229205_340253",
+     "name": "uszkodzone"
+    },
+    {
+     "id": "229205_340257",
+     "name": "zastępcze"
+    },
+    {
+     "id": "229205_340261",
+     "name": "brak opakowania"
+    }
+   ],
+   "restrictions": {
+    "multipleChoices": false
+   }
+  },
+  {
+   "id": "250661",
+   "name": "Wartość energetyczna",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "kcal",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 170000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250662",
+   "name": "Tłuszcz",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250663",
+   "name": "Kwasy tłuszczowe nasycone",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250664",
+   "name": "Węglowodany",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250665",
+   "name": "Cukry",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250666",
+   "name": "Błonnik",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250667",
+   "name": "Białko",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  },
+  {
+   "id": "250668",
+   "name": "Sól",
+   "type": "float",
+   "required": false,
+   "requiredForProduct": false,
+   "unit": "g",
+   "options": [],
+   "restrictions": {
+    "min": 0,
+    "max": 1000000,
+    "range": false,
+    "precision": 2
+   }
+  }
+ ],
+ "prefillValues": {
+  "11323": [
+   "11323_1"
+  ],
+  "17448": [
+   "0.3"
+  ],
+  "224017": [
+   "8410014439857"
+  ],
+  "225693": [
+   "8410014439857"
+  ],
+  "230801": [
+   "300"
+  ],
+  "244509": [
+   "COLA CAO AVENA"
+  ],
+  "248811": [
+   "248811_1958518"
+  ],
+  "250324": [
+   "250324_1880742"
+  ],
+  "250792": [
+   "18050000"
+  ]
+ },
+ "productParamIds": [
+  "248811",
+  "250324",
+  "245777",
+  "225181",
+  "230801",
+  "208222",
+  "233345",
+  "10643",
+  "130691",
+  "225693",
+  "224017",
+  "244509",
+  "17448",
+  "250792",
+  "250661",
+  "250662",
+  "250663",
+  "250664",
+  "250665",
+  "250666",
+  "250667",
+  "250668"
+ ],
+ "filledParameters": [
+  {
+   "id": "225693",
+   "name": "EAN (GTIN)",
+   "value": "8410014439857",
+   "kind": "values",
+   "confidence": "high",
+   "source": "allegro_catalog"
+  },
+  {
+   "id": "230801",
+   "name": "Waga",
+   "value": "300",
+   "kind": "values",
+   "confidence": "high",
+   "source": "allegro_catalog"
+  },
+  {
+   "id": "244509",
+   "name": "Nazwa handlowa",
+   "value": "COLA CAO AVENA",
+   "kind": "values",
+   "confidence": "high",
+   "source": "allegro_catalog"
+  },
+  {
+   "id": "248811",
+   "name": "Marka",
+   "value": "248811_1958518",
+   "kind": "valuesIds",
+   "confidence": "high",
+   "source": "allegro_catalog"
+  },
+  {
+   "id": "250324",
+   "name": "Rodzaj",
+   "value": "250324_1880742",
+   "kind": "valuesIds",
+   "confidence": "high",
+   "source": "allegro_catalog"
+  },
+  {
+   "id": "250792",
+   "name": "Kod taryfy celnej",
+   "value": "18050000",
+   "kind": "values",
+   "confidence": "high",
+   "source": "allegro_catalog"
+  },
+  {
+   "id": "11323",
+   "name": "Stan",
+   "value": "11323_1",
+   "valueLabel": "Nowy",
+   "kind": "valuesIds",
+   "confidence": "high",
+   "source": "default"
+  },
+  {
+   "id": "224017",
+   "name": "Kod producenta",
+   "value": "8410014439857",
+   "kind": "values",
+   "confidence": "high",
+   "source": "scan"
+  },
+  {
+   "id": "17448",
+   "name": "Waga produktu z opakowaniem jednostkowym",
+   "value": "0.3",
+   "kind": "values",
+   "confidence": "medium",
+   "source": "lookup"
+  }
+ ],
+ "skippedParameters": [
+  {
+   "id": "10643",
+   "name": "Certyfikat",
+   "reason": "regulated"
+  }
+ ],
+ "catalogDiffs": [
+  {
+   "field": "Marka",
+   "catalog": "Kakao",
+   "web": "Colacao"
+  }
+ ],
+ "source": "allegro_catalog",
+ "brand": "Kakao",
+ "weight": "300 g",
+ "ean": "8410014439857"
+}

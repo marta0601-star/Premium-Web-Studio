@@ -15,6 +15,7 @@ import {
   fetchCategoryChildrenList,
   SUPERMARKET_CATEGORY_ID,
 } from "../lib/allegro";
+import { pickCatalogProductByEan } from "../lib/catalog-ean";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan, type LookupResult } from "../lib/lookup";
 import { isVisionEnabled, extractProductFromImages, type VisionImage } from "../lib/vision";
@@ -182,12 +183,28 @@ router.get("/scan", async (req, res) => {
 
     // Step 1: Try Allegro catalog FIRST (user-level OAuth token required)
     let allegroProduct: null | Record<string, unknown> = null;
+    // "missing" = the catalog product has no EAN at all → used, but the UI asks to check.
+    let catalogEanCheck: "match" | "missing" = "match";
 
     try {
       const catalogData = await searchCatalogByEan(ean);
-      const products = (catalogData as { products?: unknown[] }).products;
-      if (products && products.length > 0) {
-        allegroProduct = products[0] as Record<string, unknown>;
+      const products = (catalogData as { products?: Array<Record<string, unknown>> }).products ?? [];
+      // Only trust a hit that carries the scanned EAN (text search can return a
+      // different product); a hit with another EAN sends us down the external path.
+      const pick = pickCatalogProductByEan(products, ean);
+      req.log.info(
+        {
+          ean,
+          decision: pick.decision,
+          candidates: products.length,
+          catalogEans: pick.catalogEans.slice(0, 10),
+          productId: pick.product?.id ?? null,
+        },
+        "Catalog EAN check"
+      );
+      if (pick.product) {
+        allegroProduct = pick.product;
+        catalogEanCheck = pick.decision === "ean_missing" ? "missing" : "match";
         req.log.info(
           { productId: allegroProduct.id, productName: allegroProduct.name },
           "Allegro catalog product selected"
@@ -355,6 +372,7 @@ router.get("/scan", async (req, res) => {
         filledParameters,
         skippedParameters: catFiller.skipped,
         catalogDiffs,
+        catalogEanCheck,
         source: "allegro_catalog",
         brand: catBrand,
         weight: catWeight,
@@ -1025,7 +1043,7 @@ router.post("/create-offer", async (req, res) => {
   try {
     const body = CreateOfferBody.parse(req.body);
 
-    const offer = await createAllegroOffer(body);
+    const { offer, catalogCorrections } = await createAllegroOffer(body);
     const offerId = (offer as { id?: string }).id ?? "";
     const status = (offer as { publication?: { status?: string } }).publication?.status || "INACTIVE";
 
@@ -1047,6 +1065,9 @@ router.post("/create-offer", async (req, res) => {
       productStatus: productStatus || null,
       offerUrl: `https://allegro.pl/oferta/${offerId}`,
       message,
+      // Values Allegro forced to the catalog's (PARAMETER_MISMATCH rescue) — the
+      // user's choice was overridden, so the UI must show these.
+      catalogCorrections,
     });
   } catch (err: unknown) {
     req.log.error({ err }, "Error creating offer");

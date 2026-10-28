@@ -1,0 +1,157 @@
+{
+  "request": {
+    "name": "Ciasteczka w czekoladzie - Galletas bañadas en chocolate 157g Cola Cao",
+    "sellingMode": {
+      "format": "BUY_NOW",
+      "price": {
+        "amount": "999",
+        "currency": "PLN"
+      }
+    },
+    "stock": {
+      "available": 1,
+      "unit": "UNIT"
+    },
+    "publication": {
+      "status": "ACTIVE"
+    },
+    "payments": {
+      "invoice": "VAT"
+    },
+    "location": {
+      "countryCode": "PL",
+      "city": "Wrocław",
+      "postCode": "50-202",
+      "province": "DOLNOSLASKIE"
+    },
+    "images": [
+      "https://a.allegroimg.com/original/1117d0/7ef59ad8409b82c84f5151fe0e13"
+    ],
+    "description": {
+      "sections": [
+        {
+          "items": [
+            {
+              "type": "TEXT",
+              "content": "<p>EAN: 8410014501714</p>"
+            }
+          ]
+        }
+      ]
+    },
+    "delivery": {
+      "shippingRates": {
+        "id": "ef4bff5d-7ff1-4386-8fb8-5de5261b9e3a"
+      }
+    },
+    "afterSalesServices": {
+      "impliedWarranty": {
+        "id": "a684cf17-dcd6-44c0-9825-0d37ffa25c1d"
+      },
+      "returnPolicy": {
+        "id": "52194f5f-e4ab-47cf-95af-a98aca4e5fe1"
+      }
+    },
+    "category": {
+      "id": "74017"
+    },
+    "productSet": [
+      {
+        "product": {
+          "id": "0b418477-f13a-4a67-ac9a-c59f1f7a596b",
+          "parameters": [
+            {
+              "id": "17448",
+              "values": [
+                "0.15"
+              ]
+            },
+            {
+              "id": "221929",
+              "values": [
+                "157.000"
+              ]
+            },
+            {
+              "id": "224017",
+              "values": [
+                "Ciasteczka"
+              ]
+            },
+            {
+              "id": "225693",
+              "values": [
+                "8410014501714"
+              ]
+            },
+            {
+              "id": "237018",
+              "valuesIds": [
+                "237018_407462"
+              ]
+            },
+            {
+              "id": "244509",
+              "values": [
+                "Ciasteczka w czekoladzie - Galletas bañadas en chocolate 157g Cola Cao"
+              ]
+            },
+            {
+              "id": "248811",
+              "valuesIds": [
+                "248811_1958440"
+              ]
+            },
+            {
+              "id": "250319",
+              "valuesIds": [
+                "250319_1879967"
+              ]
+            },
+            {
+              "id": "250792",
+              "values": [
+                "19053191"
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": [
+      {
+        "id": "11323",
+        "valuesIds": [
+          "11323_1"
+        ]
+      },
+      {
+        "id": "229205",
+        "valuesIds": [
+          "229205_340245"
+        ]
+      }
+    ]
+  },
+  "response": {
+    "errors": [
+      {
+        "code": "PARAMETER_MISMATCH",
+        "message": "The provided parameter 'Marka (id: 248811)' value 'Ciasteczka z Krakowa' does not match the existing parameter value 'Cola Cao'",
+        "details": null,
+        "path": "productSet[0].product.parameters",
+        "userMessage": "Product is already in the Catalog. We tried to link it with your offer, but the value of the parameter `Marka`in the offer is `Ciasteczka z Krakowa` and differs from the value of the parameter in our Catalog `Cola Cao`. To list the offer, change the value to `Cola Cao`.",
+        "metadata": {
+          "currentParameterValueId": "248811_1958440",
+          "productId": "0b418477-f13a-4a67-ac9a-c59f1f7a596b",
+          "parameterId": "248811",
+          "expectedParameterValueId": "248811_1958518",
+          "parameterName": "Marka",
+          "expectedParameterValue": "Cola Cao",
+          "currentParameterValue": "Ciasteczka z Krakowa"
+        }
+      }
+    ]
+  },
+  "httpStatus": 422
+}

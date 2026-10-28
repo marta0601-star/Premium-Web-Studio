@@ -3,6 +3,7 @@ import { logger } from "./logger";
 import { getUserToken } from "./allegro-auth";
 import { detectVolume } from "./auto-detect";
 import { isLlmEnabled, semanticPickOption } from "./llm";
+import { applyParameterMismatches, type CatalogCorrection } from "./parameter-mismatch";
 
 /**
  * Seller ship-from location — HARD-LOCKED to Wrocław. This is the physical
@@ -836,10 +837,13 @@ export async function createAllegroOffer(payload: {
       .map((p) => {
         const t = paramTypes.get(p.id);
         if ((t === "float" || t === "integer") && p.values && p.values.length > 0) {
-          const kept = p.values.filter((v) => {
-            const n = Number(String(v).replace(",", "."));
-            return Number.isFinite(n) && n > 0;
-          });
+          // Allegro wants a dot as the decimal separator ("0.777", not "0,777").
+          const kept = p.values
+            .map((v) => String(v).trim().replace(",", "."))
+            .filter((v) => {
+              const n = Number(v);
+              return Number.isFinite(n) && n > 0;
+            });
           return { ...p, values: kept };
         }
         return p;
@@ -983,6 +987,10 @@ export async function createAllegroOffer(payload: {
   // If MatchingProductForDataNotFoundException fires, fall back to Strategy C
   let skipProductProposal = false;
 
+  // PARAMETER_MISMATCH is fixed by taking Allegro's expected values — at most once.
+  let mismatchRetried = false;
+  const catalogCorrections: CatalogCorrection[] = [];
+
   let offerBody = buildOfferBody();
 
   const MAX_RETRIES = 20;
@@ -1010,7 +1018,7 @@ export async function createAllegroOffer(payload: {
         { status: response.status, responseData: JSON.stringify(response.data) },
         "POST /sale/product-offers — success"
       );
-      return response.data;
+      return { offer: response.data, catalogCorrections };
     } catch (err: unknown) {
       const axiosErr = err as {
         response?: {
@@ -1064,6 +1072,27 @@ export async function createAllegroOffer(payload: {
         productLevelParams = [];
         offerBody = buildOfferBody();
         continue;
+      }
+
+      // ── Handle PARAMETER_MISMATCH ─────────────────────────────────────────────
+      // The product is already in the catalog (our productId, or one Allegro
+      // recognised) and some product parameter differs from it. Allegro accepts
+      // only its own value, given in the error metadata: apply ALL mismatches of
+      // this response and retry once. A second mismatch goes back to the user.
+      if (!mismatchRetried && attempt < MAX_RETRIES) {
+        const fix = applyParameterMismatches(errors, productLevelParams, offerLevelParams);
+        if (fix) {
+          mismatchRetried = true;
+          productLevelParams = fix.productParams;
+          offerLevelParams = fix.offerParams;
+          catalogCorrections.push(...fix.corrections);
+          logger.warn(
+            { attempt, corrections: fix.corrections },
+            "PARAMETER_MISMATCH: replaced values with the catalog ones, retrying once"
+          );
+          offerBody = buildOfferBody();
+          continue;
+        }
       }
 
       // ── Handle DuplicateDetectionMissingParametersException ──────────────────
@@ -1204,5 +1233,7 @@ export async function createAllegroOffer(payload: {
       offerBody = buildOfferBody();
     }
   }
+  // Unreachable: the last attempt always rethrows above.
+  throw new Error("createAllegroOffer: retry loop exhausted");
 }
 

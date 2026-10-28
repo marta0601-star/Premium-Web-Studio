@@ -12,46 +12,19 @@ import { PremiumButton, PremiumInput, PremiumSwitch, CustomSelect } from "@/comp
 import { AllegroAuthBanner } from "@/components/AllegroAuth";
 import { LocationSetup } from "@/components/LocationSetup";
 import type { CreateOfferRequest, ParameterValue } from "@workspace/api-client-react";
+import {
+  autoFillParam,
+  buildAutoFilledState,
+  numericInputStep,
+  type AllegroParam,
+  type FillConfidence,
+  type ParamFillMeta,
+  type ParamSource,
+  type ProductContext,
+  type ServerFilledParameter,
+} from "@/lib/autofill";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-interface AllegroParam {
-  id: string;
-  name: string;
-  type: string;
-  required: boolean;
-  requiredForProduct: boolean;
-  unit: string | null;
-  options: Array<{ id: string; name: string }>;
-  restrictions: Record<string, unknown> | null;
-}
-
-// Per-field auto-fill source (mirrors backend FilledParameter.source) + "client"
-// for values the frontend derived on its own.
-type ParamSource =
-  | "default"
-  | "scan"
-  | "lookup"
-  | "name_keyword"
-  | "off_tags"
-  | "ean_country"
-  | "allegro_catalog"
-  | "vision"
-  | "llm_match"
-  | "client";
-
-type FillConfidence = "high" | "medium" | "low";
-
-interface ServerFilledParameter {
-  id: string;
-  name: string;
-  value: string;
-  valueLabel?: string;
-  kind: "values" | "valuesIds";
-  confidence: FillConfidence;
-  source: ParamSource;
-  sourceDetail?: string;
-}
 
 interface ServerSkippedParameter {
   id: string;
@@ -63,12 +36,6 @@ interface CatalogDiff {
   field: string;
   catalog: string;
   web: string;
-}
-
-interface ParamFillMeta {
-  source: ParamSource;
-  confidence: FillConfidence;
-  sourceDetail?: string;
 }
 
 interface ExtendedScanResult {
@@ -85,6 +52,8 @@ interface ExtendedScanResult {
   filledParameters?: ServerFilledParameter[];
   skippedParameters?: ServerSkippedParameter[];
   catalogDiffs?: CatalogDiff[];
+  /** "missing": the catalog product has no EAN, so it may not be the scanned one. */
+  catalogEanCheck?: "match" | "missing";
   gaps?: Array<{ id: string; name: string }>;
   vision?: {
     brand: string | null;
@@ -184,189 +153,6 @@ async function downscaleToBase64(file: File, maxDim = 1280): Promise<{ data: str
     });
     return { data: raw, mediaType: file.type || "image/jpeg" };
   }
-}
-
-// ── Smart auto-fill logic ────────────────────────────────────────────────────
-
-function extractNumber(s: string): string | null {
-  const m = s.match(/(\d+(?:[.,]\d+)?)/);
-  return m ? m[1].replace(",", ".") : null;
-}
-
-function fuzzyMatchOption(
-  options: Array<{ id: string; name: string }>,
-  query: string | null | undefined
-): string | null {
-  if (!query || !options.length) return null;
-  const q = query.toLowerCase().trim();
-  // 1. Exact match
-  const exact = options.find((o) => o.name.toLowerCase() === q);
-  if (exact) return exact.id;
-  // 2. Option name contains query
-  const optContains = options.find((o) => o.name.toLowerCase().includes(q));
-  if (optContains) return optContains.id;
-  // 3. Query contains option name — only if option name is ≥4 chars (avoids "Bio" matching "Schlossblick Bio Wasser")
-  const qContains = options.find((o) => {
-    const n = o.name.toLowerCase();
-    return n.length >= 4 && q.includes(n);
-  });
-  if (qContains) return qContains.id;
-  return null;
-}
-
-interface ProductContext {
-  ean: string;
-  brand?: string | null;
-  weight?: string | null;
-  productName?: string | null;
-  country?: string | null;
-}
-
-function autoFillParam(
-  param: AllegroParam,
-  ctx: ProductContext
-): { value?: ParameterValue; autoFilled: boolean } {
-  const nameLower = param.name.toLowerCase();
-
-  const isEan = /ean|gtin|kod kreskowy|barcode/.test(nameLower);
-  const isBrand = /marka|brand|producent/.test(nameLower);
-  const isWeight = /waga|gramatu|masa netto|netto|weight/.test(nameLower);
-  const isVolume = /pojemność|volume|litraż/.test(nameLower);
-  const isName = nameLower === "nazwa handlowa" || nameLower === "nazwa produktu";
-  const isCountry = /kraj pochodzenia|country of origin|kraj prod/.test(nameLower);
-  const isCondition = /stan/.test(nameLower) && param.type === "dictionary";
-
-  // EAN/GTIN string
-  if (isEan && param.type === "string" && ctx.ean) {
-    return { value: { id: param.id, values: [ctx.ean] }, autoFilled: true };
-  }
-
-  // Brand — dictionary fuzzy match
-  if (isBrand && param.type === "dictionary") {
-    const matched = fuzzyMatchOption(param.options, ctx.brand);
-    if (matched) {
-      return { value: { id: param.id, valuesIds: [matched] }, autoFilled: true };
-    }
-  }
-  // Brand — string
-  if (isBrand && param.type === "string" && ctx.brand) {
-    return { value: { id: param.id, values: [ctx.brand] }, autoFilled: true };
-  }
-
-  // Weight / Volume — extract numeric from weight string
-  if ((isWeight || isVolume) && (param.type === "float" || param.type === "integer") && ctx.weight) {
-    const num = extractNumber(ctx.weight);
-    if (num) return { value: { id: param.id, values: [num] }, autoFilled: true };
-  }
-
-  // Product name
-  if (isName && param.type === "string" && ctx.productName) {
-    return { value: { id: param.id, values: [ctx.productName] }, autoFilled: true };
-  }
-
-  // Country of origin — dictionary fuzzy match
-  if (isCountry && param.type === "dictionary" && ctx.country) {
-    const matched = fuzzyMatchOption(param.options, ctx.country);
-    if (matched) {
-      return { value: { id: param.id, valuesIds: [matched] }, autoFilled: true };
-    }
-  }
-  if (isCountry && param.type === "string" && ctx.country) {
-    return { value: { id: param.id, values: [ctx.country] }, autoFilled: true };
-  }
-
-  // Condition — always "Nowy" if only one option
-  if (isCondition && param.options.length === 1) {
-    return { value: { id: param.id, valuesIds: [param.options[0].id] }, autoFilled: true };
-  }
-  if (isCondition) {
-    const nowy = fuzzyMatchOption(param.options, "Nowy") || fuzzyMatchOption(param.options, "nowy") || param.options[0]?.id;
-    if (nowy) return { value: { id: param.id, valuesIds: [nowy] }, autoFilled: true };
-  }
-
-  return { autoFilled: false };
-}
-
-function buildAutoFilledState(
-  params: AllegroParam[],
-  prefillValues: Record<string, string[]>,
-  ctx: ProductContext,
-  serverFilled?: ServerFilledParameter[]
-): {
-  formState: Record<string, ParameterValue>;
-  autoFilledIds: Set<string>;
-  paramMeta: Record<string, ParamFillMeta>;
-} {
-  const formState: Record<string, ParameterValue> = {};
-  const autoFilledIds = new Set<string>();
-  const paramMeta: Record<string, ParamFillMeta> = {};
-  const serverById = new Map((serverFilled ?? []).map((f) => [f.id, f]));
-
-  for (const param of params) {
-    const nameLower = param.name.toLowerCase();
-    const isBrandParam = /marka|brand|producent/.test(nameLower);
-
-    // Brand parameters: always prefer ctx.brand from product lookup over Allegro catalog prefill.
-    // The Allegro catalog can match a completely different product for the same EAN,
-    // resulting in a wrong brand being populated (e.g. CHAOKOH for a German water brand).
-    if (isBrandParam && ctx.brand) {
-      if (param.type === "dictionary") {
-        const matched = fuzzyMatchOption(param.options, ctx.brand);
-        if (matched) {
-          formState[param.id] = { id: param.id, valuesIds: [matched] };
-          autoFilledIds.add(param.id);
-          paramMeta[param.id] = { source: "lookup", confidence: "high" };
-        } else {
-          // Brand not in options list — leave empty so user selects manually
-          formState[param.id] = { id: param.id };
-        }
-      } else if (param.type === "string") {
-        formState[param.id] = { id: param.id, values: [ctx.brand] };
-        autoFilledIds.add(param.id);
-        paramMeta[param.id] = { source: "lookup", confidence: "high" };
-      }
-      continue; // Skip Allegro catalog prefill for brand
-    }
-
-    // 1. Server-computed fill — carries confidence + source attribution.
-    const sf = serverById.get(param.id);
-    if (sf && sf.value) {
-      formState[param.id] =
-        sf.kind === "valuesIds"
-          ? { id: param.id, valuesIds: [sf.value] }
-          : { id: param.id, values: [sf.value] };
-      autoFilledIds.add(param.id);
-      paramMeta[param.id] = { source: sf.source, confidence: sf.confidence, sourceDetail: sf.sourceDetail };
-      continue;
-    }
-
-    // 2. Allegro catalog prefill (non-brand params the server didn't attribute).
-    const catalogValues = prefillValues[param.id];
-    if (catalogValues && catalogValues.length > 0) {
-      if (param.type === "dictionary") {
-        formState[param.id] = { id: param.id, valuesIds: catalogValues };
-      } else {
-        formState[param.id] = { id: param.id, values: catalogValues };
-      }
-      autoFilledIds.add(param.id);
-      paramMeta[param.id] = { source: "allegro_catalog", confidence: "high" };
-      continue;
-    }
-
-    // 3. Client-side smart auto-fill fallback (e.g. after manual category change).
-    const { value, autoFilled } = autoFillParam(param, ctx);
-    if (value) {
-      formState[param.id] = value;
-      if (autoFilled) {
-        autoFilledIds.add(param.id);
-        paramMeta[param.id] = { source: "client", confidence: "medium" };
-      }
-    } else {
-      formState[param.id] = { id: param.id };
-    }
-  }
-
-  return { formState, autoFilledIds, paramMeta };
 }
 
 // ── Per-field source/confidence presentation ─────────────────────────────────
@@ -731,6 +517,7 @@ export default function Home() {
   const [offerStatus, setOfferStatus] = useState<string | null>(null);
   const [productStatus, setProductStatus] = useState<string | null>(null);
   const [offerMessage, setOfferMessage] = useState<string | null>(null);
+  const [catalogCorrections, setCatalogCorrections] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [allegroErrors, setAllegroErrors] = useState<AllegroError[]>([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -840,6 +627,7 @@ export default function Home() {
         weight: data.weight,
         productName: data.productName,
         country,
+        catalogProduct: !!data.productId,
       };
 
       setSkippedParams(data.skippedParameters || []);
@@ -1053,6 +841,7 @@ export default function Home() {
         // For manual entry, scannedData.productName is "" — use productTitle instead
         productName: scannedData.productName || productTitle,
         country,
+        catalogProduct: !!scannedData.productId,
       };
       await applyCategory(cat.id, cat.name, [], scannedData.prefillValues || {}, ctx, true);
     },
@@ -1121,6 +910,9 @@ export default function Home() {
       setOfferStatus((res as { status?: string }).status || null);
       setProductStatus((res as { productStatus?: string }).productStatus || null);
       setOfferMessage((res as { message?: string }).message || null);
+      setCatalogCorrections(
+        ((res as { catalogCorrections?: Array<{ message: string }> }).catalogCorrections ?? []).map((c) => c.message)
+      );
       setScanHistory((prev) =>
         prev.map((e) => (e.ean === currentEan ? { ...e, offerId: newOfferId } : e))
       );
@@ -1153,6 +945,7 @@ export default function Home() {
     setOfferStatus(null);
     setProductStatus(null);
     setOfferMessage(null);
+    setCatalogCorrections([]);
     setErrorMsg(null);
     setAllegroErrors([]);
     setSubmitAttempted(false);
@@ -1261,6 +1054,15 @@ export default function Home() {
 
               {/* Source Banner */}
               <SourceBanner source={scannedData.source} productId={scannedData.productId} productName={scannedData.productName} />
+
+              {/* Catalog product without any EAN — can't confirm it is the scanned one */}
+              {scannedData.catalogEanCheck === "missing" && (
+                <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                  <p className="text-amber-300 text-sm font-medium flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" /> Produkt z katalogu Allegro nie ma podanego kodu EAN — sprawdź, czy to na pewno ten produkt (EAN: {currentEan}).
+                  </p>
+                </div>
+              )}
 
               {/* Catalog vs web mismatch — likely wrong match (single vs multipack) */}
               {catalogDiffs.length > 0 && (
@@ -1522,7 +1324,7 @@ export default function Home() {
                                     ) : (
                                       <PremiumInput
                                         type={param.type === "float" || param.type === "integer" ? "number" : "text"}
-                                        step={param.type === "float" ? "0.01" : param.type === "integer" ? "1" : undefined}
+                                        step={numericInputStep(param)}
                                         min={param.restrictions?.min != null ? String(param.restrictions.min) : undefined}
                                         max={param.restrictions?.max != null ? String(param.restrictions.max) : undefined}
                                         maxLength={param.restrictions?.maxLength != null ? Number(param.restrictions.maxLength) : undefined}
@@ -1672,6 +1474,18 @@ export default function Home() {
                 <p className="text-amber-400/70 text-xs mb-4">
                   Nowy produkt wymaga akceptacji Allegro (zazwyczaj do 24h).
                 </p>
+              )}
+              {catalogCorrections.length > 0 && (
+                <div className="text-left rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 mb-5">
+                  <p className="text-amber-300 text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" /> Allegro przyjmuje tylko wartości z katalogu — poprawiono:
+                  </p>
+                  <ul className="space-y-0.5">
+                    {catalogCorrections.map((m) => (
+                      <li key={m} className="text-xs text-white/80">{m}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               {offerId && (
