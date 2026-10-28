@@ -3,7 +3,7 @@
  * from pages/Home.tsx so it can be unit-tested.
  */
 
-import { matchDictionaryOption, quantityForParam } from "../../../api-server/src/lib/shared/autofill-rules";
+import { decideBrandOption, matchDictionaryOption, quantityForParam, type BrandDecision } from "../../../api-server/src/lib/shared/autofill-rules";
 
 // Same shape as ParameterValue in lib/api-client-react/src/generated/api.schemas.ts;
 // declared here because the package index does not re-export it (see api-zod TODO).
@@ -81,6 +81,9 @@ export interface ProductContext {
    *  Allegro then rejects any product parameter that differs from the catalog
    *  (PARAMETER_MISMATCH), so catalog-filled values must never be overridden. */
   catalogProduct?: boolean;
+  /** Brand candidates from the scan. Given after a manual category change, so
+   *  Marka is re-decided against the new category's dictionary (shared rule). */
+  brandCandidates?: string[];
 }
 
 export function autoFillParam(
@@ -159,10 +162,13 @@ export function buildAutoFilledState(
   formState: Record<string, ParameterValue>;
   autoFilledIds: Set<string>;
   paramMeta: Record<string, ParamFillMeta>;
+  /** Brand params left empty on purpose, with ≤ 3 one-tap options (only with ctx.brandCandidates). */
+  brandSuggestions: Record<string, { reason: NonNullable<BrandDecision["reason"]>; suggestions: BrandDecision["suggestions"] }>;
 } {
   const formState: Record<string, ParameterValue> = {};
   const autoFilledIds = new Set<string>();
   const paramMeta: Record<string, ParamFillMeta> = {};
+  const brandSuggestions: Record<string, { reason: NonNullable<BrandDecision["reason"]>; suggestions: BrandDecision["suggestions"] }> = {};
   const serverById = new Map((serverFilled ?? []).map((f) => [f.id, f]));
 
   for (const param of params) {
@@ -174,6 +180,21 @@ export function buildAutoFilledState(
     // overriding it only produces PARAMETER_MISMATCH. The old reason for overriding —
     // a catalog hit for a different product (CHAOKOH for a German water) — is now
     // handled server-side by only accepting catalog products that carry the scanned EAN.
+    // After a manual category change the server's brand decision is gone —
+    // re-run the same rule on the scan's candidates against this dictionary.
+    if (isBrandParam && ctx.brandCandidates && !ctx.catalogProduct && param.type === "dictionary") {
+      const d = decideBrandOption(param.options, ctx.brandCandidates, ctx.productName ?? "");
+      if (d.fill) {
+        formState[param.id] = { id: param.id, valuesIds: [d.fill.id] };
+        autoFilledIds.add(param.id);
+        paramMeta[param.id] = { source: "lookup", confidence: d.fill.exact ? "high" : "medium" };
+      } else {
+        formState[param.id] = { id: param.id };
+        brandSuggestions[param.id] = { reason: d.reason ?? "unknown_value", suggestions: d.suggestions };
+      }
+      continue;
+    }
+
     if (isBrandParam && ctx.brand && !ctx.catalogProduct) {
       if (param.type === "dictionary") {
         const matched = fuzzyMatchOption(param.options, ctx.brand);
@@ -231,7 +252,7 @@ export function buildAutoFilledState(
     }
   }
 
-  return { formState, autoFilledIds, paramMeta };
+  return { formState, autoFilledIds, paramMeta, brandSuggestions };
 }
 
 /**

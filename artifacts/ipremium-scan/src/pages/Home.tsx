@@ -23,6 +23,7 @@ import {
   type ProductContext,
   type ServerFilledParameter,
 } from "@/lib/autofill";
+import { categoryFromScan, type CategoryHint } from "@/lib/category";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,10 @@ interface ExtendedScanResult {
   filledParameters?: ServerFilledParameter[];
   skippedParameters?: ServerSkippedParameter[];
   catalogDiffs?: CatalogDiff[];
+  /** Off-catalog: ≤ 3 one-tap categories when none (or as alternatives to the one) preselected. */
+  categorySuggestions?: CategoryHint[];
+  /** Off-catalog: brand candidates from the scan, to re-decide Marka after a category change. */
+  brandCandidates?: string[];
   /** "missing": the catalog product has no EAN, so it may not be the scanned one. */
   catalogEanCheck?: "match" | "missing";
   gaps?: Array<{ id: string; name: string }>;
@@ -512,6 +517,7 @@ export default function Home() {
 
   const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [categoryHints, setCategoryHints] = useState<CategoryHint[]>([]);
   const [loadingParams, setLoadingParams] = useState(false);
 
   const [offerId, setOfferId] = useState<string | null>(null);
@@ -553,10 +559,17 @@ export default function Home() {
       setCategoryId(catId);
       setCategoryName(catName);
       setParameters(params);
-      const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, prefillValues, ctx);
+      const { formState: fs, autoFilledIds: ai, paramMeta: pm, brandSuggestions } = buildAutoFilledState(params, prefillValues, ctx);
       setFormState(fs);
       setAutoFilledIds(ai);
       setParamMeta(pm);
+      // Brand suggestions for THIS category's dictionary replace the scan's ones.
+      setSkippedParams((prev) => [
+        ...prev.filter((sp) => !params.some((p) => p.id === sp.id && /\b(marka|brand|producent)\b/i.test(p.name))),
+        ...params
+          .filter((p) => brandSuggestions[p.id])
+          .map((p) => ({ id: p.id, name: p.name, reason: brandSuggestions[p.id].reason, suggestions: brandSuggestions[p.id].suggestions })),
+      ]);
       setLoadingParams(false);
     },
     []
@@ -600,6 +613,7 @@ export default function Home() {
     setSkippedParams([]);
     setCatalogDiffs([]);
     setCategorySuggestions([]);
+    setCategoryHints([]);
     if (userImagePreviewUrl) URL.revokeObjectURL(userImagePreviewUrl);
     setUserImagePreviewUrl(null);
     setAllegroImageUrl(null);
@@ -649,10 +663,11 @@ export default function Home() {
       } else {
         // External source — backend auto-detects category and loads params
         setStep("FORM");
-        const defaultCatId = data.categoryId || "258832";
-        const defaultCatName = data.categoryName || "Supermarket";
-        setCategoryId(defaultCatId);
-        setCategoryName(defaultCatName);
+        // No confident category → nothing chosen (never the non-leaf root), one-tap suggestions instead.
+        const cat = categoryFromScan(data);
+        setCategoryId(cat.categoryId);
+        setCategoryName(cat.categoryName);
+        setCategoryHints(cat.hints);
 
         const params = data.parameters || [];
         setParameters(params);
@@ -685,7 +700,7 @@ export default function Home() {
         }
 
         // Pre-load subcategories of detected category (for picker, if user wants to change)
-        fetchCategoryChildren(defaultCatId).then((children) => {
+        fetchCategoryChildren(cat.categoryId ?? "258832").then((children) => {
           setCategorySuggestions(children);
         });
       }
@@ -769,9 +784,10 @@ export default function Home() {
           productName: data.productName,
           country: v?.country_of_origin ?? getCountryFromEan(currentEan),
         };
-        const defaultCatId = data.categoryId || "258832";
-        setCategoryId(defaultCatId);
-        setCategoryName(data.categoryName || "Supermarket");
+        const cat = categoryFromScan(data);
+        setCategoryId(cat.categoryId);
+        setCategoryName(cat.categoryName);
+        setCategoryHints(cat.hints);
         const params = data.parameters || [];
         setParameters(params);
         const { formState: fs, autoFilledIds: ai, paramMeta: pm } = buildAutoFilledState(params, data.prefillValues || {}, ctx, data.filledParameters);
@@ -779,7 +795,7 @@ export default function Home() {
         setAutoFilledIds(ai);
         setParamMeta(pm);
         setShowCategoryPicker(false);
-        if (params.length === 0) fetchCategoryChildren(defaultCatId).then(setCategorySuggestions);
+        if (params.length === 0) fetchCategoryChildren(cat.categoryId ?? "258832").then(setCategorySuggestions);
       } else {
         // Case B — a category/web draft already exists: vision fills ONLY the
         // still-empty fields of the CURRENT params; never overwrites known values.
@@ -822,8 +838,9 @@ export default function Home() {
 
       // If this is NOT a leaf category, drill down: show its children in the picker
       if (!cat.leaf) {
-        setCategoryId(cat.id);
-        setCategoryName(cat.name);
+        // Browsing only — a non-leaf is never the offer's category (Allegro rejects it).
+        setCategoryId(null);
+        setCategoryName("");
         setParameters([]);
         setLoadingParams(true);
         const children = await fetchCategoryChildren(cat.id);
@@ -844,6 +861,7 @@ export default function Home() {
         productName: scannedData.productName || productTitle,
         country,
         catalogProduct: !!scannedData.productId,
+        brandCandidates: scannedData.productId ? undefined : scannedData.brandCandidates ?? [],
       };
       await applyCategory(cat.id, cat.name, [], scannedData.prefillValues || {}, ctx, true);
     },
@@ -1194,6 +1212,25 @@ export default function Home() {
                         <ChevronDown className={`w-3 h-3 transition-transform ${showCategoryPicker ? "rotate-180" : ""}`} />
                       </button>
                     </div>
+                    {/* Off-catalog category suggestions — one tap applies the category */}
+                    {categoryHints.filter((h) => h.id !== categoryId).length > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                        <span className={categoryId ? "text-white/40" : "text-amber-300"}>
+                          {categoryId ? "Inne propozycje:" : "Sprawdź — propozycje kategorii:"}
+                        </span>
+                        {categoryHints.filter((h) => h.id !== categoryId).map((h) => (
+                          <button
+                            type="button"
+                            key={h.id}
+                            title={h.path.join(" › ")}
+                            onClick={() => handleCategoryChange({ id: h.id, name: h.name, leaf: true })}
+                            className="px-2.5 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                          >
+                            {h.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {showCategoryPicker && (
                       <CategoryPicker
                         suggestions={categorySuggestions}

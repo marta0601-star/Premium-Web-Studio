@@ -1,0 +1,345 @@
+{
+ "_note": "Real inputs and Allegro answers (2026-10-28) for \"Moutarde de Dijon\" (EAN 5410056181182, off-catalog). The pre-fix /scan logic put it in 1066 \"Samochody\"; the later successful offer used 112619 \"Sosy kanapkowe i dressingi\". Catalog answers keep only the fields the resolver reads.",
+ "input": {
+  "ean": "5410056181182",
+  "brands": [
+   "DEVOS LEMMENS"
+  ],
+  "offTags": [
+   "en:condiments",
+   "en:sauces",
+   "en:mustards",
+   "en:dijon-mustards",
+   "nl:Kruidenierswaren/Droge voeding",
+   "nl:Sauzen (warm/koud)"
+  ],
+  "plType": null,
+  "cleanedName": "Moutarde de Dijon 300ml",
+  "drillCategoryId": null
+ },
+ "truthCategoryId": "112619",
+ "oldRouteCategoryId": "1066",
+ "products": {
+  "DEVOS LEMMENS": {
+   "products": [
+    {
+     "id": "e9fed07c-df6a-4eca-99ba-4e30fe5a8fd7",
+     "name": "Devos lemmens Lemmens 350g",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5414972370354"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "d9199ed7-29b4-43b7-8806-8618502d236d",
+     "name": "Moutarde de Dijon 300ml",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5410056181182"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "8d9f4383-8be1-41cf-9cb8-f6d402c75320",
+     "name": "Sos belgijski Samourai Devos Lemmens 300 ml",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5410056184886"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "DEVOS LEMMENS"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e8abcfb2-82b5-4368-85c4-a4f07e63f94d",
+     "name": "SOS Devos Lemmens tartar sauce 300ml tatarski",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5410056181090"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "cb749172-cf48-4990-85bd-175c9402da50",
+     "name": "Devos & Lemmens | Majonez do Frytek | Tradycyjna receptura | Belgia 350 ml",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5410056199255"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "bez marki"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "fbde2139-60c8-4839-b2f8-71d1f4d60a05",
+     "name": "D&L Devos & Lemmens Sos Américaine 300 ml",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5414972101460"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "b2101b2f-03cd-4363-bf16-24b7f6d6d06a",
+     "name": "DEVOS LEMMENS D&L MAJONEZ ROŚLINNY WEGAŃSKI 300 ml",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5414972334318"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "91c313f7-b338-4978-8609-b50245efff95",
+     "name": "Devos & Lemmens | Majonez z Cytryną | Tradycyjna receptura | Belgia 350 ml",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5414972102887"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "25c8c1bf-1622-452e-b4c1-261db0324248",
+     "name": "Sos BRASIL 300 ml D&L DEVOS LEMMENS BELGIJSKI SOS",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5410056197664"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "4b9542df-7d24-40c4-b4e5-fe5aec4f9441",
+     "name": "Sos PITA 300 ml D&L DEVOS LEMMENS BELGIJSKI SOS SQZ",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5410056197657"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "6e31a290-0c2e-40b3-927f-bcd75aae6eb5",
+     "name": "Sos SPICY GARLIC 300 ml D&L DEVOS LEMMENS SOS BELGIJSKI",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5414972334554"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "d5e4dbde-e444-4b37-85d8-9bcff09a462e",
+     "name": "Sos TOMATO SWEET ONION 300 ml D&L BELGIJSKI SOS DEVOS LEMMENS",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5414972110516"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "a8b166ce-948a-4639-a38b-ac8d994eb0df",
+     "name": "Sos BLACK PEPPER 300 ml DEVOS LEMMENS belgijskie sosy CZARNY PIEPRZ D&L",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5414972100524"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "Moutarde de Dijon 300ml": {
+   "products": [
+    {
+     "id": "d9199ed7-29b4-43b7-8806-8618502d236d",
+     "name": "Moutarde de Dijon 300ml",
+     "category": {
+      "id": "112619"
+     },
+     "parameters": [
+      {
+       "id": "225693",
+       "values": [
+        "5410056181182"
+       ]
+      },
+      {
+       "id": "248811",
+       "values": null,
+       "valuesLabels": [
+        "D&L"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "matching": {
+  "dijon mustards": {
+   "matchingCategories": []
+  }
+ }
+}

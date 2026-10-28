@@ -768,6 +768,8 @@ export async function createAllegroOffer(payload: {
   // paramTypes: map of paramId → numeric type, used to strip 0/empty numbers that
   // Allegro rejects ("wielkość musi należeć do zakresu od 1 …").
   const paramTypes = new Map<string, "float" | "integer" | "string" | "dictionary">();
+  // Marka option id → label, to record the listed brand in the category history.
+  const brandLabels = new Map<string, string>();
   try {
     const rawData = await getCategoryParameters(payload.categoryId);
     const rawParams = (
@@ -777,6 +779,7 @@ export async function createAllegroOffer(payload: {
           name?: string;
           type?: string;
           options?: { describesOffer?: boolean; describesProduct?: boolean };
+          dictionary?: Array<{ id: string; value: string }>;
         }>;
       }
     ).parameters || [];
@@ -789,6 +792,7 @@ export async function createAllegroOffer(payload: {
         paramTypes.set(rp.id, rp.type);
       }
       if (rp.name) paramNameToId.set(rp.name.toLowerCase().trim(), rp.id);
+      if (rp.name && /^marka$/i.test(rp.name.trim())) for (const o of rp.dictionary ?? []) brandLabels.set(o.id, o.value);
     }
     logger.info({ flagCount: paramFlags.size, categoryId: payload.categoryId }, "Loaded category param flags");
   } catch (flagErr) {
@@ -1018,7 +1022,8 @@ export async function createAllegroOffer(payload: {
         { status: response.status, responseData: JSON.stringify(response.data) },
         "POST /sale/product-offers — success"
       );
-      return { offer: response.data, catalogCorrections };
+      const brandId = [...productLevelParams, ...offerLevelParams].find((p) => p.valuesIds?.some((v) => brandLabels.has(v)))?.valuesIds?.[0];
+      return { offer: response.data, catalogCorrections, brandLabel: brandId ? brandLabels.get(brandId) ?? null : null };
     } catch (err: unknown) {
       const axiosErr = err as {
         response?: {

@@ -1,0 +1,154 @@
+{
+ "_note": "Real per-signal votes (2026-10-28) for off-catalog products from the logs: history leave-one-out, live catalog / matching-categories answers; truth = category of the later successful offer; oldRouteCategoryId = what the pre-fix /scan logic returned (no LLM).",
+ "cases": [
+  {
+   "ean": "5053990195817",
+   "name": "Black Travel & Butter",
+   "truthCategoryId": "261448",
+   "oldRouteCategoryId": "110935",
+   "signals": {
+    "hist_tag": {},
+    "drill": {},
+    "cat_name": {},
+    "hist_brand": {
+     "261448": 14
+    },
+    "cat_brand": {
+     "251902": 2,
+     "261448": 58
+    },
+    "mc_pl_type": {},
+    "mc_en_tag": {}
+   }
+  },
+  {
+   "ean": "5410056181182",
+   "name": "Moutarde de Dijon",
+   "truthCategoryId": "112619",
+   "oldRouteCategoryId": "1066",
+   "signals": {
+    "hist_tag": {
+     "112619": 2.708333333333333
+    },
+    "drill": {},
+    "cat_name": {},
+    "hist_brand": {},
+    "cat_brand": {
+     "112619": 13
+    },
+    "mc_pl_type": {},
+    "mc_en_tag": {}
+   }
+  },
+  {
+   "ean": "86945608",
+   "name": "Mentos Gum Forest Fruit Mix 45 Stuks 90 g",
+   "truthCategoryId": "74019",
+   "oldRouteCategoryId": null,
+   "signals": {
+    "hist_tag": {},
+    "drill": {},
+    "cat_name": {},
+    "hist_brand": {
+     "74018": 6,
+     "74019": 2,
+     "74023": 2
+    },
+    "cat_brand": {
+     "74018": 60
+    },
+    "mc_pl_type": {},
+    "mc_en_tag": {}
+   }
+  },
+  {
+   "ean": "80964490",
+   "name": "Insta White",
+   "truthCategoryId": "74018",
+   "oldRouteCategoryId": "259425",
+   "signals": {
+    "hist_tag": {},
+    "drill": {},
+    "cat_name": {
+     "74019": 1
+    },
+    "hist_brand": {
+     "74018": 5,
+     "74019": 3,
+     "74023": 2
+    },
+    "cat_brand": {
+     "74018": 60
+    },
+    "mc_pl_type": {},
+    "mc_en_tag": {}
+   }
+  },
+  {
+   "ean": "8723400872825",
+   "name": "Mads",
+   "truthCategoryId": "74023",
+   "oldRouteCategoryId": "1",
+   "signals": {
+    "hist_tag": {},
+    "drill": {},
+    "cat_name": {
+     "74018": 1,
+     "74023": 8
+    },
+    "hist_brand": {
+     "261479": 3
+    },
+    "cat_brand": {
+     "74018": 8,
+     "74023": 26,
+     "261479": 26
+    },
+    "mc_pl_type": {},
+    "mc_en_tag": {}
+   }
+  },
+  {
+   "ean": "4000177035177",
+   "name": "Capri-Sun Siroop Jungle Drink Zero 600 ml",
+   "truthCategoryId": "112636",
+   "oldRouteCategoryId": "112636",
+   "signals": {
+    "hist_tag": {},
+    "drill": {
+     "112636": 1
+    },
+    "cat_name": {},
+    "hist_brand": {},
+    "cat_brand": {
+     "112633": 1,
+     "112635": 25,
+     "112636": 3
+    },
+    "mc_pl_type": {},
+    "mc_en_tag": {}
+   }
+  },
+  {
+   "ean": "8710398529251",
+   "name": "Lay's Dipsaus Fantasia Groene kruiden NUTRI-SCORE",
+   "truthCategoryId": "112619",
+   "oldRouteCategoryId": null,
+   "signals": {
+    "hist_tag": {},
+    "drill": {},
+    "cat_name": {},
+    "hist_brand": {
+     "112619": 3,
+     "261448": 7
+    },
+    "cat_brand": {
+     "112619": 6,
+     "261448": 54
+    },
+    "mc_pl_type": {},
+    "mc_en_tag": {}
+   }
+  }
+ ]
+}

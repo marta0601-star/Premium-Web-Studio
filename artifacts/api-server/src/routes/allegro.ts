@@ -16,6 +16,8 @@ import {
   SUPERMARKET_CATEGORY_ID,
 } from "../lib/allegro";
 import { pickCatalogProductByEan } from "../lib/catalog-ean";
+import { resolveOffCatalogCategory, isSupermarketLeaf, type CategorySuggestion } from "../lib/category-resolver";
+import { recordCategoryUse, rememberScanContext, scanContextFor } from "../lib/category-history";
 import { getUserToken } from "../lib/allegro-auth";
 import { lookupEan, type LookupResult } from "../lib/lookup";
 import { isVisionEnabled, extractProductFromImages, type VisionImage } from "../lib/vision";
@@ -580,6 +582,39 @@ router.get("/scan", async (req, res) => {
       }
     }
 
+    // ── Step 3b': combine the drill with history / catalog / OFF signals ──────
+    // No LLM. The drill only counts when it landed on a food leaf (it used to
+    // return "Majtki" or "Muzyka" for foreign names); without enough agreement
+    // nothing is preselected and the user gets ≤ 3 one-tap suggestions.
+    const offTags = result.meta?.categoriesTags ?? [];
+    const offCatalogCategory = await resolveOffCatalogCategory({
+      ean,
+      brands: detectedBrandCandidates,
+      offTags,
+      plType: deriveOffTypeHint(result.meta),
+      cleanedName,
+      drillCategoryId: categoryLeaf && isSupermarketLeaf(detectedCategoryId) ? detectedCategoryId : null,
+    });
+    req.log.info(
+      {
+        ean,
+        drillCategoryId: detectedCategoryId,
+        decision: offCatalogCategory.decision,
+        categoryId: offCatalogCategory.categoryId,
+        confidence: offCatalogCategory.confidence,
+        suggestions: offCatalogCategory.suggestions.map((x) => x.id),
+        signals: offCatalogCategory.top,
+      },
+      "Off-catalog category decision"
+    );
+    detectedCategoryId = offCatalogCategory.categoryId;
+    detectedCategoryName = offCatalogCategory.categoryName;
+    categoryPath = offCatalogCategory.categoryPath;
+    categoryLeaf = !!offCatalogCategory.categoryId;
+    categoryConfidence = offCatalogCategory.confidence;
+    const categorySuggestions: CategorySuggestion[] = offCatalogCategory.suggestions;
+    rememberScanContext(ean, { brands: detectedBrandCandidates, tags: offTags });
+
     // ── Step 3c: Fetch category parameters + product-parameter IDs ────────────
     let parameters: ReturnType<typeof mapParam>[] = [];
     let productParamIds: string[] = [];
@@ -684,6 +719,9 @@ router.get("/scan", async (req, res) => {
       categoryPath,
       categoryLeaf,
       categoryConfidence,
+      categorySuggestions,
+      // Kept so the form can re-decide Marka against another category's dictionary.
+      brandCandidates: detectedBrandCandidates,
       images: result.image ? [{ url: result.image }] : [],
       parameters,
       prefillValues,
@@ -702,6 +740,7 @@ router.get("/scan", async (req, res) => {
         ...(result.debug ?? {}),
         weightSanity: weightSanityProbe.reason,
         categoryResolution: categoryResolutionTrace,
+        offCatalogCategory: { decision: offCatalogCategory.decision, signals: offCatalogCategory.top },
         filling: fillerOutput.stats,
       },
       ean,
@@ -1053,7 +1092,12 @@ router.post("/create-offer", async (req, res) => {
   try {
     const body = CreateOfferBody.parse(req.body);
 
-    const { offer, catalogCorrections } = await createAllegroOffer(body);
+    const { offer, catalogCorrections, brandLabel } = await createAllegroOffer(body);
+    // Our own history is a category signal for later scans (lib/category-history).
+    if (body.ean) {
+      const ctx = scanContextFor(body.ean);
+      recordCategoryUse({ ean: body.ean, brand: brandLabel ?? ctx?.brands[0] ?? null, categoryId: body.categoryId, tags: ctx?.tags ?? [] });
+    }
     const offerId = (offer as { id?: string }).id ?? "";
     const status = (offer as { publication?: { status?: string } }).publication?.status || "INACTIVE";
 

@@ -27,7 +27,7 @@
  */
 
 import type { LookupMeta, FieldSources } from "./lookup";
-import { matchDictionaryOption, normalizeForMatch, parseQuantity, quantityForParam } from "./shared/autofill-rules";
+import { decideBrandOption, parseQuantity, quantityForParam } from "./shared/autofill-rules";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -373,20 +373,6 @@ export function deriveOffTypeHint(meta: LookupMeta | undefined): string | null {
 
 // ── Weight parsing for waga/masa params ──────────────────────────────────────
 
-/**
- * Dictionary options named as WHOLE words in the product name ("… Casali z
- * nadzieniem" → Casali), in order of appearance (longer first at the same spot). Suggestions only — a name word is never
- * auto-filled as the brand ("Sos" is also the brand "SOS").
- */
-function optionsNamedIn(options: AllegroParamOption[], name: string): AllegroParamOption[] {
-  const hay = ` ${normalizeForMatch(name)} `;
-  return options
-    .map((o) => ({ o, n: normalizeForMatch(o.name) }))
-    .filter(({ n }) => n.length >= 4 && hay.includes(` ${n} `))
-    .sort((a, b) => hay.indexOf(` ${a.n} `) - hay.indexOf(` ${b.n} `) || b.n.length - a.n.length)
-    .map(({ o }) => o);
-}
-
 /** Grams from a weight string — null for volumes (ml/l) or no quantity. */
 function massGrams(text: string | null | undefined): number | null {
   const q = parseQuantity(text);
@@ -580,35 +566,27 @@ export function fillCategoryParameters(
     const brandCands = data.brandCandidates ?? (data.brand ? [data.brand] : []);
     if (NAME_RE.brand.test(p.name)) {
       if (p.type === "dictionary" && p.options && p.options.length > 0) {
-        // Whole-value / whole-word matches only (shared rule), and only fill
-        // when the candidates point at exactly ONE option. Otherwise leave it
-        // empty with up to 3 one-tap suggestions — the user decides.
-        const picks: Array<{ id: string; label: string; exact: boolean }> = [];
-        for (const c of brandCands) {
-          const m = matchDictionaryOption(p.options, c);
-          if (m && !picks.some((x) => x.id === m.id)) picks.push(m);
-        }
-        if (picks.length === 1) {
+        // Whole-value / whole-word matches only, filled only when the candidates
+        // point at exactly ONE option; otherwise empty + ≤ 3 one-tap suggestions
+        // (shared rule — the form re-runs it after a manual category change).
+        const d = decideBrandOption(p.options, brandCands, data.productName);
+        if (d.fill) {
           filled.push({
             id: p.id,
             name: p.name,
-            value: picks[0].id,
-            valueLabel: picks[0].label,
+            value: d.fill.id,
+            valueLabel: d.fill.label,
             kind: "valuesIds",
-            confidence: picks[0].exact ? "high" : "medium",
+            confidence: d.fill.exact ? "high" : "medium",
             source: "lookup",
           });
           continue;
         }
-        const suggestions: Array<{ id: string; label: string }> = picks.map(({ id, label }) => ({ id, label }));
-        for (const o of optionsNamedIn(p.options, data.productName)) {
-          if (!suggestions.some((x) => x.id === o.id)) suggestions.push({ id: o.id, label: o.name });
-        }
         skipped.push({
           id: p.id,
           name: p.name,
-          reason: picks.length > 1 ? "ambiguous" : "unknown_value",
-          ...(suggestions.length ? { suggestions: suggestions.slice(0, 3) } : {}),
+          reason: d.reason ?? "unknown_value",
+          ...(d.suggestions.length ? { suggestions: d.suggestions } : {}),
         });
         missingData++;
         continue;

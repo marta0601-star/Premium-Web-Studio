@@ -129,3 +129,47 @@ export function quantityForParam(
   if (u === "cl") return fmt(q.value / 10);
   return fmt(q.value);
 }
+
+// ── Brand (Marka) decision ───────────────────────────────────────────────────
+
+/**
+ * Dictionary options named as WHOLE words in the product name ("… Casali z
+ * nadzieniem" → Casali), in order of appearance (longer first at the same spot).
+ * Suggestions only — a name word is never auto-filled as the brand ("Sos" is
+ * also the brand "SOS").
+ */
+export function optionsNamedIn(options: DictOption[], name: string): DictOption[] {
+  const hay = ` ${normalizeForMatch(name)} `;
+  return options
+    .map((o) => ({ o, n: normalizeForMatch(o.name) }))
+    .filter(({ n }) => n.length >= 4 && hay.includes(` ${n} `))
+    .sort((a, b) => hay.indexOf(` ${a.n} `) - hay.indexOf(` ${b.n} `) || b.n.length - a.n.length)
+    .map(({ o }) => o);
+}
+
+export interface BrandDecision {
+  /** Set only when the candidates point at exactly ONE option. */
+  fill: { id: string; label: string; exact: boolean } | null;
+  reason: "ambiguous" | "unknown_value" | null;
+  /** ≤ 3 one-tap options when not filled: candidates first, then names in the title. */
+  suggestions: Array<{ id: string; label: string }>;
+}
+
+/** Brand value for a dictionary param from brand candidates (auto-detect.brandCandidates). */
+export function decideBrandOption(
+  options: DictOption[],
+  candidates: string[],
+  productName: string,
+): BrandDecision {
+  const picks: Array<{ id: string; label: string; exact: boolean }> = [];
+  for (const c of candidates) {
+    const m = matchDictionaryOption(options, c);
+    if (m && !picks.some((x) => x.id === m.id)) picks.push(m);
+  }
+  if (picks.length === 1) return { fill: picks[0], reason: null, suggestions: [] };
+  const suggestions = picks.map(({ id, label }) => ({ id, label }));
+  for (const o of optionsNamedIn(options, productName)) {
+    if (!suggestions.some((x) => x.id === o.id)) suggestions.push({ id: o.id, label: o.name });
+  }
+  return { fill: null, reason: picks.length > 1 ? "ambiguous" : "unknown_value", suggestions: suggestions.slice(0, 3) };
+}
