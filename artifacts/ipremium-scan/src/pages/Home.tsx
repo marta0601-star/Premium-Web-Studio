@@ -29,7 +29,9 @@ import {
 interface ServerSkippedParameter {
   id: string;
   name: string;
-  reason: "user_fills_manually" | "regulated" | "unknown_value";
+  reason: "user_fills_manually" | "regulated" | "unknown_value" | "ambiguous";
+  /** Up to 3 dictionary options for a one-tap pick (brand). */
+  suggestions?: Array<{ id: string; label: string }>;
 }
 
 interface CatalogDiff {
@@ -1304,13 +1306,37 @@ export default function Home() {
                                     </label>
 
                                     {param.type === "dictionary" && param.options.length > 0 ? (
-                                      <CustomSelect
-                                        value={formState[param.id]?.valuesIds?.[0] || ""}
-                                        onChange={(v) => updateForm(param.id, { valuesIds: [v] })}
-                                        options={param.options.map((opt) => ({ value: opt.id, label: opt.name }))}
-                                        required={param.required}
-                                        className={borderClass}
-                                      />
+                                      <>
+                                        <CustomSelect
+                                          value={formState[param.id]?.valuesIds?.[0] || ""}
+                                          onChange={(v) => updateForm(param.id, { valuesIds: [v] })}
+                                          options={param.options.map((opt) => ({ value: opt.id, label: opt.name }))}
+                                          required={param.required}
+                                          className={borderClass}
+                                        />
+                                        {/* Brand we could not decide on: leave it empty and offer the candidates */}
+                                        {(() => {
+                                          const sk = skippedParams.find((s) => s.id === param.id);
+                                          if (hasValue || !sk || (sk.reason !== "ambiguous" && sk.reason !== "unknown_value")) return null;
+                                          return (
+                                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                              <span className="text-amber-300">
+                                                {sk.suggestions?.length ? "Sprawdź — propozycje:" : "Nie rozpoznano — sprawdź i wybierz z listy."}
+                                              </span>
+                                              {sk.suggestions?.map((sg) => (
+                                                <button
+                                                  type="button"
+                                                  key={sg.id}
+                                                  onClick={() => updateForm(param.id, { valuesIds: [sg.id] })}
+                                                  className="px-2.5 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                                                >
+                                                  {sg.label}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          );
+                                        })()}
+                                      </>
                                     ) : param.type === "boolean" ? (
                                       <div className={`flex h-12 items-center px-4 rounded-xl bg-black/20 border ${borderClass || "border-white/5"}`}>
                                         <PremiumSwitch
@@ -1347,13 +1373,13 @@ export default function Home() {
                       </div>
 
                       {/* Fields we deliberately leave for manual entry (regulated / to verify) */}
-                      {skippedParams.filter((s) => s.reason !== "unknown_value").length > 0 && (
+                      {skippedParams.filter((s) => s.reason !== "unknown_value" && s.reason !== "ambiguous").length > 0 && (
                         <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                           <p className="text-xs text-white/50 mb-1.5 flex items-center gap-1.5">
                             <AlertCircle className="w-3.5 h-3.5" /> Uzupełnij ręcznie (nie wypełniamy automatycznie):
                           </p>
                           <div className="flex flex-wrap gap-1.5">
-                            {skippedParams.filter((s) => s.reason !== "unknown_value").map((s) => (
+                            {skippedParams.filter((s) => s.reason !== "unknown_value" && s.reason !== "ambiguous").map((s) => (
                               <span key={s.id} className="text-xs px-2 py-0.5 rounded-md bg-black/30 text-white/60">
                                 {s.name}{s.reason === "regulated" ? " · regulowane" : ""}
                               </span>

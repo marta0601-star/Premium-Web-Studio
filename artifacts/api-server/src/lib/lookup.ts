@@ -49,6 +49,7 @@
 import axios, { type AxiosResponse } from "axios";
 import { getUserToken } from "./allegro-auth";
 import { STORE_NAMES_TO_REMOVE } from "./auto-detect";
+import { pickCatalogProductByEan } from "./catalog-ean";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -166,6 +167,8 @@ export interface LookupResult {
   meta?: LookupMeta;
   /** Per-field winners across all sources (set by lookupEan for found results). */
   fieldSources?: FieldSources;
+  /** Every brand a source returned, most trusted source first (brand candidates). */
+  brandSources?: Array<{ value: string; source: string }>;
 }
 
 // ── EAN variants for fuzzy matching ──────────────────────────────────────────
@@ -664,6 +667,8 @@ async function searchAllegroByPhrase(
   label: string,
   logs: string[],
   signal: AbortSignal,
+  /** When the phrase is a scanned EAN: only accept a product carrying it. */
+  ean?: string,
 ): Promise<LookupResult | null> {
   let token: string;
   try {
@@ -703,7 +708,7 @@ async function searchAllegroByPhrase(
       name?: string;
       category?: { id?: string; name?: string };
       images?: Array<{ url?: string }>;
-      parameters?: Array<{ name?: string; values?: string[] }>;
+      parameters?: Array<{ id?: string; name?: string; values?: string[] | null; valuesLabels?: string[] | null }>;
     }>;
   };
   const products = data.products ?? [];
@@ -712,7 +717,17 @@ async function searchAllegroByPhrase(
     return null;
   }
 
-  const p = products[0];
+  // Same rule as the catalog step in routes/allegro.ts: a text search can return
+  // a different product, so for an EAN only a hit carrying it (or no EAN at all) counts.
+  let p = products[0];
+  if (ean) {
+    const pick = pickCatalogProductByEan(products, ean);
+    if (!pick.product) {
+      logs.push(`[${label}] ${pick.decision}: hits carry other EANs (${pick.catalogEans.slice(0, 3).join(", ")}) — skipping`);
+      return null;
+    }
+    p = pick.product;
+  }
   const name = typeof p.name === "string" ? p.name.trim() : null;
   const image = p.images?.[0]?.url ?? null;
   const category = p.category?.name ?? null;
@@ -722,7 +737,8 @@ async function searchAllegroByPhrase(
     const n = (par.name ?? "").toLowerCase();
     return n === "marka" || n === "brand" || n === "producent" || n === "manufacturer";
   });
-  const brand = brandParam?.values?.[0] ?? null;
+  // Dictionary params (Marka) carry the label in valuesLabels; values is null.
+  const brand = brandParam?.valuesLabels?.[0] ?? brandParam?.values?.[0] ?? null;
 
   if (!name && !image) {
     logs.push(`[${label}] First product had neither name nor image`);
@@ -998,6 +1014,17 @@ function sourceTier(source: string): "high" | "medium" | "low" {
   return "low";
 }
 
+/** Every distinct brand any source returned, most trusted tier first. */
+function buildBrandSources(hits: LookupResult[]): Array<{ value: string; source: string }> {
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  const out: Array<{ value: string; source: string }> = [];
+  for (const h of [...hits].sort((a, b) => rank[sourceTier(a.source ?? "")] - rank[sourceTier(b.source ?? "")])) {
+    const v = h.brand?.trim();
+    if (v && !out.some((o) => o.value.toLowerCase() === v.toLowerCase())) out.push({ value: v, source: h.source ?? "unknown" });
+  }
+  return out;
+}
+
 /**
  * Aggregate the best value PER FIELD across every source that returned data,
  * not just the single winning result. Lets the param-filler take, say, the
@@ -1054,7 +1081,7 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
     ),
     trackSource("upcitemdb", sources, (s) => searchUpcItemdb(ean, logs, s)),
     trackSource("allegro_search", sources, (s) =>
-      searchAllegroByPhrase(ean, "allegro_search", "AllegroSearch", logs, s),
+      searchAllegroByPhrase(ean, "allegro_search", "AllegroSearch", logs, s, ean),
     ),
     trackSource("ceneo_listing", sources, (s) => searchCeneoListing(ean, logs, s)),
     trackSource("skapiec_listing", sources, (s) => searchSkapiecListing(ean, logs, s)),
@@ -1189,6 +1216,7 @@ export async function lookupEan(ean: string): Promise<LookupResult> {
     ...winner,
     image: image ?? null,
     fieldSources: buildFieldSources(allHits),
+    brandSources: buildBrandSources(allHits),
     logs,
     debug: {
       sources,

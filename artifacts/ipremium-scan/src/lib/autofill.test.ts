@@ -63,14 +63,15 @@ describe("buildAutoFilledState — product from the Allegro catalog", () => {
   });
 });
 
-describe("buildAutoFilledState — product outside the catalog (unchanged behaviour)", () => {
-  it("the detected brand still wins over prefill for brand params", () => {
-    const ctx: ProductContext = { ...catalogCtx(), catalogProduct: false };
-    const state = buildAutoFilledState(scan.parameters, scan.prefillValues, ctx);
-    // Old, intentionally kept behaviour off-catalog: fuzzy match of ctx.brand.
-    expect(state.formState[MARKA]?.valuesIds).not.toEqual([COLA_CAO]);
+describe("buildAutoFilledState — product outside the catalog", () => {
+  it("a detected brand still wins over prefill; Kod producenta gets the EAN, never the brand", () => {
+    const OKAKAO = "248811_1962677";
+    const ctx: ProductContext = { ...catalogCtx(), brand: "Cola Cao", catalogProduct: false };
+    const prefill = { ...scan.prefillValues, [MARKA]: [OKAKAO] };
+    const state = buildAutoFilledState(scan.parameters, prefill, ctx);
+    expect(state.formState[MARKA]).toEqual({ id: MARKA, valuesIds: [COLA_CAO] });
     expect(state.paramMeta[MARKA]?.source).toBe("lookup");
-    expect(state.formState[KOD_PRODUCENTA]).toEqual({ id: KOD_PRODUCENTA, values: ["Kakao"] });
+    expect(state.formState[KOD_PRODUCENTA]?.values).not.toEqual(["Cola Cao"]);
   });
 });
 

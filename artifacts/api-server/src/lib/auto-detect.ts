@@ -1,3 +1,5 @@
+import { normalizeForMatch } from "./shared/autofill-rules";
+
 // ── Store name strip pattern (was duplicated in lookup.ts) ───────────────────
 // Used to remove e-shop branding from scraped/lookup names so that what we
 // hand to the user is the actual product name, not "Amazon — Snickers 50g".
@@ -35,8 +37,9 @@ const CATEGORY_KEYWORD_MAP: Array<{ patterns: string[]; keyword: string }> = [
 
 const BRAND_MAP: Array<{ patterns: string[]; canonical: string }> = [
   { patterns: ["red bull", "redbull"], canonical: "Red Bull" },
-  { patterns: ["monster energy", "monster"], canonical: "Monster" },
-  { patterns: ["hell energy", "hell fire", "hell ", "flying power"], canonical: "Hell" },
+  // Canonicals are spelled as in Allegro's Marka dictionary ("Monster Energy").
+  { patterns: ["monster energy", "monster"], canonical: "Monster Energy" },
+  { patterns: ["hell energy", "hell fire", "hell ", "flying power"], canonical: "Hell Energy" },
   { patterns: ["burn energy", "burn"], canonical: "Burn" },
   { patterns: ["tiger energy", "tiger"], canonical: "Tiger" },
   { patterns: ["black energy"], canonical: "Black" },
@@ -63,7 +66,10 @@ const BRAND_MAP: Array<{ patterns: string[]; canonical: string }> = [
   { patterns: ["lay's", "lays", "lay s"], canonical: "Lay's" },
   { patterns: ["pringles"], canonical: "Pringles" },
   { patterns: ["barilla"], canonical: "Barilla" },
-  { patterns: ["nestlé", "nestle", "nescafé", "nescafe"], canonical: "Nestlé" },
+  { patterns: ["nestlé", "nestle"], canonical: "Nestlé" },
+  { patterns: ["nescafé", "nescafe"], canonical: "Nescafe" },
+  { patterns: ["nesquik"], canonical: "Nesquik" },
+  { patterns: ["kinder"], canonical: "Kinder" },
   { patterns: ["knorr"], canonical: "Knorr" },
   { patterns: ["dr. oetker", "dr oetker", "oetker"], canonical: "Dr. Oetker" },
   { patterns: ["lipton"], canonical: "Lipton" },
@@ -287,31 +293,73 @@ export function detectCategoryKeyword(name: string): string | null {
   return null;
 }
 
-export function detectBrand(name: string, offBrand: string | null): string | null {
-  const lower = name.toLowerCase();
-
+/**
+ * Brands from BRAND_MAP that occur in the text as WHOLE words, in order of
+ * appearance ("Mentos … Fanta" → ["Mentos", "Fanta"]). A shorter pattern inside
+ * a longer hit is dropped ("Żywiec Zdrój" does not also yield "Żywiec").
+ */
+function brandMapHits(text: string): string[] {
+  const t = ` ${normalizeForMatch(text)} `;
+  const hits: Array<{ canonical: string; start: number; end: number }> = [];
   for (const { patterns, canonical } of BRAND_MAP) {
-    if (patterns.some((p) => lower.includes(p.toLowerCase()))) {
-      return canonical;
-    }
-  }
-
-  if (offBrand) {
-    const offLower = offBrand.toLowerCase().split(",")[0].trim();
-    for (const { patterns, canonical } of BRAND_MAP) {
-      if (patterns.some((p) => offLower.includes(p.toLowerCase()))) {
-        return canonical;
+    let best: { start: number; end: number } | null = null;
+    for (const pattern of patterns) {
+      const p = normalizeForMatch(pattern);
+      if (!p) continue;
+      const i = t.indexOf(` ${p} `);
+      if (i >= 0 && (!best || i < best.start || (i === best.start && i + p.length > best.end))) {
+        best = { start: i, end: i + p.length };
       }
     }
-    const firstBrand = offBrand.split(",")[0].trim();
-    if (firstBrand) return toTitleCase(firstBrand);
+    if (best) hits.push({ canonical, ...best });
   }
+  return hits
+    .filter((h) => !hits.some((o) => o !== h && o.start <= h.start && o.end >= h.end && o.end - o.start > h.end - h.start))
+    .sort((a, b) => a.start - b.start)
+    .map((h) => h.canonical);
+}
 
-  // Fallback: first word of the name, capitalised
-  const words = name.trim().split(/\s+/);
-  if (words[0]) return toTitleCase(words[0]);
+/** BRAND_MAP canonical when the WHOLE value is one of its spellings ("monster" → "Monster Energy"). */
+function brandMapCanonical(value: string): string | null {
+  const v = normalizeForMatch(value);
+  const entry = BRAND_MAP.find(
+    ({ patterns, canonical }) =>
+      normalizeForMatch(canonical) === v || patterns.some((p) => normalizeForMatch(p) === v),
+  );
+  return entry?.canonical ?? null;
+}
 
-  return null;
+/**
+ * Brand candidates for a product, most trusted first: brands given by
+ * structured sources (OpenFoodFacts, UPCitemDB, Allegro search — first entry
+ * of a comma list), then BRAND_MAP brands found as whole words in the name.
+ * Never a guess from the name itself ("Cukierki", "Kakao" are not brands).
+ */
+export function brandCandidates(
+  name: string,
+  sourceBrands: Array<string | null | undefined>,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (v: string) => {
+    const k = normalizeForMatch(v);
+    if (k && !seen.has(k)) {
+      seen.add(k);
+      out.push(v);
+    }
+  };
+  for (const raw of sourceBrands) {
+    const first = (raw ?? "").split(",")[0].trim();
+    if (first) add(brandMapCanonical(first) ?? first);
+  }
+  for (const b of brandMapHits(name)) add(b);
+  return out;
+}
+
+/** The brand when the candidates agree on exactly one, else null (user checks). */
+export function detectBrand(name: string, offBrand: string | null): string | null {
+  const candidates = brandCandidates(name, [offBrand]);
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 export function detectVolume(

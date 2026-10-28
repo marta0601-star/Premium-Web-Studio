@@ -24,6 +24,7 @@ import { getSellerSettings, saveSellerSettings } from "../lib/settings";
 import {
   detectCategoryKeyword,
   detectBrand,
+  brandCandidates,
   detectVolume,
   formatVolumeForContext,
   cleanProductName,
@@ -398,7 +399,14 @@ router.get("/scan", async (req, res) => {
 
     // ── Step 3a: Auto-detect from lookup result ──────────────────────────────
     const rawName = result.name || "";
-    const detectedBrand = detectBrand(rawName, result.brand || null);
+    // Brand candidates: what structured sources say (OFF, UPCitemDB, Allegro
+    // search) + BRAND_MAP brands named as whole words. A single display brand
+    // only when they agree; the filler decides the dictionary value.
+    const detectedBrandCandidates = brandCandidates(rawName, [
+      result.brand,
+      ...(result.brandSources ?? []).map((b) => b.value),
+    ]);
+    const detectedBrand = detectedBrandCandidates.length === 1 ? detectedBrandCandidates[0] : null;
     const categoryKeyword = detectCategoryKeyword(rawName);
     // Volume detection runs BEFORE name cleanup so a sanity-rejected weight
     // (e.g. "3 g" inside a candy name) is reported via weightSanity AND
@@ -420,6 +428,7 @@ router.get("/scan", async (req, res) => {
         rawName,
         cleanedName,
         detectedBrand,
+        detectedBrandCandidates,
         detectedVolume,
         categoryKeyword,
         weightSanity: weightSanityProbe.reason,
@@ -629,6 +638,7 @@ router.get("/scan", async (req, res) => {
     const fillerOutput = fillCategoryParameters(fillerInput, {
       productName: cleanedName,
       brand: detectedBrand,
+      brandCandidates: detectedBrandCandidates,
       categoryKeyword,
       ean,
       weight: effectiveWeight,

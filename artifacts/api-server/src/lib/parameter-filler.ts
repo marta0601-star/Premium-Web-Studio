@@ -27,6 +27,7 @@
  */
 
 import type { LookupMeta, FieldSources } from "./lookup";
+import { matchDictionaryOption, normalizeForMatch, parseQuantity, quantityForParam } from "./shared/autofill-rules";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,12 +73,17 @@ export interface FilledParameter {
 export interface SkippedParameter {
   id: string;
   name: string;
-  reason: "user_fills_manually" | "regulated" | "unknown_value";
+  reason: "user_fills_manually" | "regulated" | "unknown_value" | "ambiguous";
+  /** Up to 3 dictionary options the user can pick with one tap (brand). */
+  suggestions?: Array<{ id: string; label: string }>;
 }
 
 export interface FillerInput {
   productName: string;
   brand: string | null;
+  /** Brand candidates from structured sources + whole-word BRAND_MAP hits
+   *  (auto-detect.brandCandidates). Falls back to [brand] when absent. */
+  brandCandidates?: string[];
   categoryKeyword: string | null;
   ean: string;
   weight: string | null; // already sanitised; null if rejected or absent
@@ -367,45 +373,24 @@ export function deriveOffTypeHint(meta: LookupMeta | undefined): string | null {
 
 // ── Weight parsing for waga/masa params ──────────────────────────────────────
 
-interface ParsedWeight {
-  value: number;
-  unit: "g" | "ml";
+/**
+ * Dictionary options named as WHOLE words in the product name ("… Casali z
+ * nadzieniem" → Casali), in order of appearance (longer first at the same spot). Suggestions only — a name word is never
+ * auto-filled as the brand ("Sos" is also the brand "SOS").
+ */
+function optionsNamedIn(options: AllegroParamOption[], name: string): AllegroParamOption[] {
+  const hay = ` ${normalizeForMatch(name)} `;
+  return options
+    .map((o) => ({ o, n: normalizeForMatch(o.name) }))
+    .filter(({ n }) => n.length >= 4 && hay.includes(` ${n} `))
+    .sort((a, b) => hay.indexOf(` ${a.n} `) - hay.indexOf(` ${b.n} `) || b.n.length - a.n.length)
+    .map(({ o }) => o);
 }
 
-/** Parse "500 g", "1,5 kg", "250 ml", "0.33 l" → normalized {value, unit:g|ml}. */
-function parseWeight(text: string | null | undefined): ParsedWeight | null {
-  if (!text) return null;
-  const t = text.replace(/\s+/g, " ").trim();
-  const m = t.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|ml|cl|l)\b/i);
-  if (!m) return null;
-  const num = parseFloat(m[1].replace(",", "."));
-  if (Number.isNaN(num)) return null;
-  switch (m[2].toLowerCase()) {
-    case "kg": return { value: Math.round(num * 1000), unit: "g" };
-    case "g": return { value: Math.round(num), unit: "g" };
-    case "l": return { value: Math.round(num * 1000), unit: "ml" };
-    case "cl": return { value: Math.round(num * 10), unit: "ml" };
-    case "ml": return { value: Math.round(num), unit: "ml" };
-    default: return null;
-  }
-}
-
-/** Convert a normalized weight to the value a numeric Allegro param expects,
- *  given that param's declared unit. Returns a string ready for `values`. */
-function weightForParamUnit(w: ParsedWeight, unit: string | null | undefined): string | null {
-  // A zero/negative weight is never valid data and Allegro rejects numeric params
-  // ≤ 0 — never emit it.
-  if (!(w.value > 0)) return null;
-  const u = (unit ?? "").toLowerCase();
-  const nonZero = (n: number): string | null => (n > 0 ? String(n) : null);
-  if (w.unit === "g") {
-    if (u.includes("kg")) return nonZero(+(w.value / 1000).toFixed(3));
-    // default grams (most Allegro food weight params use g or have no unit)
-    return nonZero(w.value);
-  }
-  // volume
-  if (u.includes("l") && !u.includes("ml")) return nonZero(+(w.value / 1000).toFixed(3));
-  return nonZero(w.value);
+/** Grams from a weight string — null for volumes (ml/l) or no quantity. */
+function massGrams(text: string | null | undefined): number | null {
+  const q = parseQuantity(text);
+  return q && q.unit === "g" ? q.value : null;
 }
 
 // ── Param-name classifiers ───────────────────────────────────────────────────
@@ -487,13 +472,15 @@ export function fillCategoryParameters(
 
     // ── Weight / mass (waga, masa, gramatura) ─────────────────────────────
     if (NAME_RE.weight.test(p.name)) {
-      const parsed = parseWeight(data.weight);
-      if (parsed) {
+      // Weight only from a mass (g/kg) — a volume ("180 ml") is not a weight,
+      // the field stays empty for the user.
+      const grams = massGrams(data.weight);
+      if (grams !== null) {
         if (p.type === "dictionary" && p.options && p.options.length > 0) {
           // Some categories model weight as ranges — try the raw string.
           const m =
             (data.weight ? matchOption(p.options, data.weight) : null) ??
-            matchOption(p.options, `${parsed.value} ${parsed.unit}`);
+            matchOption(p.options, `${grams} g`);
           if (m) {
             filled.push({
               id: p.id, name: p.name, value: m.id, valueLabel: m.label,
@@ -504,7 +491,7 @@ export function fillCategoryParameters(
             continue;
           }
         } else if (p.type === "float" || p.type === "integer") {
-          const v = weightForParamUnit(parsed, p.unit);
+          const v = quantityForParam(data.weight, p);
           if (v) {
             filled.push({
               id: p.id, name: p.name, value: v, kind: "values",
@@ -590,31 +577,47 @@ export function fillCategoryParameters(
       }
     }
 
-    if (NAME_RE.brand.test(p.name) && data.brand) {
+    const brandCands = data.brandCandidates ?? (data.brand ? [data.brand] : []);
+    if (NAME_RE.brand.test(p.name)) {
       if (p.type === "dictionary" && p.options && p.options.length > 0) {
-        const m = matchOption(p.options, data.brand);
-        if (m) {
+        // Whole-value / whole-word matches only (shared rule), and only fill
+        // when the candidates point at exactly ONE option. Otherwise leave it
+        // empty with up to 3 one-tap suggestions — the user decides.
+        const picks: Array<{ id: string; label: string; exact: boolean }> = [];
+        for (const c of brandCands) {
+          const m = matchDictionaryOption(p.options, c);
+          if (m && !picks.some((x) => x.id === m.id)) picks.push(m);
+        }
+        if (picks.length === 1) {
           filled.push({
             id: p.id,
             name: p.name,
-            value: m.id,
-            valueLabel: m.label,
+            value: picks[0].id,
+            valueLabel: picks[0].label,
             kind: "valuesIds",
-            confidence: m.confidence,
+            confidence: picks[0].exact ? "high" : "medium",
             source: "lookup",
           });
           continue;
         }
-        // Brand not in dictionary — leave empty so user picks
-        skipped.push({ id: p.id, name: p.name, reason: "unknown_value" });
+        const suggestions: Array<{ id: string; label: string }> = picks.map(({ id, label }) => ({ id, label }));
+        for (const o of optionsNamedIn(p.options, data.productName)) {
+          if (!suggestions.some((x) => x.id === o.id)) suggestions.push({ id: o.id, label: o.name });
+        }
+        skipped.push({
+          id: p.id,
+          name: p.name,
+          reason: picks.length > 1 ? "ambiguous" : "unknown_value",
+          ...(suggestions.length ? { suggestions: suggestions.slice(0, 3) } : {}),
+        });
         missingData++;
         continue;
       }
-      if (p.type === "string") {
+      if (p.type === "string" && brandCands.length === 1) {
         filled.push({
           id: p.id,
           name: p.name,
-          value: data.brand,
+          value: brandCands[0],
           kind: "values",
           confidence: "high",
           source: "lookup",

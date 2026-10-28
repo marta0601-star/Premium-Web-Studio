@@ -1,0 +1,193 @@
+{
+ "id": "248811",
+ "name": "Marka",
+ "type": "dictionary",
+ "required": true,
+ "options": [
+  {
+   "id": "248811_958954",
+   "name": "bez marki"
+  },
+  {
+   "id": "248811_1938581",
+   "name": "Alen"
+  },
+  {
+   "id": "248811_1131476",
+   "name": "Apple"
+  },
+  {
+   "id": "248811_2059930",
+   "name": "BATON"
+  },
+  {
+   "id": "248811_1131950",
+   "name": "Bell"
+  },
+  {
+   "id": "248811_1949759",
+   "name": "Candy"
+  },
+  {
+   "id": "248811_1958236",
+   "name": "Capri"
+  },
+  {
+   "id": "248811_1958237",
+   "name": "Capri-sun"
+  },
+  {
+   "id": "248811_1958293",
+   "name": "Casali"
+  },
+  {
+   "id": "248811_1102151",
+   "name": "Cherry"
+  },
+  {
+   "id": "248811_1958429",
+   "name": "Chovi"
+  },
+  {
+   "id": "248811_990232",
+   "name": "Chupa Chups"
+  },
+  {
+   "id": "248811_1958440",
+   "name": "Ciasteczka z Krakowa"
+  },
+  {
+   "id": "248811_2047870",
+   "name": "Ciastkarnia Mistrza Jana"
+  },
+  {
+   "id": "248811_1135152",
+   "name": "Coca-Cola"
+  },
+  {
+   "id": "248811_1958518",
+   "name": "Cola Cao"
+  },
+  {
+   "id": "248811_1082946",
+   "name": "Cuki"
+  },
+  {
+   "id": "248811_1061919",
+   "name": "Dr. Oetker"
+  },
+  {
+   "id": "248811_1133201",
+   "name": "Fanta"
+  },
+  {
+   "id": "248811_1959800",
+   "name": "Fruit"
+  },
+  {
+   "id": "248811_1939267",
+   "name": "Gummy"
+  },
+  {
+   "id": "248811_1020548",
+   "name": "Haribo"
+  },
+  {
+   "id": "248811_1960342",
+   "name": "Hellena"
+  },
+  {
+   "id": "248811_1765592",
+   "name": "Herbataonline"
+  },
+  {
+   "id": "248811_1138280",
+   "name": "Kinder"
+  },
+  {
+   "id": "248811_1961105",
+   "name": "Kopiko"
+  },
+  {
+   "id": "248811_1961395",
+   "name": "Lay's"
+  },
+  {
+   "id": "248811_1945963",
+   "name": "Lion"
+  },
+  {
+   "id": "248811_950937",
+   "name": "Mara"
+  },
+  {
+   "id": "248811_1961994",
+   "name": "Mentos"
+  },
+  {
+   "id": "248811_986580",
+   "name": "Milka"
+  },
+  {
+   "id": "248811_1961655",
+   "name": "M&M's"
+  },
+  {
+   "id": "248811_1962185",
+   "name": "Mondelez"
+  },
+  {
+   "id": "248811_1962467",
+   "name": "Nescafe"
+  },
+  {
+   "id": "248811_1962468",
+   "name": "Nesquik"
+  },
+  {
+   "id": "248811_1123084",
+   "name": "Nestlé"
+  },
+  {
+   "id": "248811_1962512",
+   "name": "Nimm2"
+  },
+  {
+   "id": "248811_1962677",
+   "name": "Okakao"
+  },
+  {
+   "id": "248811_1964134",
+   "name": "Skittles"
+  },
+  {
+   "id": "248811_1963794",
+   "name": "SOS"
+  },
+  {
+   "id": "248811_1117938",
+   "name": "Strong"
+  },
+  {
+   "id": "248811_1964676",
+   "name": "Terry's"
+  },
+  {
+   "id": "248811_1954833",
+   "name": "Torras"
+  },
+  {
+   "id": "248811_1922426",
+   "name": "Wick"
+  },
+  {
+   "id": "248811_1965352",
+   "name": "Witamina"
+  },
+  {
+   "id": "248811_1965560",
+   "name": "Zdrowy Lizak"
+  }
+ ],
+ "_fixtureNote": "Real Allegro Marka (248811) dictionary 2026-10-28, trimmed from 9829 to the entries the old and the new filler pick or suggest for the test names"
+}

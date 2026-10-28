@@ -3,6 +3,8 @@
  * from pages/Home.tsx so it can be unit-tested.
  */
 
+import { matchDictionaryOption, quantityForParam } from "../../../api-server/src/lib/shared/autofill-rules";
+
 // Same shape as ParameterValue in lib/api-client-react/src/generated/api.schemas.ts;
 // declared here because the package index does not re-export it (see api-zod TODO).
 export interface ParameterValue {
@@ -57,31 +59,17 @@ export interface ParamFillMeta {
 
 // ── Smart auto-fill logic ────────────────────────────────────────────────────
 
-export function extractNumber(s: string): string | null {
-  const m = s.match(/(\d+(?:[.,]\d+)?)/);
-  return m ? m[1].replace(",", ".") : null;
-}
-
+/** Dictionary option for a value — whole values / whole words only (shared rule:
+ *  no substrings, so "Kakao" never becomes "Okakao"). */
 export function fuzzyMatchOption(
   options: Array<{ id: string; name: string }>,
   query: string | null | undefined
 ): string | null {
-  if (!query || !options.length) return null;
-  const q = query.toLowerCase().trim();
-  // 1. Exact match
-  const exact = options.find((o) => o.name.toLowerCase() === q);
-  if (exact) return exact.id;
-  // 2. Option name contains query
-  const optContains = options.find((o) => o.name.toLowerCase().includes(q));
-  if (optContains) return optContains.id;
-  // 3. Query contains option name — only if option name is ≥4 chars (avoids "Bio" matching "Schlossblick Bio Wasser")
-  const qContains = options.find((o) => {
-    const n = o.name.toLowerCase();
-    return n.length >= 4 && q.includes(n);
-  });
-  if (qContains) return qContains.id;
-  return null;
+  return matchDictionaryOption(options, query)?.id ?? null;
 }
+
+/** Brand parameters — whole words, so "Kod producenta" is NOT one. */
+const BRAND_PARAM_RE = /\b(marka|brand|producent)\b/;
 
 export interface ProductContext {
   ean: string;
@@ -101,8 +89,9 @@ export function autoFillParam(
 ): { value?: ParameterValue; autoFilled: boolean } {
   const nameLower = param.name.toLowerCase();
 
-  const isEan = /ean|gtin|kod kreskowy|barcode/.test(nameLower);
-  const isBrand = /marka|brand|producent/.test(nameLower);
+  // "Kod producenta" is a product code, never the brand → filled with the EAN.
+  const isEan = /ean|gtin|kod kreskowy|kod producenta|barcode/.test(nameLower);
+  const isBrand = BRAND_PARAM_RE.test(nameLower);
   const isWeight = /waga|gramatu|masa netto|netto|weight/.test(nameLower);
   const isVolume = /pojemność|volume|litraż/.test(nameLower);
   const isName = nameLower === "nazwa handlowa" || nameLower === "nazwa produktu";
@@ -126,9 +115,10 @@ export function autoFillParam(
     return { value: { id: param.id, values: [ctx.brand] }, autoFilled: true };
   }
 
-  // Weight / Volume — extract numeric from weight string
+  // Weight / Volume — converted to the parameter's unit (137 g → 0.137 for kg);
+  // a weight only from g/kg, a volume only from ml/l (shared rule with the server).
   if ((isWeight || isVolume) && (param.type === "float" || param.type === "integer") && ctx.weight) {
-    const num = extractNumber(ctx.weight);
+    const num = quantityForParam(ctx.weight, param);
     if (num) return { value: { id: param.id, values: [num] }, autoFilled: true };
   }
 
@@ -177,7 +167,7 @@ export function buildAutoFilledState(
 
   for (const param of params) {
     const nameLower = param.name.toLowerCase();
-    const isBrandParam = /marka|brand|producent/.test(nameLower);
+    const isBrandParam = BRAND_PARAM_RE.test(nameLower);
 
     // Brand parameters OFF-catalog: prefer ctx.brand from product lookup over prefill.
     // For a catalog product the catalog value wins (fall through to the fills below):
