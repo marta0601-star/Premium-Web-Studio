@@ -21,6 +21,34 @@ export function isLlmEnabled(): boolean {
 }
 
 /**
+ * Pull error.type / error.message out of a non-OK Anthropic response so the log
+ * says WHY (credit, unknown model, bad key…) instead of a bare status. Never
+ * throws; a non-JSON body (e.g. a proxy error page) is logged truncated.
+ */
+export async function anthropicErrorFields(
+  resp: Response,
+): Promise<{ errorType?: string; errorMessage?: string; requestId?: string }> {
+  try {
+    const text = await resp.text();
+    try {
+      const body = JSON.parse(text) as {
+        error?: { type?: string; message?: string };
+        request_id?: string;
+      };
+      return {
+        errorType: body.error?.type,
+        errorMessage: body.error?.message,
+        requestId: body.request_id ?? resp.headers.get("request-id") ?? undefined,
+      };
+    } catch {
+      return { errorMessage: text.slice(0, 300) };
+    }
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Ask Claude to pick the single best-matching option id for a dictionary
  * parameter, or null when none fits. `productContext` should be a short
  * human-readable description (name, brand, category, ingredients…).
@@ -80,7 +108,10 @@ export async function semanticPickOption(
     });
 
     if (!resp.ok) {
-      logger.warn({ status: resp.status }, "llm: semanticPickOption non-OK");
+      logger.warn(
+        { status: resp.status, ...(await anthropicErrorFields(resp)) },
+        "llm: semanticPickOption non-OK",
+      );
       return null;
     }
     const data = (await resp.json()) as {

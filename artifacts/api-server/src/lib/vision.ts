@@ -15,6 +15,7 @@
  */
 
 import { logger } from "./logger";
+import { anthropicErrorFields } from "./llm";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 // Haiku is cheap and good enough for legible package OCR; override via env.
@@ -132,7 +133,10 @@ export async function extractProductFromImages(
     });
 
     if (!resp.ok) {
-      logger.warn({ status: resp.status }, "vision: Anthropic API returned non-OK");
+      logger.warn(
+        { status: resp.status, ...(await anthropicErrorFields(resp)) },
+        "vision: Anthropic API returned non-OK",
+      );
       return null;
     }
 
